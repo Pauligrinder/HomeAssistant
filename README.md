@@ -1,4 +1,4 @@
-# Home Assistant for Sailfish OS
+# Helmsman for Sailfish OS
 
 A native Silica client for [Home Assistant](https://www.home-assistant.io/).
 Built as a Harbour app (Qt 5 / QML + C++) the same way most SFOS apps are,
@@ -41,9 +41,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-homeassistant-0.1.0-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.1.3-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-homeassistant-0.1.0-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.1.3-1.aarch64.rpm
 ```
 
 Sailjail permission used: `Internet`.

@@ -1,6 +1,6 @@
-Name:       harbour-homeassistant
+Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.1.0
+Version:    0.1.3
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -9,11 +9,13 @@ Requires:   sailfishsilica-qt5 >= 0.10.9
 Requires:   qt5-qtcore
 Requires:   qt5-qtdeclarative
 Requires:   qt5-qtnetwork
+Requires:   sailfish-components-webview-qt5
 BuildRequires:  pkgconfig(sailfishapp) >= 1.0.2
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5Network)
+BuildRequires:  pkgconfig(qt5embedwidget)
 BuildRequires:  desktop-file-utils
 
 %description
@@ -44,5 +46,15 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.3-1
+- Rename app/package to Helmsman (harbour-helmsman).
+
+* Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.2-1
+- Launch directly on connection screen; restore session in background.
+
+* Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.1-1
+- Fix startup routing to connection/login screens.
+- Embed Lovelace dashboard via WebView with token handoff.
+
 * Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.0-1
 - Initial packaging: instance connection and login with OTP.

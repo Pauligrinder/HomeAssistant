@@ -15,6 +15,10 @@ Page {
             if (!hassClient.loggedIn)
                 pageStack.push(Qt.resolvedUrl("LoginPage.qml"), { hassClient: hassClient })
         }
+        onRestoreFinished: function(loggedIn) {
+            if (loggedIn)
+                pageStack.replace(Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
+        }
     }
 
     SilicaFlickable {
@@ -106,6 +110,13 @@ Page {
                 text: hassClient.busy ? "Connecting..." : "Connect"
                 enabled: hostField.text.length > 0 && !hassClient.busy
                 onClicked: page.connectClicked()
+            }
+
+            Label {
+                anchors.horizontalCenter: parent.horizontalCenter
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: "App " + hassClient.appVersion
             }
         }
     }

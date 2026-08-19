@@ -13,7 +13,7 @@
 
 namespace {
 
-const char *kClientName = "Sailfish Home Assistant";
+const char *kClientName = "Helmsman";
 
 QString jsonErrorMessage(const QByteArray &data, const QString &fallback)
 {
@@ -98,6 +98,9 @@ QString HassClient::instanceName() const { return m_instanceName; }
 QString HassClient::haVersion() const { return m_haVersion; }
 QString HassClient::otpHint() const { return m_otpHint; }
 QString HassClient::baseUrl() const { return m_baseUrl; }
+QString HassClient::accessToken() const { return m_accessToken; }
+QString HassClient::refreshToken() const { return m_refreshToken; }
+qint64 HassClient::accessExpiresAtMs() const { return m_accessExpiresAt.toMSecsSinceEpoch(); }
 
 void HassClient::setHost(const QString &host)
 {
@@ -282,7 +285,7 @@ bool HassClient::parseEndpoint(const QString &endpoint, QString *error)
     return true;
 }
 
-void HassClient::watch(QNetworkReply *reply, RequestKind kind)
+void HassClient::watch(QNetworkReply *reply, RequestKind kind, bool busy)
 {
     if (m_pendingReply) {
         m_pendingReply->disconnect(this);
@@ -292,7 +295,8 @@ void HassClient::watch(QNetworkReply *reply, RequestKind kind)
     m_pendingKind = kind;
     m_pendingReply = reply;
     connect(reply, SIGNAL(finished()), this, SLOT(onReplyFinished()));
-    setBusy(true);
+    if (busy)
+        setBusy(true);
 }
 
 void HassClient::get(const QString &path, RequestKind kind)
@@ -316,14 +320,14 @@ void HassClient::postJson(const QString &path, const QJsonObject &body, RequestK
     watch(m_nam->post(request, payload), kind);
 }
 
-void HassClient::postForm(const QString &path, const QUrlQuery &form, RequestKind kind)
+void HassClient::postForm(const QString &path, const QUrlQuery &form, RequestKind kind, bool busy)
 {
     QNetworkRequest request(apiUrl(path));
     request.setHeader(QNetworkRequest::ContentTypeHeader,
                       QStringLiteral("application/x-www-form-urlencoded"));
     request.setRawHeader("Accept", "application/json");
     request.setRawHeader("User-Agent", kClientName);
-    watch(m_nam->post(request, form.toString(QUrl::FullyEncoded).toUtf8()), kind);
+    watch(m_nam->post(request, form.toString(QUrl::FullyEncoded).toUtf8()), kind, busy);
 }
 
 void HassClient::onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors)
@@ -347,7 +351,7 @@ void HassClient::restoreSession()
     form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("refresh_token"));
     form.addQueryItem(QStringLiteral("refresh_token"), m_refreshToken);
     form.addQueryItem(QStringLiteral("client_id"), clientId());
-    postForm(QStringLiteral("/auth/token"), form, RequestRefresh);
+    postForm(QStringLiteral("/auth/token"), form, RequestRefresh, false);
 }
 
 void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ignoreSslErrors)
@@ -357,8 +361,18 @@ void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ig
     setNeedsOtp(false);
     setConnected(false);
     m_flowId.clear();
-    m_accessToken.clear();
-    m_refreshToken.clear();
+    if (!m_accessToken.isEmpty()) {
+        m_accessToken.clear();
+        emit accessTokenChanged();
+    }
+    if (!m_refreshToken.isEmpty()) {
+        m_refreshToken.clear();
+        emit refreshTokenChanged();
+    }
+    if (m_accessExpiresAt.isValid()) {
+        m_accessExpiresAt = QDateTime();
+        emit accessExpiresAtChanged();
+    }
 
     setIgnoreSslErrors(ignoreSslErrors);
     setUseSsl(useSsl);
@@ -438,8 +452,18 @@ void HassClient::logout()
         setBusy(false);
     }
 
-    m_accessToken.clear();
-    m_refreshToken.clear();
+    if (!m_accessToken.isEmpty()) {
+        m_accessToken.clear();
+        emit accessTokenChanged();
+    }
+    if (!m_refreshToken.isEmpty()) {
+        m_refreshToken.clear();
+        emit refreshTokenChanged();
+    }
+    if (m_accessExpiresAt.isValid()) {
+        m_accessExpiresAt = QDateTime();
+        emit accessExpiresAtChanged();
+    }
     m_flowId.clear();
     m_authCode.clear();
     clearPersistedTokens();
@@ -518,15 +542,28 @@ void HassClient::clearPersistedTokens()
 
 void HassClient::applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing)
 {
-    m_accessToken = obj.value(QStringLiteral("access_token")).toString();
+    const QString access = obj.value(QStringLiteral("access_token")).toString();
+    if (m_accessToken != access) {
+        m_accessToken = access;
+        emit accessTokenChanged();
+    }
     const QString refresh = obj.value(QStringLiteral("refresh_token")).toString();
-    if (!refresh.isEmpty())
-        m_refreshToken = refresh;
-    else if (!keepRefreshIfMissing)
+    if (!refresh.isEmpty()) {
+        if (m_refreshToken != refresh) {
+            m_refreshToken = refresh;
+            emit refreshTokenChanged();
+        }
+    } else if (!keepRefreshIfMissing && !m_refreshToken.isEmpty()) {
         m_refreshToken.clear();
+        emit refreshTokenChanged();
+    }
 
     const int expiresIn = obj.value(QStringLiteral("expires_in")).toInt();
-    m_accessExpiresAt = QDateTime::currentDateTimeUtc().addSecs(expiresIn > 0 ? expiresIn : 1800);
+    const QDateTime nextExpiresAt = QDateTime::currentDateTimeUtc().addSecs(expiresIn > 0 ? expiresIn : 1800);
+    if (m_accessExpiresAt != nextExpiresAt) {
+        m_accessExpiresAt = nextExpiresAt;
+        emit accessExpiresAtChanged();
+    }
 }
 
 void HassClient::onReplyFinished()
@@ -597,7 +634,6 @@ void HassClient::onReplyFinished()
             const QString message = jsonErrorMessage(data, QStringLiteral("Token request failed"));
             setError(message);
             if (kind == RequestRefresh) {
-                clearPersistedTokens();
                 emit restoreFinished(false);
             } else {
                 emit loginFailed(message);

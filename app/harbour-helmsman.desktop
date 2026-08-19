@@ -1,14 +1,14 @@
 [Desktop Entry]
 Type=Application
 X-Nemo-Application-Type=silica-qt5
-Icon=harbour-homeassistant
-Exec=harbour-homeassistant
-Name=Home Assistant
-Name[en]=Home Assistant
+Icon=harbour-helmsman
+Exec=harbour-helmsman
+Name=Helmsman
+Name[en]=Helmsman
 Comment=Native Home Assistant client
 Comment[en]=Native Home Assistant client
 
 [X-Sailjail]
 Permissions=Internet
-OrganizationName=org.homeassistant
-ApplicationName=harbour-homeassistant
+OrganizationName=org.helmsman
+ApplicationName=harbour-helmsman

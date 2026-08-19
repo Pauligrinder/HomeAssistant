@@ -1,9 +1,10 @@
-TARGET = harbour-homeassistant
+TARGET = harbour-helmsman
 
 CONFIG += sailfishapp
 QT += network
+PKGCONFIG += qt5embedwidget
 
-VERSION = 0.1.0
+VERSION = 0.1.3
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
@@ -15,7 +16,7 @@ HEADERS += \
 
 DISTFILES += \
     rpm/harbour-homeassistant.spec \
-    harbour-homeassistant.desktop \
+    harbour-helmsman.desktop \
     qml/harbour-homeassistant.qml \
     qml/cover/CoverPage.qml \
     qml/pages/*.qml

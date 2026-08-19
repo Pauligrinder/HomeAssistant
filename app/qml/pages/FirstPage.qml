@@ -18,11 +18,21 @@ Page {
         }
     }
 
-    Component.onCompleted: hassClient.restoreSession()
+    Component.onCompleted: {
+        hassClient.restoreSession()
+        // If restoreSession finishes synchronously, defer routing until
+        // the page stack is fully ready.
+        if (!hassClient.busy)
+            Qt.callLater(page.route)
+    }
 
     Connections {
         target: hassClient
-        onRestoreFinished: page.route()
+        onRestoreFinished: Qt.callLater(page.route)
+        onBusyChanged: {
+            if (!hassClient.busy && !page.routed)
+                Qt.callLater(page.route)
+        }
     }
 
     BusyIndicator {

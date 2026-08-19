@@ -1,10 +1,58 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Sailfish.WebView 1.0
 
 Page {
     id: page
     property var hassClient
+    property bool sessionInjected: false
+    property string dashboardUrl: {
+        var base = hassClient.baseUrl
+        if (!base || base.length === 0)
+            return ""
+        return base + "/lovelace"
+    }
     backNavigation: false
+
+    function jsString(value) {
+        return JSON.stringify(value ? String(value) : "")
+    }
+
+    function injectSessionTokens() {
+        if (page.sessionInjected || !hassClient.accessToken || hassClient.accessToken.length === 0)
+            return
+
+        var expires = hassClient.accessExpiresAtMs > 0
+                ? hassClient.accessExpiresAtMs
+                : (Date.now() + 1800 * 1000)
+        var expiresIn = Math.max(0, Math.floor((expires - Date.now()) / 1000))
+
+        var script = "(function(){"
+                + "var tokens={"
+                + "access_token:" + page.jsString(hassClient.accessToken) + ","
+                + "expires_in:" + String(expiresIn) + ","
+                + "token_type:'Bearer',"
+                + "hassUrl:" + page.jsString(hassClient.baseUrl) + ","
+                + "clientId:" + page.jsString(hassClient.baseUrl + "/") + ","
+                + "expires:" + String(expires) + ","
+                + "refresh_token:" + page.jsString(hassClient.refreshToken) + ","
+                + "};"
+                + "localStorage.setItem('hassTokens', JSON.stringify(tokens));"
+                + "sessionStorage.setItem('hassTokens', JSON.stringify(tokens));"
+                + "return 'ok';"
+                + "})();"
+        dashboardView.runJavaScript(
+                    script,
+                    function(result) {
+                        if (result === "ok") {
+                            page.sessionInjected = true
+                            dashboardView.url = page.dashboardUrl
+                        }
+                    },
+                    function(error) {
+                        console.log("Token injection failed:", error)
+                    })
+    }
 
     Connections {
         target: hassClient
@@ -12,93 +60,43 @@ Page {
             if (!hassClient.loggedIn)
                 pageStack.replaceAbove(null, Qt.resolvedUrl("ConnectionPage.qml"), { hassClient: hassClient })
         }
+        onAccessTokenChanged: page.sessionInjected = false
     }
 
-    SilicaFlickable {
-        anchors.fill: parent
-        contentHeight: column.height + Theme.paddingLarge
+    PageHeader {
+        id: header
+        title: hassClient.instanceName.length > 0 ? hassClient.instanceName : "Home Assistant"
+    }
 
-        PullDownMenu {
-            MenuItem {
-                text: "Sign out"
-                onClicked: hassClient.logout()
-            }
+    Button {
+        id: signOutButton
+        anchors.top: header.bottom
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.horizontalPageMargin
+        text: "Sign out"
+        onClicked: hassClient.logout()
+        z: 2
+    }
+
+    WebView {
+        id: dashboardView
+        anchors.top: signOutButton.bottom
+        anchors.topMargin: Theme.paddingMedium
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        url: hassClient.baseUrl
+        onLoadedChanged: {
+            if (loaded)
+                page.injectSessionTokens()
         }
+    }
 
-        VerticalScrollDecorator {}
-
-        Column {
-            id: column
-            width: parent.width
-            spacing: Theme.paddingLarge
-
-            PageHeader {
-                title: hassClient.instanceName.length > 0 ? hassClient.instanceName : "Home Assistant"
-            }
-
-            Label {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.highlightColor
-                font.pixelSize: Theme.fontSizeLarge
-                text: "You're signed in"
-            }
-
-            Label {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                text: "Instance: " + hassClient.baseUrl
-            }
-
-            Label {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                visible: hassClient.haVersion.length > 0
-                text: "Home Assistant " + hassClient.haVersion
-            }
-
-            Label {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                visible: hassClient.username.length > 0
-                text: "User: " + hassClient.username
-            }
-
-            Label {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.secondaryHighlightColor
-                font.pixelSize: Theme.fontSizeExtraSmall
-                text: "Dashboards and entity control will land here next. Pull down to sign out."
-            }
-
-            SectionHeader { text: "About" }
-
-            Label {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.margins: Theme.horizontalPageMargin
-                wrapMode: Text.Wrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeExtraSmall
-                text: "Native Home Assistant client  ·  app " + hassClient.appVersion
-            }
-        }
+    BusyIndicator {
+        anchors.centerIn: parent
+        running: dashboardView.loading
+        visible: running
+        size: BusyIndicatorSize.Large
+        z: 3
     }
 }

@@ -8,12 +8,12 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication *app = SailfishApp::application(argc, argv);
-    app->setOrganizationName(QStringLiteral("org.homeassistant"));
-    app->setApplicationName(QStringLiteral("harbour-homeassistant"));
+    app->setOrganizationName(QStringLiteral("org.helmsman"));
+    app->setApplicationName(QStringLiteral("harbour-helmsman"));
 
     QQuickView *view = SailfishApp::createView();
 
-    qmlRegisterType<HassClient>("harbour.homeassistant", 1, 0, "HassClient");
+    qmlRegisterType<HassClient>("harbour.helmsman", 1, 0, "HassClient");
 
     view->setSource(SailfishApp::pathTo(QStringLiteral("qml/harbour-homeassistant.qml")));
     view->show();

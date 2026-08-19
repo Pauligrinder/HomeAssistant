@@ -34,6 +34,9 @@ class HassClient : public QObject
     Q_PROPERTY(QString haVersion READ haVersion NOTIFY haVersionChanged)
     Q_PROPERTY(QString otpHint READ otpHint NOTIFY otpHintChanged)
     Q_PROPERTY(QString baseUrl READ baseUrl NOTIFY baseUrlChanged)
+    Q_PROPERTY(QString accessToken READ accessToken NOTIFY accessTokenChanged)
+    Q_PROPERTY(QString refreshToken READ refreshToken NOTIFY refreshTokenChanged)
+    Q_PROPERTY(qint64 accessExpiresAtMs READ accessExpiresAtMs NOTIFY accessExpiresAtChanged)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -55,6 +58,9 @@ public:
     QString haVersion() const;
     QString otpHint() const;
     QString baseUrl() const;
+    QString accessToken() const;
+    QString refreshToken() const;
+    qint64 accessExpiresAtMs() const;
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -84,6 +90,9 @@ signals:
     void haVersionChanged();
     void otpHintChanged();
     void baseUrlChanged();
+    void accessTokenChanged();
+    void refreshTokenChanged();
+    void accessExpiresAtChanged();
     void restoreFinished(bool loggedIn);
     void connectionSucceeded();
     void loginSucceeded();
@@ -121,8 +130,8 @@ private:
 
     void get(const QString &path, RequestKind kind);
     void postJson(const QString &path, const QJsonObject &body, RequestKind kind);
-    void postForm(const QString &path, const QUrlQuery &form, RequestKind kind);
-    void watch(QNetworkReply *reply, RequestKind kind);
+    void postForm(const QString &path, const QUrlQuery &form, RequestKind kind, bool busy = true);
+    void watch(QNetworkReply *reply, RequestKind kind, bool busy = true);
 
     void handleProviders(const QByteArray &data);
     void handleFlowStep(const QByteArray &data);
