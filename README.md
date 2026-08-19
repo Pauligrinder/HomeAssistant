@@ -1,0 +1,49 @@
+# Home Assistant for Sailfish OS
+
+A native Silica client for [Home Assistant](https://www.home-assistant.io/).
+Built as a Harbour app (Qt 5 / QML + C++) the same way most SFOS apps are,
+and tested against the same Platform SDK target as ElectricEel
+(`SailfishOS-5.2.0.15-aarch64`).
+
+This first cut covers connecting to an instance and signing in, including
+TOTP two-step verification. Dashboards and entity control come next.
+
+## Layout
+
+```
+app/
+  harbour-homeassistant.pro
+  src/hassclient.{h,cpp}     HA HTTP auth + session
+  qml/pages/                 Connection, login, OTP, home
+  rpm/harbour-homeassistant.spec
+```
+
+## What works
+
+1. **Connect** — IP, hostname, or full `http(s)://` URL. Optional HTTPS and
+   ignore-certificate-errors for self-signed TLS. Default port is 8123.
+2. **Login** — Home Assistant username/password via `/auth/login_flow`.
+3. **OTP** — If the user has MFA enabled, a second page collects the TOTP
+   (or other MFA) code, then exchanges the auth code for tokens.
+4. **Session** — Refresh token is stored in the sandboxed app settings and
+   restored on launch.
+
+## Build
+
+Same Docker Platform SDK flow as ElectricEel:
+
+```sh
+docker pull coderus/sailfishos-platform-sdk-aarch64
+chmod +x build.sh
+./build.sh
+```
+
+Install on the phone:
+
+```sh
+scp app/RPMS/harbour-homeassistant-0.1.0-1.aarch64.rpm defaultuser@<phone-ip>:~/
+ssh defaultuser@<phone-ip>
+devel-su pkcon install-local ~/harbour-homeassistant-0.1.0-1.aarch64.rpm
+```
+
+Sailjail permission used: `Internet`.

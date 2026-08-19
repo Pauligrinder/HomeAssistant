@@ -1,0 +1,26 @@
+# rpmbuild staging and built packages
+app/RPMS/
+*.rpm
+*.tar.bz2
+*.tar.gz
+
+# Qt/qmake build output
+app/build/
+app/*.pro.user
+app/*.pro.user.*
+Makefile
+Makefile.*
+.qmake.stash
+*.o
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*_qmlcache.qrc
+
+# Editor / OS cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
