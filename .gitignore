@@ -24,3 +24,6 @@ ui_*.h
 *.swp
 *.swo
 .DS_Store
+
+# Local build counter: "<version> <release>"
+.build-release

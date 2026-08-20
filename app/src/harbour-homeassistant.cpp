@@ -4,6 +4,7 @@
 #include <QtQml>
 
 #include "hassclient.h"
+#include "mdiiconrenderer.h"
 
 int main(int argc, char *argv[])
 {
@@ -14,6 +15,7 @@ int main(int argc, char *argv[])
     QQuickView *view = SailfishApp::createView();
 
     qmlRegisterType<HassClient>("harbour.helmsman", 1, 0, "HassClient");
+    qmlRegisterType<MdiIconRenderer>("harbour.helmsman", 1, 0, "MdiIconRenderer");
 
     view->setSource(SailfishApp::pathTo(QStringLiteral("qml/harbour-homeassistant.qml")));
     view->show();

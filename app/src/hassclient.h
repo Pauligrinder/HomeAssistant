@@ -14,6 +14,7 @@
 class QNetworkAccessManager;
 class QNetworkReply;
 class QNetworkRequest;
+class HassPushChannel;
 
 class HassClient : public QObject
 {
@@ -36,7 +37,18 @@ class HassClient : public QObject
     Q_PROPERTY(QString baseUrl READ baseUrl NOTIFY baseUrlChanged)
     Q_PROPERTY(QString accessToken READ accessToken NOTIFY accessTokenChanged)
     Q_PROPERTY(QString refreshToken READ refreshToken NOTIFY refreshTokenChanged)
+    Q_PROPERTY(QString authClientId READ authClientId CONSTANT)
     Q_PROPERTY(qint64 accessExpiresAtMs READ accessExpiresAtMs NOTIFY accessExpiresAtChanged)
+    Q_PROPERTY(bool restoringSession READ restoringSession NOTIFY restoringSessionChanged)
+    Q_PROPERTY(QString internalUrl READ internalUrl WRITE setInternalUrl NOTIFY internalUrlChanged)
+    Q_PROPERTY(QString externalUrl READ externalUrl WRITE setExternalUrl NOTIFY externalUrlChanged)
+    Q_PROPERTY(QString homeWifiSsid READ homeWifiSsid WRITE setHomeWifiSsid NOTIFY homeWifiSsidChanged)
+    Q_PROPERTY(QString currentWifiSsid READ currentWifiSsid NOTIFY currentWifiSsidChanged)
+    Q_PROPERTY(bool usingInternalUrl READ usingInternalUrl NOTIFY usingInternalUrlChanged)
+    Q_PROPERTY(QString webhookId READ webhookId NOTIFY webhookIdChanged)
+    Q_PROPERTY(QString deviceName READ deviceName NOTIFY deviceNameChanged)
+    Q_PROPERTY(bool mobileAppRegistered READ mobileAppRegistered NOTIFY mobileAppRegisteredChanged)
+    Q_PROPERTY(bool pushConnected READ pushConnected NOTIFY pushConnectedChanged)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -60,12 +72,26 @@ public:
     QString baseUrl() const;
     QString accessToken() const;
     QString refreshToken() const;
+    QString authClientId() const;
     qint64 accessExpiresAtMs() const;
+    bool restoringSession() const;
+    QString internalUrl() const;
+    QString externalUrl() const;
+    QString homeWifiSsid() const;
+    QString currentWifiSsid() const;
+    bool usingInternalUrl() const;
+    QString webhookId() const;
+    QString deviceName() const;
+    bool mobileAppRegistered() const;
+    bool pushConnected() const;
 
     void setHost(const QString &host);
     void setPort(int port);
     void setUseSsl(bool useSsl);
     void setIgnoreSslErrors(bool ignore);
+    void setInternalUrl(const QString &url);
+    void setExternalUrl(const QString &url);
+    void setHomeWifiSsid(const QString &ssid);
 
 public slots:
     void restoreSession();
@@ -73,6 +99,12 @@ public slots:
     void login(const QString &username, const QString &password);
     void submitOtp(const QString &code);
     void logout();
+    void saveConnectionSettings(const QString &internalUrl,
+                                const QString &externalUrl,
+                                const QString &homeWifiSsid,
+                                bool ignoreSslErrors);
+    void updateCurrentWifiSsid(const QString &ssid);
+    bool selectEndpointForWifi(const QString &ssid);
 
 signals:
     void busyChanged();
@@ -93,15 +125,32 @@ signals:
     void accessTokenChanged();
     void refreshTokenChanged();
     void accessExpiresAtChanged();
+    void restoringSessionChanged();
+    void internalUrlChanged();
+    void externalUrlChanged();
+    void homeWifiSsidChanged();
+    void currentWifiSsidChanged();
+    void usingInternalUrlChanged();
+    void webhookIdChanged();
+    void deviceNameChanged();
+    void mobileAppRegisteredChanged();
+    void pushConnectedChanged();
     void restoreFinished(bool loggedIn);
     void connectionSucceeded();
     void loginSucceeded();
     void otpRequired();
     void loginFailed(const QString &message);
+    void notificationReceived(const QString &title,
+                              const QString &message,
+                              const QVariantMap &data);
 
 private slots:
     void onReplyFinished();
     void onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
+    void onPushConnectedChanged();
+    void onPushNotificationReceived(const QString &title,
+                                    const QString &message,
+                                    const QVariantMap &data);
 
 private:
     enum RequestKind {
@@ -112,7 +161,8 @@ private:
         RequestToken,
         RequestRefresh,
         RequestConfig,
-        RequestRevoke
+        RequestRevoke,
+        RequestMobileRegister
     };
 
     void setBusy(bool busy);
@@ -122,9 +172,12 @@ private:
     void setConnected(bool connected);
     void setLoggedIn(bool loggedIn);
     void setNeedsOtp(bool needsOtp);
+    void setRestoringSession(bool restoring);
 
     bool parseEndpoint(const QString &endpoint, QString *error);
     void rebuildBaseUrl();
+    void persistConnectionSettings();
+    void setUsingInternalUrl(bool usingInternal);
     QUrl apiUrl(const QString &path) const;
     QString clientId() const;
 
@@ -137,15 +190,25 @@ private:
     void handleFlowStep(const QByteArray &data);
     void handleToken(const QByteArray &data, bool fromRefresh);
     void handleConfig(const QByteArray &data);
+    void handleMobileRegistration(const QByteArray &data);
     void startLoginFlow();
     void submitFlow(const QJsonObject &fields);
     void exchangeCode(const QString &code);
     void fetchConfig();
+    void ensureDeviceId();
+    void ensureDeviceName();
+    void ensureMobileAppRegistration();
+    void registerMobileApp();
+    void startPushChannel();
+    void stopPushChannel();
+    void clearMobileRegistration();
+    void loadSession();
     void persistSession();
     void clearPersistedTokens();
     void applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing);
 
     QNetworkAccessManager *m_nam;
+    HassPushChannel *m_pushChannel;
     RequestKind m_pendingKind;
     QNetworkReply *m_pendingReply;
 
@@ -155,9 +218,15 @@ private:
     bool m_needsOtp;
     bool m_useSsl;
     bool m_ignoreSslErrors;
+    bool m_usingInternalUrl;
+    bool m_restoringSession;
     int m_port;
     QString m_host;
     QString m_baseUrl;
+    QString m_internalUrl;
+    QString m_externalUrl;
+    QString m_homeWifiSsid;
+    QString m_currentWifiSsid;
     QString m_errorMessage;
     QString m_statusText;
     QString m_username;
@@ -168,9 +237,16 @@ private:
     QString m_authCode;
     QString m_accessToken;
     QString m_refreshToken;
+    QString m_authClientId;
     QDateTime m_accessExpiresAt;
     QString m_providerType;
     QVariant m_providerId;
+    QString m_deviceId;
+    QString m_deviceName;
+    QString m_webhookId;
+    QString m_webhookSecret;
+    QString m_cloudhookUrl;
+    QString m_remoteUiUrl;
 };
 
 #endif
