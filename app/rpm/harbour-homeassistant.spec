@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.1.9
+Version:    0.2.0
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -51,6 +51,9 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Thu Aug 20 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.0-1
+- Fix app cover when notifications include tag or group data.
+
 * Thu Aug 20 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.9-1
 - Register as mobile_app and receive notifications over WebSocket.
 
