@@ -23,13 +23,18 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-echo "Building harbour-helmsman-${VERSION}-${RELEASE}.${ARCH}.rpm"
+RPM_NAME="harbour-helmsman-${VERSION}-${RELEASE}.${ARCH}.rpm"
+
+echo "Building ${RPM_NAME}"
 echo "  image=$IMAGE"
 echo "  target=$TARGET"
 
 docker pull "$IMAGE"
 
 mkdir -p "$ROOT/RPMS"
+# Bind mounts keep host ownership. Open the directory so the SDK user
+# (mersdk) can write artifacts on GitHub Actions runners.
+chmod a+rwx "$ROOT/RPMS"
 
 # Copy the app tree into the container and build there (same idea as
 # coderus/github-sfos-build) so host UID/permissions do not matter.
@@ -38,23 +43,28 @@ docker run --rm --privileged \
     -v "$ROOT/RPMS:/out" \
     -e VERSION="$VERSION" \
     -e RELEASE="$RELEASE" \
+    -e ARCH="$ARCH" \
     -e TARGET="$TARGET" \
+    -e RPM_NAME="$RPM_NAME" \
     "$IMAGE" \
     /bin/bash -lc '
         set -e
         mkdir -p /home/mersdk/build
         cp -a /app/. /home/mersdk/build/
+        # Do not carry host app/RPMS into the build tree.
+        rm -rf /home/mersdk/build/RPMS
         cd /home/mersdk/build
         sed -i \
             -e "s/^Version:.*/Version:    ${VERSION}/" \
             -e "s/^Release:.*/Release:    ${RELEASE}/" \
             rpm/harbour-homeassistant.spec
         mb2 --target "${TARGET}" build
-        mkdir -p /out
-        find RPMS -type f -name "*.rpm" ! -name "*-debuginfo-*" ! -name "*-debugsource-*" \
-            -exec cp -v {} /out/ \;
-        # Ensure the runner can read the artifacts.
-        chmod -R a+rX /out || sudo chmod -R a+rX /out
+        if [ ! -f "RPMS/${RPM_NAME}" ]; then
+            echo "Expected RPM not found: RPMS/${RPM_NAME}" >&2
+            ls -la RPMS || true
+            exit 1
+        fi
+        cp -v "RPMS/${RPM_NAME}" /out/
     '
 
 echo "Artifacts:"
