@@ -821,19 +821,17 @@ bool HassClient::selectEndpointForWifi(const QString &ssid)
     const bool onHomeWifi = !m_homeWifiSsid.isEmpty()
             && !ssid.isEmpty()
             && ssid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0;
-    const bool wifiKnown = !ssid.isEmpty();
 
-    // Prefer internal (often plain http) when on home Wi‑Fi or when Wi‑Fi is
-    // still unknown at startup. Only force external when we know we are away.
+    // Internal only on the configured home SSID; otherwise external (different
+    // Wi‑Fi, mobile data, or not connected). Fall back to internal if external
+    // is not configured.
     QString chosen;
     if (onHomeWifi && !m_internalUrl.isEmpty())
         chosen = m_internalUrl;
-    else if (wifiKnown && !onHomeWifi && !m_externalUrl.isEmpty())
+    else if (!m_externalUrl.isEmpty())
         chosen = m_externalUrl;
     else if (!m_internalUrl.isEmpty())
         chosen = m_internalUrl;
-    else if (!m_externalUrl.isEmpty())
-        chosen = m_externalUrl;
     else
         return false;
 
