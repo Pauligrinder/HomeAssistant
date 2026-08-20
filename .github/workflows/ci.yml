@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build aarch64
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build RPM
+        run: |
+          chmod +x scripts/ci-build.sh
+          ./scripts/ci-build.sh aarch64
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: harbour-helmsman-aarch64
+          path: |
+            RPMS/*.rpm
+            !RPMS/*-debuginfo-*.rpm
+            !RPMS/*-debugsource-*.rpm
+          if-no-files-found: error
+          retention-days: 14

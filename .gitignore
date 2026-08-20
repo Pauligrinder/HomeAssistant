@@ -27,3 +27,7 @@ ui_*.h
 
 # Local build counter: "<version> <release>"
 .build-release
+
+# CI build scratch trees
+.ci-work-*/
+RPMS/
