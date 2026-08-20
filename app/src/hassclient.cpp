@@ -1,4 +1,5 @@
 #include "hassclient.h"
+#include "hasspushchannel.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -10,10 +11,41 @@
 #include <QSettings>
 #include <QUrl>
 #include <QDebug>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
+#include <QSaveFile>
+#include <QUuid>
+#include <QSysInfo>
+#include <QHostInfo>
 
 namespace {
 
 const char *kClientName = "Helmsman";
+
+QString canonicalClientId(const QString &baseUrl)
+{
+    QString url = baseUrl.trimmed();
+    if (url.isEmpty())
+        return QString();
+    if (!url.endsWith(QLatin1Char('/')))
+        url.append(QLatin1Char('/'));
+    return url;
+}
+
+// Ensure instance URLs always carry an explicit scheme so switching between
+// http (LAN) and https (remote) cannot inherit the previous useSsl flag.
+QString normalizeInstanceUrl(const QString &input, bool defaultSsl)
+{
+    QString value = input.trimmed();
+    if (value.isEmpty())
+        return value;
+    if (value.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive)
+            || value.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)) {
+        return value;
+    }
+    return (defaultSsl ? QStringLiteral("https://") : QStringLiteral("http://")) + value;
+}
 
 QString jsonErrorMessage(const QByteArray &data, const QString &fallback)
 {
@@ -41,11 +73,19 @@ QVariantMap jsonObjectToMap(const QJsonObject &obj)
     return map;
 }
 
+QString sessionFilePath()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(dir);
+    return dir + QStringLiteral("/session.json");
+}
+
 } // namespace
 
 HassClient::HassClient(QObject *parent)
     : QObject(parent)
     , m_nam(new QNetworkAccessManager(this))
+    , m_pushChannel(new HassPushChannel(this))
     , m_pendingKind(RequestNone)
     , m_pendingReply(nullptr)
     , m_busy(false)
@@ -54,24 +94,19 @@ HassClient::HassClient(QObject *parent)
     , m_needsOtp(false)
     , m_useSsl(false)
     , m_ignoreSslErrors(false)
+    , m_usingInternalUrl(true)
+    , m_restoringSession(false)
     , m_port(8123)
 {
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
+    connect(m_pushChannel, SIGNAL(connectedChanged()),
+            this, SLOT(onPushConnectedChanged()));
+    connect(m_pushChannel, SIGNAL(notificationReceived(QString,QString,QVariantMap)),
+            this, SLOT(onPushNotificationReceived(QString,QString,QVariantMap)));
 
-    QSettings settings;
-    m_host = settings.value(QStringLiteral("host")).toString();
-    m_port = settings.value(QStringLiteral("port"), 8123).toInt();
-    m_useSsl = settings.value(QStringLiteral("useSsl"), false).toBool();
-    m_ignoreSslErrors = settings.value(QStringLiteral("ignoreSslErrors"), false).toBool();
-    m_username = settings.value(QStringLiteral("username")).toString();
-    m_refreshToken = settings.value(QStringLiteral("refreshToken")).toString();
-    m_accessToken = settings.value(QStringLiteral("accessToken")).toString();
-    m_accessExpiresAt = QDateTime::fromMSecsSinceEpoch(
-                settings.value(QStringLiteral("accessExpiresAt"), 0).toLongLong());
-    m_instanceName = settings.value(QStringLiteral("instanceName")).toString();
-    m_haVersion = settings.value(QStringLiteral("haVersion")).toString();
-    rebuildBaseUrl();
+    m_authClientId = QString();
+    loadSession();
 }
 
 HassClient::~HassClient()
@@ -100,7 +135,18 @@ QString HassClient::otpHint() const { return m_otpHint; }
 QString HassClient::baseUrl() const { return m_baseUrl; }
 QString HassClient::accessToken() const { return m_accessToken; }
 QString HassClient::refreshToken() const { return m_refreshToken; }
+QString HassClient::authClientId() const { return clientId(); }
 qint64 HassClient::accessExpiresAtMs() const { return m_accessExpiresAt.toMSecsSinceEpoch(); }
+bool HassClient::restoringSession() const { return m_restoringSession; }
+QString HassClient::internalUrl() const { return m_internalUrl; }
+QString HassClient::externalUrl() const { return m_externalUrl; }
+QString HassClient::homeWifiSsid() const { return m_homeWifiSsid; }
+QString HassClient::currentWifiSsid() const { return m_currentWifiSsid; }
+bool HassClient::usingInternalUrl() const { return m_usingInternalUrl; }
+QString HassClient::webhookId() const { return m_webhookId; }
+QString HassClient::deviceName() const { return m_deviceName; }
+bool HassClient::mobileAppRegistered() const { return !m_webhookId.isEmpty(); }
+bool HassClient::pushConnected() const { return m_pushChannel && m_pushChannel->connected(); }
 
 void HassClient::setHost(const QString &host)
 {
@@ -135,6 +181,40 @@ void HassClient::setIgnoreSslErrors(bool ignore)
         return;
     m_ignoreSslErrors = ignore;
     emit ignoreSslErrorsChanged();
+    if (m_loggedIn)
+        startPushChannel();
+}
+
+void HassClient::setInternalUrl(const QString &url)
+{
+    if (m_internalUrl == url)
+        return;
+    m_internalUrl = url;
+    emit internalUrlChanged();
+}
+
+void HassClient::setExternalUrl(const QString &url)
+{
+    if (m_externalUrl == url)
+        return;
+    m_externalUrl = url;
+    emit externalUrlChanged();
+}
+
+void HassClient::setHomeWifiSsid(const QString &ssid)
+{
+    if (m_homeWifiSsid == ssid)
+        return;
+    m_homeWifiSsid = ssid;
+    emit homeWifiSsidChanged();
+}
+
+void HassClient::setUsingInternalUrl(bool usingInternal)
+{
+    if (m_usingInternalUrl == usingInternal)
+        return;
+    m_usingInternalUrl = usingInternal;
+    emit usingInternalUrlChanged();
 }
 
 void HassClient::setBusy(bool busy)
@@ -190,6 +270,14 @@ void HassClient::setNeedsOtp(bool needsOtp)
     emit needsOtpChanged();
 }
 
+void HassClient::setRestoringSession(bool restoring)
+{
+    if (m_restoringSession == restoring)
+        return;
+    m_restoringSession = restoring;
+    emit restoringSessionChanged();
+}
+
 void HassClient::rebuildBaseUrl()
 {
     QString host = m_host.trimmed();
@@ -221,10 +309,115 @@ QUrl HassClient::apiUrl(const QString &path) const
 
 QString HassClient::clientId() const
 {
-    QString url = m_baseUrl;
-    if (!url.endsWith(QLatin1Char('/')))
-        url.append(QLatin1Char('/'));
-    return url;
+    if (!m_authClientId.isEmpty())
+        return m_authClientId;
+    return canonicalClientId(m_baseUrl);
+}
+
+void HassClient::loadSession()
+{
+    const QString path = sessionFilePath();
+    QFile file(path);
+    QJsonObject obj;
+
+    if (file.exists() && file.open(QIODevice::ReadOnly)) {
+        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        file.close();
+        if (doc.isObject())
+            obj = doc.object();
+    }
+
+    QSettings legacy;
+
+    // Migrate from older QSettings-based storage if needed.
+    if (obj.isEmpty()) {
+        if (!legacy.value(QStringLiteral("refreshToken")).toString().isEmpty()
+                || !legacy.value(QStringLiteral("host")).toString().isEmpty()) {
+            obj.insert(QStringLiteral("host"), legacy.value(QStringLiteral("host")).toString());
+            obj.insert(QStringLiteral("port"), legacy.value(QStringLiteral("port"), 8123).toInt());
+            obj.insert(QStringLiteral("useSsl"), legacy.value(QStringLiteral("useSsl"), false).toBool());
+            obj.insert(QStringLiteral("ignoreSslErrors"),
+                       legacy.value(QStringLiteral("ignoreSslErrors"), false).toBool());
+            obj.insert(QStringLiteral("username"), legacy.value(QStringLiteral("username")).toString());
+            obj.insert(QStringLiteral("refreshToken"),
+                       legacy.value(QStringLiteral("refreshToken")).toString());
+            obj.insert(QStringLiteral("accessToken"),
+                       legacy.value(QStringLiteral("accessToken")).toString());
+            obj.insert(QStringLiteral("accessExpiresAt"),
+                       legacy.value(QStringLiteral("accessExpiresAt"), 0).toLongLong());
+            obj.insert(QStringLiteral("instanceName"),
+                       legacy.value(QStringLiteral("instanceName")).toString());
+            obj.insert(QStringLiteral("haVersion"),
+                       legacy.value(QStringLiteral("haVersion")).toString());
+            obj.insert(QStringLiteral("internalUrl"),
+                       legacy.value(QStringLiteral("internalUrl")).toString());
+            obj.insert(QStringLiteral("externalUrl"),
+                       legacy.value(QStringLiteral("externalUrl")).toString());
+            obj.insert(QStringLiteral("homeWifiSsid"),
+                       legacy.value(QStringLiteral("homeWifiSsid")).toString());
+            obj.insert(QStringLiteral("authClientId"),
+                       legacy.value(QStringLiteral("authClientId")).toString());
+        }
+    }
+
+    m_host = obj.value(QStringLiteral("host")).toString();
+    m_port = obj.value(QStringLiteral("port")).toInt();
+    if (m_port <= 0)
+        m_port = 8123;
+    m_useSsl = obj.value(QStringLiteral("useSsl")).toBool();
+    m_ignoreSslErrors = obj.value(QStringLiteral("ignoreSslErrors")).toBool();
+    m_username = obj.value(QStringLiteral("username")).toString();
+    m_refreshToken = obj.value(QStringLiteral("refreshToken")).toString();
+    m_accessToken = obj.value(QStringLiteral("accessToken")).toString();
+    m_accessExpiresAt = QDateTime::fromMSecsSinceEpoch(
+                obj.value(QStringLiteral("accessExpiresAt")).toVariant().toLongLong(),
+                Qt::UTC);
+    m_instanceName = obj.value(QStringLiteral("instanceName")).toString();
+    m_haVersion = obj.value(QStringLiteral("haVersion")).toString();
+    m_internalUrl = obj.value(QStringLiteral("internalUrl")).toString();
+    m_externalUrl = obj.value(QStringLiteral("externalUrl")).toString();
+    m_homeWifiSsid = obj.value(QStringLiteral("homeWifiSsid")).toString();
+    m_authClientId = obj.value(QStringLiteral("authClientId")).toString();
+    m_deviceId = obj.value(QStringLiteral("deviceId")).toString();
+    m_deviceName = obj.value(QStringLiteral("deviceName")).toString();
+    m_webhookId = obj.value(QStringLiteral("webhookId")).toString();
+    m_webhookSecret = obj.value(QStringLiteral("webhookSecret")).toString();
+    m_cloudhookUrl = obj.value(QStringLiteral("cloudhookUrl")).toString();
+    m_remoteUiUrl = obj.value(QStringLiteral("remoteUiUrl")).toString();
+
+    m_internalUrl = normalizeInstanceUrl(m_internalUrl, false);
+    m_externalUrl = normalizeInstanceUrl(m_externalUrl, true);
+
+    rebuildBaseUrl();
+
+    if (m_authClientId.isEmpty())
+        m_authClientId = canonicalClientId(m_baseUrl);
+
+    ensureDeviceId();
+    ensureDeviceName();
+
+    if (m_internalUrl.isEmpty() && !m_host.isEmpty())
+        m_internalUrl = m_baseUrl;
+
+    // Recover a refresh token left only in legacy QSettings.
+    if (m_refreshToken.isEmpty()) {
+        const QString legacyRefresh = legacy.value(QStringLiteral("refreshToken")).toString();
+        if (!legacyRefresh.isEmpty())
+            m_refreshToken = legacyRefresh;
+    }
+    if (m_accessToken.isEmpty()) {
+        const QString legacyAccess = legacy.value(QStringLiteral("accessToken")).toString();
+        if (!legacyAccess.isEmpty())
+            m_accessToken = legacyAccess;
+    }
+
+    qWarning() << "Helmsman: session loaded from" << path
+               << "host=" << m_host
+               << "refreshLen=" << m_refreshToken.size()
+               << "clientId=" << m_authClientId;
+
+    if (!m_refreshToken.isEmpty() || !m_host.isEmpty())
+        persistSession();
 }
 
 bool HassClient::parseEndpoint(const QString &endpoint, QString *error)
@@ -304,9 +497,11 @@ void HassClient::get(const QString &path, RequestKind kind)
     QNetworkRequest request(apiUrl(path));
     request.setRawHeader("Accept", "application/json");
     request.setRawHeader("User-Agent", kClientName);
-    if (kind == RequestConfig && !m_accessToken.isEmpty())
+    if (!m_accessToken.isEmpty()
+            && (kind == RequestConfig || kind == RequestMobileRegister)) {
         request.setRawHeader("Authorization",
                              QByteArray("Bearer ") + m_accessToken.toUtf8());
+    }
     watch(m_nam->get(request), kind);
 }
 
@@ -316,6 +511,11 @@ void HassClient::postJson(const QString &path, const QJsonObject &body, RequestK
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Accept", "application/json");
     request.setRawHeader("User-Agent", kClientName);
+    if (!m_accessToken.isEmpty()
+            && (kind == RequestConfig || kind == RequestMobileRegister)) {
+        request.setRawHeader("Authorization",
+                             QByteArray("Bearer ") + m_accessToken.toUtf8());
+    }
     const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
     watch(m_nam->post(request, payload), kind);
 }
@@ -340,9 +540,30 @@ void HassClient::onSslErrors(QNetworkReply *reply, const QList<QSslError> &error
 void HassClient::restoreSession()
 {
     clearError();
+
+    // Pick http vs https endpoint from the configured URLs before refreshing.
+    // Without this, a previous external https session can leave useSsl=true and
+    // break restore on a plain http LAN address.
+    if (!m_internalUrl.isEmpty() || !m_externalUrl.isEmpty())
+        selectEndpointForWifi(m_currentWifiSsid);
+
     if (m_refreshToken.isEmpty() || m_host.isEmpty()) {
-        setStatus(QStringLiteral("Not connected"));
+        setRestoringSession(false);
+        setStatus(m_refreshToken.isEmpty()
+                  ? QStringLiteral("Not connected")
+                  : QStringLiteral("Saved session is incomplete"));
         emit restoreFinished(false);
+        return;
+    }
+
+    setRestoringSession(true);
+
+    // Reuse a still-valid access token without hitting the network.
+    const qint64 msLeft = QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC());
+    if (!m_accessToken.isEmpty() && msLeft > 60 * 1000) {
+        setConnected(true);
+        setStatus(QStringLiteral("Restoring session..."));
+        fetchConfig();
         return;
     }
 
@@ -357,17 +578,18 @@ void HassClient::restoreSession()
 void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ignoreSslErrors)
 {
     clearError();
+    setRestoringSession(false);
     setLoggedIn(false);
     setNeedsOtp(false);
     setConnected(false);
     m_flowId.clear();
+
+    // Keep the saved refresh token on disk until a new login succeeds or the
+    // user explicitly signs out. Clearing + persistConnectionSettings here was
+    // wiping sessions whenever Connect was tapped during restore.
     if (!m_accessToken.isEmpty()) {
         m_accessToken.clear();
         emit accessTokenChanged();
-    }
-    if (!m_refreshToken.isEmpty()) {
-        m_refreshToken.clear();
-        emit refreshTokenChanged();
     }
     if (m_accessExpiresAt.isValid()) {
         m_accessExpiresAt = QDateTime();
@@ -376,6 +598,8 @@ void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ig
 
     setIgnoreSslErrors(ignoreSslErrors);
     setUseSsl(useSsl);
+
+    const QString previousHost = m_host;
 
     QString parseError;
     if (!parseEndpoint(endpoint, &parseError)) {
@@ -387,11 +611,16 @@ void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ig
     // parseEndpoint may override SSL if the user pasted a full URL.
     Q_UNUSED(useSsl);
 
-    QSettings settings;
-    settings.setValue(QStringLiteral("host"), m_host);
-    settings.setValue(QStringLiteral("port"), m_port);
-    settings.setValue(QStringLiteral("useSsl"), m_useSsl);
-    settings.setValue(QStringLiteral("ignoreSslErrors"), m_ignoreSslErrors);
+    // New interactive login should bind tokens to this instance URL.
+    m_authClientId = canonicalClientId(m_baseUrl);
+
+    // Switching instances invalidates the previous mobile_app registration.
+    if (!previousHost.isEmpty() && previousHost.compare(m_host, Qt::CaseInsensitive) != 0)
+        clearMobileRegistration();
+
+    if (m_internalUrl.isEmpty())
+        setInternalUrl(m_baseUrl);
+    persistConnectionSettings();
 
     setStatus(QStringLiteral("Contacting %1...").arg(m_baseUrl));
     get(QStringLiteral("/auth/providers"), RequestProviders);
@@ -466,11 +695,161 @@ void HassClient::logout()
     }
     m_flowId.clear();
     m_authCode.clear();
+    stopPushChannel();
     clearPersistedTokens();
     setLoggedIn(false);
     setNeedsOtp(false);
     setConnected(false);
     setStatus(QStringLiteral("Signed out"));
+}
+
+void HassClient::persistConnectionSettings()
+{
+    persistSession();
+}
+
+void HassClient::persistSession()
+{
+    if (m_authClientId.isEmpty())
+        m_authClientId = canonicalClientId(m_baseUrl);
+
+    QJsonObject obj;
+    obj.insert(QStringLiteral("host"), m_host);
+    obj.insert(QStringLiteral("port"), m_port);
+    obj.insert(QStringLiteral("useSsl"), m_useSsl);
+    obj.insert(QStringLiteral("ignoreSslErrors"), m_ignoreSslErrors);
+    obj.insert(QStringLiteral("internalUrl"), m_internalUrl);
+    obj.insert(QStringLiteral("externalUrl"), m_externalUrl);
+    obj.insert(QStringLiteral("homeWifiSsid"), m_homeWifiSsid);
+    obj.insert(QStringLiteral("authClientId"), m_authClientId);
+    obj.insert(QStringLiteral("username"), m_username);
+    obj.insert(QStringLiteral("refreshToken"), m_refreshToken);
+    obj.insert(QStringLiteral("accessToken"), m_accessToken);
+    obj.insert(QStringLiteral("accessExpiresAt"),
+               static_cast<double>(m_accessExpiresAt.toMSecsSinceEpoch()));
+    obj.insert(QStringLiteral("instanceName"), m_instanceName);
+    obj.insert(QStringLiteral("haVersion"), m_haVersion);
+    obj.insert(QStringLiteral("deviceId"), m_deviceId);
+    obj.insert(QStringLiteral("deviceName"), m_deviceName);
+    obj.insert(QStringLiteral("webhookId"), m_webhookId);
+    obj.insert(QStringLiteral("webhookSecret"), m_webhookSecret);
+    obj.insert(QStringLiteral("cloudhookUrl"), m_cloudhookUrl);
+    obj.insert(QStringLiteral("remoteUiUrl"), m_remoteUiUrl);
+
+    const QString path = sessionFilePath();
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "Helmsman: failed to open session file for writing:" << path << file.errorString();
+        setError(QStringLiteral("Could not save session"));
+        return;
+    }
+    file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    if (!file.commit()) {
+        qWarning() << "Helmsman: failed to commit session file:" << path << file.errorString();
+        setError(QStringLiteral("Could not save session"));
+        return;
+    }
+
+    // Mirror into QSettings as a backup under Sailjail.
+    QSettings legacy;
+    legacy.setValue(QStringLiteral("host"), m_host);
+    legacy.setValue(QStringLiteral("port"), m_port);
+    legacy.setValue(QStringLiteral("useSsl"), m_useSsl);
+    legacy.setValue(QStringLiteral("ignoreSslErrors"), m_ignoreSslErrors);
+    legacy.setValue(QStringLiteral("internalUrl"), m_internalUrl);
+    legacy.setValue(QStringLiteral("externalUrl"), m_externalUrl);
+    legacy.setValue(QStringLiteral("homeWifiSsid"), m_homeWifiSsid);
+    legacy.setValue(QStringLiteral("authClientId"), m_authClientId);
+    legacy.setValue(QStringLiteral("username"), m_username);
+    legacy.setValue(QStringLiteral("refreshToken"), m_refreshToken);
+    legacy.setValue(QStringLiteral("accessToken"), m_accessToken);
+    legacy.setValue(QStringLiteral("accessExpiresAt"), m_accessExpiresAt.toMSecsSinceEpoch());
+    legacy.setValue(QStringLiteral("instanceName"), m_instanceName);
+    legacy.setValue(QStringLiteral("haVersion"), m_haVersion);
+    legacy.setValue(QStringLiteral("deviceId"), m_deviceId);
+    legacy.setValue(QStringLiteral("deviceName"), m_deviceName);
+    legacy.setValue(QStringLiteral("webhookId"), m_webhookId);
+    legacy.setValue(QStringLiteral("webhookSecret"), m_webhookSecret);
+    legacy.setValue(QStringLiteral("cloudhookUrl"), m_cloudhookUrl);
+    legacy.setValue(QStringLiteral("remoteUiUrl"), m_remoteUiUrl);
+    legacy.sync();
+
+    qWarning() << "Helmsman: session saved to" << path
+               << "refreshLen=" << m_refreshToken.size()
+               << "clientId=" << m_authClientId
+               << "webhook=" << (!m_webhookId.isEmpty());
+}
+
+void HassClient::clearPersistedTokens()
+{
+    m_accessToken.clear();
+    m_refreshToken.clear();
+    m_accessExpiresAt = QDateTime();
+    persistSession();
+
+    QSettings legacy;
+    legacy.remove(QStringLiteral("refreshToken"));
+    legacy.remove(QStringLiteral("accessToken"));
+    legacy.remove(QStringLiteral("accessExpiresAt"));
+    legacy.sync();
+}
+
+void HassClient::saveConnectionSettings(const QString &internalUrl,
+                                        const QString &externalUrl,
+                                        const QString &homeWifiSsid,
+                                        bool ignoreSslErrors)
+{
+    setInternalUrl(normalizeInstanceUrl(internalUrl, false));
+    setExternalUrl(normalizeInstanceUrl(externalUrl, true));
+    setHomeWifiSsid(homeWifiSsid.trimmed());
+    setIgnoreSslErrors(ignoreSslErrors);
+    persistConnectionSettings();
+    selectEndpointForWifi(m_currentWifiSsid);
+}
+
+void HassClient::updateCurrentWifiSsid(const QString &ssid)
+{
+    if (m_currentWifiSsid == ssid)
+        return;
+    m_currentWifiSsid = ssid;
+    emit currentWifiSsidChanged();
+    selectEndpointForWifi(ssid);
+}
+
+bool HassClient::selectEndpointForWifi(const QString &ssid)
+{
+    const bool onHomeWifi = !m_homeWifiSsid.isEmpty()
+            && !ssid.isEmpty()
+            && ssid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0;
+    const bool wifiKnown = !ssid.isEmpty();
+
+    // Prefer internal (often plain http) when on home Wi‑Fi or when Wi‑Fi is
+    // still unknown at startup. Only force external when we know we are away.
+    QString chosen;
+    if (onHomeWifi && !m_internalUrl.isEmpty())
+        chosen = m_internalUrl;
+    else if (wifiKnown && !onHomeWifi && !m_externalUrl.isEmpty())
+        chosen = m_externalUrl;
+    else if (!m_internalUrl.isEmpty())
+        chosen = m_internalUrl;
+    else if (!m_externalUrl.isEmpty())
+        chosen = m_externalUrl;
+    else
+        return false;
+
+    QString parseError;
+    const QString previousBase = m_baseUrl;
+    const bool previousInternal = m_usingInternalUrl;
+    if (!parseEndpoint(chosen, &parseError)) {
+        setError(parseError);
+        return false;
+    }
+
+    setUsingInternalUrl(chosen == m_internalUrl);
+    persistConnectionSettings();
+    if (m_loggedIn && previousBase != m_baseUrl)
+        startPushChannel();
+    return previousBase != m_baseUrl || previousInternal != m_usingInternalUrl;
 }
 
 void HassClient::startLoginFlow()
@@ -517,31 +896,9 @@ void HassClient::fetchConfig()
     get(QStringLiteral("/api/config"), RequestConfig);
 }
 
-void HassClient::persistSession()
-{
-    QSettings settings;
-    settings.setValue(QStringLiteral("host"), m_host);
-    settings.setValue(QStringLiteral("port"), m_port);
-    settings.setValue(QStringLiteral("useSsl"), m_useSsl);
-    settings.setValue(QStringLiteral("ignoreSslErrors"), m_ignoreSslErrors);
-    settings.setValue(QStringLiteral("username"), m_username);
-    settings.setValue(QStringLiteral("refreshToken"), m_refreshToken);
-    settings.setValue(QStringLiteral("accessToken"), m_accessToken);
-    settings.setValue(QStringLiteral("accessExpiresAt"), m_accessExpiresAt.toMSecsSinceEpoch());
-    settings.setValue(QStringLiteral("instanceName"), m_instanceName);
-    settings.setValue(QStringLiteral("haVersion"), m_haVersion);
-}
-
-void HassClient::clearPersistedTokens()
-{
-    QSettings settings;
-    settings.remove(QStringLiteral("refreshToken"));
-    settings.remove(QStringLiteral("accessToken"));
-    settings.remove(QStringLiteral("accessExpiresAt"));
-}
-
 void HassClient::applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing)
 {
+    Q_UNUSED(keepRefreshIfMissing);
     const QString access = obj.value(QStringLiteral("access_token")).toString();
     if (m_accessToken != access) {
         m_accessToken = access;
@@ -553,9 +910,9 @@ void HassClient::applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing)
             m_refreshToken = refresh;
             emit refreshTokenChanged();
         }
-    } else if (!keepRefreshIfMissing && !m_refreshToken.isEmpty()) {
-        m_refreshToken.clear();
-        emit refreshTokenChanged();
+    } else {
+        // Never drop a known refresh token just because a response omitted it.
+        qWarning() << "Helmsman: token response missing refresh_token; keeping existing token";
     }
 
     const int expiresIn = obj.value(QStringLiteral("expires_in")).toInt();
@@ -595,10 +952,22 @@ void HassClient::onReplyFinished()
                 .arg(m_baseUrl, netErrorString);
         setError(message);
         setStatus(QStringLiteral("Connection failed"));
-        if (kind == RequestRefresh)
-            emit restoreFinished(false);
-        else
+        if (kind == RequestRefresh) {
+            // Keep tokens on transient network errors so a later launch can retry.
+            const qint64 msLeft = QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC());
+            if (!m_accessToken.isEmpty() && msLeft > 0) {
+                setConnected(true);
+                setLoggedIn(true);
+                setRestoringSession(false);
+                emit loginSucceeded();
+                emit restoreFinished(true);
+            } else {
+                setRestoringSession(false);
+                emit restoreFinished(false);
+            }
+        } else {
             emit loginFailed(message);
+        }
         return;
     }
 
@@ -634,6 +1003,11 @@ void HassClient::onReplyFinished()
             const QString message = jsonErrorMessage(data, QStringLiteral("Token request failed"));
             setError(message);
             if (kind == RequestRefresh) {
+                // Keep tokens so the user can retry. Wiping here forced a full
+                // password login whenever HA was briefly unreachable or the
+                // client_id did not match yet after an app update.
+                setStatus(QStringLiteral("Could not restore session — tap Retry restore"));
+                setRestoringSession(false);
                 emit restoreFinished(false);
             } else {
                 emit loginFailed(message);
@@ -652,11 +1026,25 @@ void HassClient::onReplyFinished()
             // Tokens are still valid.
             setLoggedIn(true);
             setConnected(true);
+            setRestoringSession(false);
             emit loginSucceeded();
             emit restoreFinished(true);
+            ensureMobileAppRegistration();
             return;
         }
         handleConfig(data);
+        return;
+    }
+
+    if (kind == RequestMobileRegister) {
+        setBusy(false);
+        if (status != 200 && status != 201) {
+            const QString message = jsonErrorMessage(
+                        data, QStringLiteral("Mobile app registration failed"));
+            qWarning() << "Helmsman: mobile_app registration failed" << status << message;
+            return;
+        }
+        handleMobileRegistration(data);
         return;
     }
 
@@ -831,24 +1219,29 @@ void HassClient::handleToken(const QByteArray &data, bool fromRefresh)
         setBusy(false);
         const QString message = QStringLiteral("Malformed token response");
         setError(message);
-        if (fromRefresh)
+        if (fromRefresh) {
+            setRestoringSession(false);
             emit restoreFinished(false);
-        else
+        } else
             emit loginFailed(message);
         return;
     }
 
-    applyTokens(jsonObjectToMap(doc.object()), fromRefresh);
+    applyTokens(jsonObjectToMap(doc.object()), true);
     if (m_accessToken.isEmpty()) {
         setBusy(false);
         const QString message = QStringLiteral("No access token in response");
         setError(message);
-        if (fromRefresh)
+        if (fromRefresh) {
+            setRestoringSession(false);
             emit restoreFinished(false);
-        else
+        } else
             emit loginFailed(message);
         return;
     }
+
+    if (m_authClientId.isEmpty())
+        m_authClientId = canonicalClientId(m_baseUrl);
 
     setConnected(true);
     persistSession();
@@ -877,9 +1270,137 @@ void HassClient::handleConfig(const QByteArray &data)
     setNeedsOtp(false);
     setLoggedIn(true);
     setConnected(true);
+    setRestoringSession(false);
     setStatus(m_instanceName.isEmpty()
               ? QStringLiteral("Signed in")
               : QStringLiteral("Signed in to %1").arg(m_instanceName));
     emit loginSucceeded();
     emit restoreFinished(true);
+    ensureMobileAppRegistration();
+}
+
+void HassClient::ensureDeviceId()
+{
+    if (!m_deviceId.isEmpty())
+        return;
+    m_deviceId = QUuid::createUuid().toString();
+    m_deviceId.remove(QLatin1Char('{'));
+    m_deviceId.remove(QLatin1Char('}'));
+}
+
+void HassClient::ensureDeviceName()
+{
+    if (!m_deviceName.isEmpty())
+        return;
+
+    QString host = QHostInfo::localHostName().trimmed();
+    if (host.isEmpty() || host == QLatin1String("localhost"))
+        host = QStringLiteral("Sailfish");
+    m_deviceName = QStringLiteral("Helmsman (%1)").arg(host);
+    emit deviceNameChanged();
+}
+
+void HassClient::ensureMobileAppRegistration()
+{
+    if (!m_loggedIn || m_accessToken.isEmpty())
+        return;
+
+    if (!m_webhookId.isEmpty()) {
+        startPushChannel();
+        return;
+    }
+
+    registerMobileApp();
+}
+
+void HassClient::registerMobileApp()
+{
+    ensureDeviceId();
+    ensureDeviceName();
+
+    QJsonObject appData;
+    appData.insert(QStringLiteral("push_websocket_channel"), true);
+
+    QJsonObject body;
+    body.insert(QStringLiteral("device_id"), m_deviceId);
+    body.insert(QStringLiteral("app_id"), QStringLiteral("harbour.helmsman"));
+    body.insert(QStringLiteral("app_name"), QStringLiteral("Helmsman"));
+    body.insert(QStringLiteral("app_version"), appVersion());
+    body.insert(QStringLiteral("device_name"), m_deviceName);
+    body.insert(QStringLiteral("manufacturer"), QStringLiteral("Jolla"));
+    body.insert(QStringLiteral("model"), QSysInfo::prettyProductName());
+    body.insert(QStringLiteral("os_name"), QStringLiteral("Sailfish OS"));
+    body.insert(QStringLiteral("os_version"), QSysInfo::productVersion());
+    body.insert(QStringLiteral("supports_encryption"), false);
+    body.insert(QStringLiteral("app_data"), appData);
+
+    qWarning() << "Helmsman: registering mobile_app as" << m_deviceName;
+    postJson(QStringLiteral("/api/mobile_app/registrations"), body, RequestMobileRegister);
+}
+
+void HassClient::handleMobileRegistration(const QByteArray &data)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) {
+        qWarning() << "Helmsman: malformed mobile_app registration response";
+        return;
+    }
+
+    const QJsonObject obj = doc.object();
+    const QString webhook = obj.value(QStringLiteral("webhook_id")).toString();
+    if (webhook.isEmpty()) {
+        qWarning() << "Helmsman: registration response missing webhook_id";
+        return;
+    }
+
+    const bool wasRegistered = !m_webhookId.isEmpty();
+    m_webhookId = webhook;
+    m_webhookSecret = obj.value(QStringLiteral("secret")).toString();
+    m_cloudhookUrl = obj.value(QStringLiteral("cloudhook_url")).toString();
+    m_remoteUiUrl = obj.value(QStringLiteral("remote_ui_url")).toString();
+    persistSession();
+    if (!wasRegistered)
+        emit mobileAppRegisteredChanged();
+    emit webhookIdChanged();
+    qWarning() << "Helmsman: mobile_app registered, webhook set";
+    startPushChannel();
+}
+
+void HassClient::clearMobileRegistration()
+{
+    const bool hadWebhook = !m_webhookId.isEmpty();
+    m_webhookId.clear();
+    m_webhookSecret.clear();
+    m_cloudhookUrl.clear();
+    m_remoteUiUrl.clear();
+    if (hadWebhook) {
+        emit webhookIdChanged();
+        emit mobileAppRegisteredChanged();
+    }
+}
+
+void HassClient::startPushChannel()
+{
+    if (!m_pushChannel || m_webhookId.isEmpty() || m_accessToken.isEmpty() || m_baseUrl.isEmpty())
+        return;
+    m_pushChannel->configure(m_baseUrl, m_accessToken, m_webhookId, m_ignoreSslErrors);
+    m_pushChannel->start();
+}
+
+void HassClient::stopPushChannel()
+{
+    if (m_pushChannel)
+        m_pushChannel->stop();
+}
+
+void HassClient::onPushConnectedChanged()
+{
+    emit pushConnectedChanged();
+}
+
+void HassClient::onPushNotificationReceived(const QString &title,
+                                            const QString &message,
+                                            const QVariantMap &data)
+{
+    emit notificationReceived(title, message, data);
 }

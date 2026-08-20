@@ -4,9 +4,17 @@ import Sailfish.Silica 1.0
 Page {
     id: page
     property var hassClient
+    property bool hasSavedSession: hassClient.refreshToken.length > 0
 
     function connectClicked() {
         hassClient.connectToInstance(hostField.text, sslSwitch.checked, ignoreSslSwitch.checked)
+    }
+
+    function primaryClicked() {
+        if (page.hasSavedSession)
+            hassClient.restoreSession()
+        else
+            page.connectClicked()
     }
 
     Connections {
@@ -15,9 +23,12 @@ Page {
             if (!hassClient.loggedIn)
                 pageStack.push(Qt.resolvedUrl("LoginPage.qml"), { hassClient: hassClient })
         }
-        onRestoreFinished: function(loggedIn) {
+        onRestoreFinished: {
             if (loggedIn)
-                pageStack.replace(Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
+                pageStack.replaceAbove(null, Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
+        }
+        onLoginSucceeded: {
+            pageStack.replaceAbove(null, Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
         }
     }
 
@@ -41,7 +52,9 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Enter the IP address or hostname of your Home Assistant instance."
+                text: page.hasSavedSession
+                      ? "A saved session was found for this instance. Retry restore, or connect again to sign in fresh."
+                      : "Enter the IP address or hostname of your Home Assistant instance."
             }
 
             TextField {
@@ -58,9 +71,9 @@ Page {
                     return value
                 }
                 inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
-                EnterKey.enabled: text.length > 0 && !hassClient.busy
+                EnterKey.enabled: text.length > 0 && !hassClient.busy && !hassClient.restoringSession
                 EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-                EnterKey.onClicked: page.connectClicked()
+                EnterKey.onClicked: page.primaryClicked()
             }
 
             TextSwitch {
@@ -99,16 +112,41 @@ Page {
                 text: hassClient.statusText
             }
 
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: hassClient.restoringSession
+                text: "Restoring saved session..."
+            }
+
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
-                running: hassClient.busy
+                running: hassClient.busy || hassClient.restoringSession
                 visible: running
             }
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: hassClient.busy ? "Connecting..." : "Connect"
-                enabled: hostField.text.length > 0 && !hassClient.busy
+                text: {
+                    if (hassClient.restoringSession)
+                        return "Restoring..."
+                    if (page.hasSavedSession)
+                        return "Retry restore"
+                    return hassClient.busy ? "Connecting..." : "Connect"
+                }
+                enabled: hostField.text.length > 0 && !hassClient.busy && !hassClient.restoringSession
+                onClicked: page.primaryClicked()
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Sign in again"
+                visible: page.hasSavedSession
+                enabled: hostField.text.length > 0 && !hassClient.busy && !hassClient.restoringSession
                 onClicked: page.connectClicked()
             }
 

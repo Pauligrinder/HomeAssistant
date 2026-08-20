@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/mdi">
+        <file alias="materialdesignicons-webfont.ttf">data/mdi/materialdesignicons-webfont.ttf</file>
+        <file alias="codepoints.json">data/mdi/codepoints.json</file>
+    </qresource>
+</RCC>

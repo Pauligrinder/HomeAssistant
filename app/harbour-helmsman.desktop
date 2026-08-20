@@ -9,6 +9,6 @@ Comment=Native Home Assistant client
 Comment[en]=Native Home Assistant client
 
 [X-Sailjail]
-Permissions=Internet
+Permissions=Internet;Notifications;
 OrganizationName=org.helmsman
 ApplicationName=harbour-helmsman
