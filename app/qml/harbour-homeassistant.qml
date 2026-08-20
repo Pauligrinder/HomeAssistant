@@ -148,8 +148,8 @@ ApplicationWindow
         }
 
         var tag = dataString(data, "tag")
-        var group = dataString(data, "group")
-        var channel = dataString(data, "channel")
+        // data.group / data.channel are accepted by HA but not mapped here —
+        // encoding them into appName/category previously broke Lipstick publish.
         var subtitle = dataString(data, "subtitle")
         if (!subtitle.length)
             subtitle = dataString(data, "subject")
@@ -167,18 +167,17 @@ ApplicationWindow
             n.replacesId = 0
         }
 
-        // Sailfish groups by appName. Keep ASCII-only — unicode separators have
-        // broken publish on some Lipstick builds. Also avoid custom origin hints.
-        n.appName = group.length > 0 ? ("Helmsman - " + group) : "Helmsman"
+        // Keep a stable appName. Encoding HA group into appName previously
+        // broke publish on some Lipstick builds (and skipped the cover update).
+        n.appName = "Helmsman"
         n.appIcon = "harbour-helmsman"
 
-        if (channel.length > 0)
-            n.category = "x-helmsman." + channel.replace(/\s+/g, "_").toLowerCase()
-
-        n.summary = title && title.length > 0 ? title : "Home Assistant"
-        n.body = message || ""
-        n.previewSummary = n.summary
-        n.previewBody = n.body
+        var summary = title && title.length > 0 ? title : "Home Assistant"
+        var body = message || ""
+        n.summary = summary
+        n.body = body
+        n.previewSummary = summary
+        n.previewBody = body
         if (subtitle.length > 0)
             n.subText = subtitle
         n.urgency = urgencyFromData(data)
@@ -225,20 +224,26 @@ ApplicationWindow
             }
         }
 
-        n.clicked.connect(function() { appWindow.activate() })
-        n.publish()
-        console.log("Helmsman: published notification id=", n.replacesId)
-
-        if (tag.length > 0) {
-            var next = cloneTagMap()
-            next[tag] = n.replacesId
-            appWindow.notificationTags = next
-        }
-
+        // Cover first: publish() can fail with some HA data fields and must not
+        // prevent the cover from reflecting the latest alert.
         if (!replacing)
             appWindow.notificationCount += 1
+        else if (appWindow.notificationCount < 1)
+            appWindow.notificationCount = 1
+        appWindow.updateCoverNotification(summary, body, color, coverIconPath)
 
-        appWindow.updateCoverNotification(n.summary, n.body, color, coverIconPath)
+        n.clicked.connect(function() { appWindow.activate() })
+        try {
+            n.publish()
+            console.log("Helmsman: published notification id=", n.replacesId)
+            if (tag.length > 0) {
+                var next = cloneTagMap()
+                next[tag] = n.replacesId
+                appWindow.notificationTags = next
+            }
+        } catch (e) {
+            console.log("Helmsman: notification publish failed:", e)
+        }
     }
 
     onApplicationActiveChanged: {

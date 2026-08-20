@@ -2,11 +2,10 @@
 
 A native Silica client for [Home Assistant](https://www.home-assistant.io/).
 Built as a Harbour app (Qt 5 / QML + C++) the same way most SFOS apps are,
-and tested against the same Platform SDK target as ElectricEel
-(`SailfishOS-5.2.0.15-aarch64`).
+and tested against Platform SDK target `SailfishOS-5.2.0.15-aarch64`.
 
 This first cut covers connecting to an instance and signing in, including
-TOTP two-step verification. Dashboards and entity control come next.
+TOTP two-step verification, dashboards (webview-wrapped) and notifications.
 
 ## Layout
 
@@ -30,7 +29,7 @@ app/
 
 ## Build
 
-Same Docker Platform SDK flow as ElectricEel:
+Docker Platform SDK flow:
 
 ```sh
 docker pull coderus/sailfishos-platform-sdk-aarch64
@@ -41,9 +40,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.1.9-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.0-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.1.9-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.2.0-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`.
