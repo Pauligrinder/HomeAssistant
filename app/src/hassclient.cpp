@@ -22,6 +22,8 @@
 namespace {
 
 const char *kClientName = "Helmsman";
+const int kDefaultHttpPort = 80;
+const int kDefaultHttpsPort = 443;
 
 QString canonicalClientId(const QString &baseUrl)
 {
@@ -73,6 +75,76 @@ QVariantMap jsonObjectToMap(const QJsonObject &obj)
     return map;
 }
 
+bool parseEndpointSpec(const QString &endpoint, bool defaultSsl,
+                       bool *ssl, QString *host, int *port, QString *error)
+{
+    QString raw = endpoint.trimmed();
+    if (raw.isEmpty()) {
+        *error = QStringLiteral("Enter an IP address or hostname");
+        return false;
+    }
+
+    bool useSsl = defaultSsl;
+    if (raw.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive)) {
+        useSsl = true;
+        raw = raw.mid(8);
+    } else if (raw.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)) {
+        useSsl = false;
+        raw = raw.mid(7);
+    }
+
+    if (raw.endsWith(QLatin1Char('/')))
+        raw.chop(1);
+
+    const int slash = raw.indexOf(QLatin1Char('/'));
+    if (slash >= 0)
+        raw = raw.left(slash);
+
+    QString parsedHost;
+    int parsedPort = useSsl ? kDefaultHttpsPort : kDefaultHttpPort;
+
+    if (raw.startsWith(QLatin1Char('['))) {
+        const int close = raw.indexOf(QLatin1Char(']'));
+        if (close < 0) {
+            *error = QStringLiteral("Invalid IPv6 address");
+            return false;
+        }
+        parsedHost = raw.mid(1, close - 1);
+        if (close + 1 < raw.size() && raw.at(close + 1) == QLatin1Char(':'))
+            parsedPort = raw.mid(close + 2).toInt();
+    } else {
+        const int colon = raw.lastIndexOf(QLatin1Char(':'));
+        if (colon > 0 && raw.indexOf(QLatin1Char(':')) == colon) {
+            parsedHost = raw.left(colon);
+            parsedPort = raw.mid(colon + 1).toInt();
+        } else {
+            parsedHost = raw;
+        }
+    }
+
+    if (parsedHost.isEmpty() || parsedPort <= 0 || parsedPort > 65535) {
+        *error = QStringLiteral("Could not parse host or port");
+        return false;
+    }
+
+    *ssl = useSsl;
+    *host = parsedHost;
+    *port = parsedPort;
+    return true;
+}
+
+QUrl endpointSpecToUrl(bool ssl, const QString &host, int port, const QString &path)
+{
+    QUrl url;
+    url.setScheme(ssl ? QStringLiteral("https") : QStringLiteral("http"));
+    url.setHost(host);
+    const int defaultPort = ssl ? kDefaultHttpsPort : kDefaultHttpPort;
+    if (port > 0 && port != defaultPort)
+        url.setPort(port);
+    url.setPath(path);
+    return url;
+}
+
 QString sessionFilePath()
 {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
@@ -96,7 +168,10 @@ HassClient::HassClient(QObject *parent)
     , m_ignoreSslErrors(false)
     , m_usingInternalUrl(true)
     , m_restoringSession(false)
-    , m_port(8123)
+    , m_testingConnection(false)
+    , m_testIgnoreSslErrors(false)
+    , m_port(kDefaultHttpPort)
+    , m_testReply(nullptr)
 {
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -138,6 +213,7 @@ QString HassClient::refreshToken() const { return m_refreshToken; }
 QString HassClient::authClientId() const { return clientId(); }
 qint64 HassClient::accessExpiresAtMs() const { return m_accessExpiresAt.toMSecsSinceEpoch(); }
 bool HassClient::restoringSession() const { return m_restoringSession; }
+bool HassClient::testingConnection() const { return m_testingConnection; }
 QString HassClient::internalUrl() const { return m_internalUrl; }
 QString HassClient::externalUrl() const { return m_externalUrl; }
 QString HassClient::homeWifiSsid() const { return m_homeWifiSsid; }
@@ -287,11 +363,9 @@ void HassClient::rebuildBaseUrl()
     QUrl url;
     url.setScheme(m_useSsl ? QStringLiteral("https") : QStringLiteral("http"));
     url.setHost(host);
-    const int defaultPort = m_useSsl ? 443 : 8123;
+    const int defaultPort = m_useSsl ? kDefaultHttpsPort : kDefaultHttpPort;
     if (m_port > 0 && m_port != defaultPort)
         url.setPort(m_port);
-    else if (!m_useSsl && m_port == 8123)
-        url.setPort(8123);
 
     const QString next = url.toString();
     if (m_baseUrl == next)
@@ -334,7 +408,7 @@ void HassClient::loadSession()
         if (!legacy.value(QStringLiteral("refreshToken")).toString().isEmpty()
                 || !legacy.value(QStringLiteral("host")).toString().isEmpty()) {
             obj.insert(QStringLiteral("host"), legacy.value(QStringLiteral("host")).toString());
-            obj.insert(QStringLiteral("port"), legacy.value(QStringLiteral("port"), 8123).toInt());
+            obj.insert(QStringLiteral("port"), legacy.value(QStringLiteral("port"), kDefaultHttpPort).toInt());
             obj.insert(QStringLiteral("useSsl"), legacy.value(QStringLiteral("useSsl"), false).toBool());
             obj.insert(QStringLiteral("ignoreSslErrors"),
                        legacy.value(QStringLiteral("ignoreSslErrors"), false).toBool());
@@ -363,7 +437,7 @@ void HassClient::loadSession()
     m_host = obj.value(QStringLiteral("host")).toString();
     m_port = obj.value(QStringLiteral("port")).toInt();
     if (m_port <= 0)
-        m_port = 8123;
+        m_port = kDefaultHttpPort;
     m_useSsl = obj.value(QStringLiteral("useSsl")).toBool();
     m_ignoreSslErrors = obj.value(QStringLiteral("ignoreSslErrors")).toBool();
     m_username = obj.value(QStringLiteral("username")).toString();
@@ -422,54 +496,11 @@ void HassClient::loadSession()
 
 bool HassClient::parseEndpoint(const QString &endpoint, QString *error)
 {
-    QString raw = endpoint.trimmed();
-    if (raw.isEmpty()) {
-        *error = QStringLiteral("Enter an IP address or hostname");
-        return false;
-    }
-
     bool ssl = m_useSsl;
-    if (raw.startsWith(QStringLiteral("https://"), Qt::CaseInsensitive)) {
-        ssl = true;
-        raw = raw.mid(8);
-    } else if (raw.startsWith(QStringLiteral("http://"), Qt::CaseInsensitive)) {
-        ssl = false;
-        raw = raw.mid(7);
-    }
-
-    if (raw.endsWith(QLatin1Char('/')))
-        raw.chop(1);
-
-    const int slash = raw.indexOf(QLatin1Char('/'));
-    if (slash >= 0)
-        raw = raw.left(slash);
-
     QString host;
-    int port = 8123;
-
-    if (raw.startsWith(QLatin1Char('['))) {
-        const int close = raw.indexOf(QLatin1Char(']'));
-        if (close < 0) {
-            *error = QStringLiteral("Invalid IPv6 address");
-            return false;
-        }
-        host = raw.mid(1, close - 1);
-        if (close + 1 < raw.size() && raw.at(close + 1) == QLatin1Char(':'))
-            port = raw.mid(close + 2).toInt();
-    } else {
-        const int colon = raw.lastIndexOf(QLatin1Char(':'));
-        if (colon > 0 && raw.indexOf(QLatin1Char(':')) == colon) {
-            host = raw.left(colon);
-            port = raw.mid(colon + 1).toInt();
-        } else {
-            host = raw;
-        }
-    }
-
-    if (host.isEmpty() || port <= 0 || port > 65535) {
-        *error = QStringLiteral("Could not parse host or port");
+    int port = kDefaultHttpPort;
+    if (!parseEndpointSpec(endpoint, m_useSsl, &ssl, &host, &port, error))
         return false;
-    }
 
     setUseSsl(ssl);
     setHost(host);
@@ -533,8 +564,96 @@ void HassClient::postForm(const QString &path, const QUrlQuery &form, RequestKin
 void HassClient::onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors)
 {
     Q_UNUSED(errors);
-    if (m_ignoreSslErrors)
+    if (reply == m_testReply && m_testIgnoreSslErrors)
         reply->ignoreSslErrors();
+    else if (m_ignoreSslErrors)
+        reply->ignoreSslErrors();
+}
+
+void HassClient::cancelRestore()
+{
+    if (m_pendingReply) {
+        m_pendingReply->disconnect(this);
+        m_pendingReply->abort();
+        m_pendingReply->deleteLater();
+        m_pendingReply = nullptr;
+        m_pendingKind = RequestNone;
+    }
+    setBusy(false);
+    setRestoringSession(false);
+    setStatus(QStringLiteral("Restore cancelled"));
+}
+
+void HassClient::testEndpoint(const QString &endpoint, bool ignoreSslErrors)
+{
+    if (m_testReply) {
+        m_testReply->disconnect(this);
+        m_testReply->abort();
+        m_testReply->deleteLater();
+        m_testReply = nullptr;
+    }
+
+    const QString normalized = normalizeInstanceUrl(endpoint, endpoint.startsWith(
+            QStringLiteral("https://"), Qt::CaseInsensitive));
+
+    QString parseError;
+    bool ssl = false;
+    QString host;
+    int port = kDefaultHttpPort;
+    if (!parseEndpointSpec(normalized, false, &ssl, &host, &port, &parseError)) {
+        emit connectionTestFinished(endpoint, false, parseError);
+        return;
+    }
+
+    m_testEndpoint = endpoint;
+    m_testIgnoreSslErrors = ignoreSslErrors;
+
+    QNetworkRequest request(endpointSpecToUrl(ssl, host, port,
+                                              QStringLiteral("/auth/providers")));
+    request.setRawHeader("Accept", "application/json");
+    request.setRawHeader("User-Agent", kClientName);
+
+    m_testingConnection = true;
+    emit testingConnectionChanged();
+
+    m_testReply = m_nam->get(request);
+    connect(m_testReply, SIGNAL(finished()), this, SLOT(onTestReplyFinished()));
+}
+
+void HassClient::onTestReplyFinished()
+{
+    QNetworkReply *reply = m_testReply;
+    if (!reply)
+        return;
+
+    m_testReply = nullptr;
+    const QString endpoint = m_testEndpoint;
+    m_testEndpoint.clear();
+    m_testingConnection = false;
+    emit testingConnectionChanged();
+
+    const QByteArray data = reply->readAll();
+    const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QNetworkReply::NetworkError netError = reply->error();
+    const QString netErrorString = reply->errorString();
+    reply->deleteLater();
+
+    if (netError != QNetworkReply::NoError && status == 0) {
+        emit connectionTestFinished(endpoint, false,
+                                    QStringLiteral("Could not reach server (%1)").arg(netErrorString));
+        return;
+    }
+
+    if (status == 200) {
+        emit connectionTestFinished(endpoint, true,
+                                    QStringLiteral("OK — Home Assistant responded"));
+        return;
+    }
+
+    emit connectionTestFinished(endpoint, false,
+                                jsonErrorMessage(data,
+                                                 QStringLiteral("Unexpected response (HTTP %1)")
+                                                 .arg(status)));
 }
 
 void HassClient::restoreSession()
@@ -573,6 +692,27 @@ void HassClient::restoreSession()
     form.addQueryItem(QStringLiteral("refresh_token"), m_refreshToken);
     form.addQueryItem(QStringLiteral("client_id"), clientId());
     postForm(QStringLiteral("/auth/token"), form, RequestRefresh, false);
+}
+
+void HassClient::connectToConfiguredInstance()
+{
+    if (!m_internalUrl.isEmpty() || !m_externalUrl.isEmpty())
+        selectEndpointForWifi(m_currentWifiSsid);
+
+    QString endpoint = m_baseUrl;
+    if (endpoint.isEmpty() && !m_internalUrl.isEmpty())
+        endpoint = m_internalUrl;
+    else if (endpoint.isEmpty() && !m_externalUrl.isEmpty())
+        endpoint = m_externalUrl;
+
+    if (endpoint.isEmpty()) {
+        const QString message = QStringLiteral("Configure an internal or external URL first");
+        setError(message);
+        emit loginFailed(message);
+        return;
+    }
+
+    connectToInstance(endpoint, m_useSsl, m_ignoreSslErrors);
 }
 
 void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ignoreSslErrors)

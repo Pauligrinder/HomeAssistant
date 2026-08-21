@@ -28,7 +28,7 @@ CoverBackground {
     Item {
         id: houseWatermark
         anchors.centerIn: parent
-        width: parent.width * 1.45
+        width: parent.width * 1.65
         height: width
         opacity: 0.22
         rotation: -32
@@ -48,7 +48,7 @@ CoverBackground {
 
                 var cx = w * 0.5
                 var cy = h * 0.52
-                var s = Math.min(w, h) * 0.38
+                var s = Math.min(w, h) * 0.50
 
                 ctx.fillStyle = "#FFFFFF"
                 ctx.beginPath()
@@ -82,7 +82,7 @@ CoverBackground {
     Image {
         id: iconWatermark
         anchors.centerIn: parent
-        width: parent.width * 0.72
+        width: parent.width * 1.65
         height: width
         opacity: 0.28
         rotation: -32

@@ -40,6 +40,7 @@ class HassClient : public QObject
     Q_PROPERTY(QString authClientId READ authClientId CONSTANT)
     Q_PROPERTY(qint64 accessExpiresAtMs READ accessExpiresAtMs NOTIFY accessExpiresAtChanged)
     Q_PROPERTY(bool restoringSession READ restoringSession NOTIFY restoringSessionChanged)
+    Q_PROPERTY(bool testingConnection READ testingConnection NOTIFY testingConnectionChanged)
     Q_PROPERTY(QString internalUrl READ internalUrl WRITE setInternalUrl NOTIFY internalUrlChanged)
     Q_PROPERTY(QString externalUrl READ externalUrl WRITE setExternalUrl NOTIFY externalUrlChanged)
     Q_PROPERTY(QString homeWifiSsid READ homeWifiSsid WRITE setHomeWifiSsid NOTIFY homeWifiSsidChanged)
@@ -75,6 +76,7 @@ public:
     QString authClientId() const;
     qint64 accessExpiresAtMs() const;
     bool restoringSession() const;
+    bool testingConnection() const;
     QString internalUrl() const;
     QString externalUrl() const;
     QString homeWifiSsid() const;
@@ -95,7 +97,10 @@ public:
 
 public slots:
     void restoreSession();
+    void cancelRestore();
+    void testEndpoint(const QString &endpoint, bool ignoreSslErrors);
     void connectToInstance(const QString &endpoint, bool useSsl, bool ignoreSslErrors);
+    void connectToConfiguredInstance();
     void login(const QString &username, const QString &password);
     void submitOtp(const QString &code);
     void logout();
@@ -126,6 +131,7 @@ signals:
     void refreshTokenChanged();
     void accessExpiresAtChanged();
     void restoringSessionChanged();
+    void testingConnectionChanged();
     void internalUrlChanged();
     void externalUrlChanged();
     void homeWifiSsidChanged();
@@ -136,6 +142,7 @@ signals:
     void mobileAppRegisteredChanged();
     void pushConnectedChanged();
     void restoreFinished(bool loggedIn);
+    void connectionTestFinished(const QString &endpoint, bool success, const QString &message);
     void connectionSucceeded();
     void loginSucceeded();
     void otpRequired();
@@ -146,6 +153,7 @@ signals:
 
 private slots:
     void onReplyFinished();
+    void onTestReplyFinished();
     void onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
     void onPushConnectedChanged();
     void onPushNotificationReceived(const QString &title,
@@ -220,7 +228,11 @@ private:
     bool m_ignoreSslErrors;
     bool m_usingInternalUrl;
     bool m_restoringSession;
+    bool m_testingConnection;
+    bool m_testIgnoreSslErrors;
     int m_port;
+    QNetworkReply *m_testReply;
+    QString m_testEndpoint;
     QString m_host;
     QString m_baseUrl;
     QString m_internalUrl;

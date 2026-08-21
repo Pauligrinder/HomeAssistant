@@ -20,7 +20,7 @@ app/
 ## What works
 
 1. **Connect** — IP, hostname, or full `http(s)://` URL. Optional HTTPS and
-   ignore-certificate-errors for self-signed TLS. Default port is 8123.
+   ignore-certificate-errors for self-signed TLS. Default port is 80 (HTTP) or 443 (HTTPS).
 2. **Login** — Home Assistant username/password via `/auth/login_flow`.
 3. **OTP** — If the user has MFA enabled, a second page collects the TOTP
    (or other MFA) code, then exchanges the auth code for tokens.
@@ -40,9 +40,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.0-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.2-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.2.0-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.2.2-1.aarch64.rpm
 ```
 
 Sailjail permission used: `Internet`.

@@ -7,6 +7,8 @@ Page {
     objectName: "SplashPage"
     property var hassClient
     property bool decided: false
+    property bool showEscape: false
+    property bool restoreCancelled: false
 
     backNavigation: false
 
@@ -29,6 +31,12 @@ Page {
         hassClient.restoreSession()
     }
 
+    function openSettings() {
+        hassClient.cancelRestore()
+        page.restoreCancelled = true
+        pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { hassClient: hassClient })
+    }
+
     WifiChecker {
         id: wifi
     }
@@ -40,6 +48,14 @@ Page {
         running: true
         repeat: false
         onTriggered: page.startRestore()
+    }
+
+    // Offer a way out if restore hangs on a bad endpoint.
+    Timer {
+        interval: 3000
+        running: !page.decided
+        repeat: false
+        onTriggered: page.showEscape = true
     }
 
     // Don't leave the user on the splash forever if restore hangs.
@@ -93,6 +109,34 @@ Page {
                 if (hassClient.statusText.length > 0)
                     return hassClient.statusText
                 return "Starting..."
+            }
+        }
+
+        Label {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            color: Theme.highlightColor
+            font.pixelSize: Theme.fontSizeExtraSmall
+            visible: hassClient.errorMessage.length > 0
+            text: hassClient.errorMessage
+        }
+
+        Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: page.showEscape && !page.decided
+            text: "Edit addresses"
+            onClicked: page.openSettings()
+        }
+
+        Button {
+            anchors.horizontalCenter: parent.horizontalCenter
+            visible: page.restoreCancelled && !page.decided
+            text: "Retry restore"
+            onClicked: {
+                page.restoreCancelled = false
+                page.startRestore()
             }
         }
     }

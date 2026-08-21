@@ -1,20 +1,31 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../components"
 
 Page {
     id: page
     property var hassClient
     property bool hasSavedSession: hassClient.refreshToken.length > 0
+    property bool hasConfiguredUrls: hassClient.internalUrl.length > 0
+                                   || hassClient.externalUrl.length > 0
 
-    function connectClicked() {
-        hassClient.connectToInstance(hostField.text, sslSwitch.checked, ignoreSslSwitch.checked)
+    function prepareEndpoint() {
+        hassClient.updateCurrentWifiSsid(wifi.ssid)
+        hassClient.selectEndpointForWifi(wifi.ssid)
     }
 
-    function primaryClicked() {
-        if (page.hasSavedSession)
-            hassClient.restoreSession()
-        else
-            page.connectClicked()
+    function connectClicked() {
+        page.prepareEndpoint()
+        hassClient.connectToConfiguredInstance()
+    }
+
+    function restoreClicked() {
+        page.prepareEndpoint()
+        hassClient.restoreSession()
+    }
+
+    WifiChecker {
+        id: wifi
     }
 
     Connections {
@@ -53,42 +64,37 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.hasSavedSession
-                      ? "A saved session was found for this instance. Retry restore, or connect again to sign in fresh."
-                      : "Enter the IP address or hostname of your Home Assistant instance."
+                      ? "A saved session was found. Retry restore, or sign in again on the configured address."
+                      : "Configure your Home Assistant addresses, then connect to sign in."
             }
 
-            TextField {
-                id: hostField
-                width: parent.width
-                label: "IP or hostname"
-                placeholderText: "homeassistant.local:8123"
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
                 text: {
-                    if (!hassClient.host.length)
-                        return ""
-                    var value = hassClient.host
-                    if (hassClient.port > 0)
-                        value += ":" + hassClient.port
-                    return value
+                    if (!page.hasConfiguredUrls)
+                        return "No addresses configured yet."
+                    var lines = []
+                    if (hassClient.internalUrl.length > 0)
+                        lines.push("Internal: " + hassClient.internalUrl)
+                    if (hassClient.externalUrl.length > 0)
+                        lines.push("External: " + hassClient.externalUrl)
+                    if (hassClient.baseUrl.length > 0)
+                        lines.push("Using: " + hassClient.baseUrl
+                                   + (hassClient.usingInternalUrl ? " (internal)" : " (external)"))
+                    return lines.join("\n")
                 }
-                inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
-                EnterKey.enabled: text.length > 0 && !hassClient.busy && !hassClient.restoringSession
-                EnterKey.iconSource: "image://theme/icon-m-enter-accept"
-                EnterKey.onClicked: page.primaryClicked()
             }
 
-            TextSwitch {
-                id: sslSwitch
-                text: "Use HTTPS"
-                checked: hassClient.useSsl
-                description: "Turn on if the instance is served over TLS. Port still defaults to 8123 unless you specify one."
-            }
-
-            TextSwitch {
-                id: ignoreSslSwitch
-                text: "Ignore certificate errors"
-                checked: hassClient.ignoreSslErrors
-                visible: sslSwitch.checked
-                description: "Needed for self-signed certificates."
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Edit addresses"
+                onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"),
+                                          { hassClient: hassClient })
             }
 
             Label {
@@ -138,15 +144,19 @@ Page {
                         return "Retry restore"
                     return hassClient.busy ? "Connecting..." : "Connect"
                 }
-                enabled: hostField.text.length > 0 && !hassClient.busy && !hassClient.restoringSession
-                onClicked: page.primaryClicked()
+                enabled: page.hasConfiguredUrls
+                         && !hassClient.busy
+                         && !hassClient.restoringSession
+                onClicked: page.hasSavedSession ? page.restoreClicked() : page.connectClicked()
             }
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "Sign in again"
                 visible: page.hasSavedSession
-                enabled: hostField.text.length > 0 && !hassClient.busy && !hassClient.restoringSession
+                enabled: page.hasConfiguredUrls
+                         && !hassClient.busy
+                         && !hassClient.restoringSession
                 onClicked: page.connectClicked()
             }
 

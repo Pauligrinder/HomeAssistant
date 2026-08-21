@@ -5,6 +5,9 @@ import "../components"
 Page {
     id: page
     property var hassClient
+    property string pendingTestUrl: ""
+    property string internalTestResult: ""
+    property string externalTestResult: ""
 
     function save() {
         hassClient.saveConnectionSettings(
@@ -20,6 +23,22 @@ Page {
         onSsidChanged: {
             if (ssidField.text.length === 0 && wifi.ssid.length > 0)
                 ssidField.placeholderText = wifi.ssid
+        }
+    }
+
+    Connections {
+        target: hassClient
+        onConnectionTestFinished: {
+            if (endpoint === internalField.text) {
+                internalTestResult = success
+                        ? ("Internal: " + message)
+                        : ("Internal failed: " + message)
+            } else if (endpoint === externalField.text) {
+                externalTestResult = success
+                        ? ("External: " + message)
+                        : ("External failed: " + message)
+            }
+            page.pendingTestUrl = ""
         }
     }
 
@@ -50,9 +69,33 @@ Page {
                 id: internalField
                 width: parent.width
                 label: "Internal URL"
-                placeholderText: "http://homeassistant.local:8123"
+                placeholderText: "http://homeassistant.local"
                 text: hassClient.internalUrl
                 inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: page.pendingTestUrl === internalField.text ? "Testing internal..." : "Test internal"
+                enabled: internalField.text.length > 0
+                         && !hassClient.testingConnection
+                         && page.pendingTestUrl.length === 0
+                onClicked: {
+                    internalTestResult = ""
+                    page.pendingTestUrl = internalField.text
+                    hassClient.testEndpoint(internalField.text, ignoreSslSwitch.checked)
+                }
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: internalTestResult.length > 0
+                text: internalTestResult
             }
 
             TextField {
@@ -62,6 +105,30 @@ Page {
                 placeholderText: "https://example.ui.nabu.casa"
                 text: hassClient.externalUrl
                 inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: page.pendingTestUrl === externalField.text ? "Testing external..." : "Test external"
+                enabled: externalField.text.length > 0
+                         && !hassClient.testingConnection
+                         && page.pendingTestUrl.length === 0
+                onClicked: {
+                    externalTestResult = ""
+                    page.pendingTestUrl = externalField.text
+                    hassClient.testEndpoint(externalField.text, ignoreSslSwitch.checked)
+                }
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: externalTestResult.length > 0
+                text: externalTestResult
             }
 
             TextField {
