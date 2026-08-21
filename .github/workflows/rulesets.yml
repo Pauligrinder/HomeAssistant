@@ -1,0 +1,32 @@
+name: Apply Rulesets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/rulesets/**
+      - .github/CODEOWNERS
+      - scripts/apply-github-rulesets.sh
+  workflow_dispatch:
+
+permissions:
+  administration: write
+
+concurrency:
+  group: rulesets-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply repository rulesets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          chmod +x scripts/apply-github-rulesets.sh
+          ./scripts/apply-github-rulesets.sh
