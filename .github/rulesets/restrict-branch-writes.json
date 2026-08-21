@@ -1,5 +1,5 @@
 {
-  "name": "Restrict branch creation",
+  "name": "Restrict branch writes",
   "target": "branch",
   "source_type": "Repository",
   "enforcement": "active",
@@ -19,6 +19,9 @@
   "rules": [
     {
       "type": "creation"
+    },
+    {
+      "type": "update"
     }
   ]
 }
