@@ -45,4 +45,25 @@ ssh defaultuser@<phone-ip>
 devel-su pkcon install-local ~/harbour-helmsman-0.2.2-1.aarch64.rpm
 ```
 
-Sailjail permission used: `Internet`.
+Sailjail permissions used: `Internet`, `Notifications`.
+
+## Releases (GitHub Actions)
+
+CI builds Sailfish RPMs with the Platform SDK Docker image (`5.2.0.15`)
+for `aarch64`, `armv7hl`, and `i486`.
+
+**Automatic release:** bump `VERSION` in `app/harbour-homeassistant.pro`,
+merge to `main`. If no GitHub release exists for `v$VERSION` yet, the
+Release workflow builds the RPMs and publishes a GitHub Release.
+
+**Manual tag:** after bumping `VERSION`, you can also tag explicitly:
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Optional RPM release counter in the tag: `v0.2.0-2`.
+
+Pull requests and pushes to `main` also run a CI build (aarch64 only)
+without publishing a release.
