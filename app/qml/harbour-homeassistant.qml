@@ -260,10 +260,18 @@ ApplicationWindow
             home.onAppForegrounded()
     }
 
+    function captureHomeSnapshotIfPresent() {
+        var home = appWindow.findHomePage()
+        if (home && typeof home.captureDashboardSnapshot === "function")
+            home.captureDashboardSnapshot()
+    }
+
     onApplicationActiveChanged: {
         if (applicationActive) {
             appWindow.clearCoverNotification()
             appWindow.wakeHomePageIfPresent()
+        } else {
+            appWindow.captureHomeSnapshotIfPresent()
         }
     }
 

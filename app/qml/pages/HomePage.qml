@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.WebView 1.0
+import QtGraphicalEffects 1.0
 import "../components"
 
 WebViewPage {
@@ -14,6 +15,9 @@ WebViewPage {
     property int readyCheckAttempts: 0
     property bool resumeProbeRunning: false
     property int resumeProbeAttempts: 0
+    property bool capturingSnapshot: false
+    property int snapshotRevision: 1
+    property bool snapshotUsable: false
     property string lastLoadedBase: ""
     property color overlayBackgroundColor: page.fallbackOverlayBackground
     property color overlayTextColor: page.fallbackOverlayText
@@ -31,8 +35,11 @@ WebViewPage {
         var base = hassClient.baseUrl
         if (!base || base.length === 0)
             return ""
-        // No external_auth=1: Sailfish can only inject JS after load, which is too late
-        // for HA's external auth module (it requires window.externalApp at import time).
+        // Prefer Lovelace directly when we already have a native token — gecko
+        // localStorage from a previous run often still has hassTokens, so the
+        // extra "/" hop is unnecessary. Fallback to "/" only for a fresh login.
+        if (hassClient.accessToken && hassClient.accessToken.length > 0)
+            return base + "/lovelace"
         return base + "/"
     }
     property string dashboardUrl: {
@@ -218,6 +225,38 @@ WebViewPage {
         page.readyCheckRunning = false
         page.dashboardReady = true
         page.pollBridge()
+        snapshotDelayTimer.restart()
+    }
+
+    function refreshSnapshotState() {
+        page.snapshotUsable = !!(hassClient
+                                 && hassClient.baseUrl
+                                 && hassClient.dashboardSnapshotMatches(hassClient.baseUrl))
+        page.snapshotRevision += 1
+    }
+
+    function captureDashboardSnapshot() {
+        if (page.capturingSnapshot || !page.dashboardReady)
+            return
+        if (!hassClient || !hassClient.loggedIn)
+            return
+        if (dashboardView.width < 8 || dashboardView.height < 8)
+            return
+
+        page.capturingSnapshot = true
+        dashboardView.grabToImage(function(result) {
+            page.capturingSnapshot = false
+            if (!result)
+                return
+            var path = hassClient.dashboardSnapshotPath
+            if (!result.saveToFile(path)) {
+                console.log("Helmsman: failed to save dashboard snapshot")
+                return
+            }
+            hassClient.rememberDashboardSnapshot(hassClient.baseUrl)
+            page.refreshSnapshotState()
+        }, Qt.size(Math.max(48, Math.round(dashboardView.width / 6)),
+                   Math.max(48, Math.round(dashboardView.height / 6))))
     }
 
     function beginReadyCheck() {
@@ -310,7 +349,10 @@ WebViewPage {
                         page.updateLoadingThemeFromWebView()
                         if (!page.tokensInjected) {
                             page.tokensInjected = true
-                            dashboardView.url = page.dashboardUrl
+                            if (page.isLovelaceUrl(dashboardView.url))
+                                page.beginReadyCheck()
+                            else
+                                dashboardView.url = page.dashboardUrl
                             return
                         }
                         if (silent)
@@ -422,6 +464,7 @@ WebViewPage {
                 return
             if (page.lastLoadedBase === hassClient.baseUrl)
                 return
+            page.refreshSnapshotState()
             page.reloadDashboard()
         }
     }
@@ -471,11 +514,20 @@ WebViewPage {
     }
 
     Timer {
+        id: snapshotDelayTimer
+        interval: 900
+        repeat: false
+        onTriggered: page.captureDashboardSnapshot()
+    }
+
+    Timer {
         id: resumeProbeTimer
         interval: 400
         repeat: true
         onTriggered: page.runResumeProbe()
     }
+
+    Component.onCompleted: page.refreshSnapshotState()
 
     Timer {
         id: bridgePollTimer
@@ -500,10 +552,36 @@ WebViewPage {
 
     // Cover the WebView until Lovelace is ready so users do not see partial renders.
     Rectangle {
+        id: loadingOverlay
         anchors.fill: parent
         color: page.overlayBackgroundColor
         visible: !page.dashboardReady
         z: 2
+
+        Image {
+            id: snapshotImage
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: false
+            opacity: 0
+            source: page.snapshotUsable
+                    ? ("file://" + hassClient.dashboardSnapshotPath + "?" + page.snapshotRevision)
+                    : ""
+        }
+
+        FastBlur {
+            anchors.fill: parent
+            source: snapshotImage
+            radius: 48
+            visible: snapshotImage.status === Image.Ready
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: page.overlayBackgroundColor
+            opacity: snapshotImage.status === Image.Ready ? 0.42 : 1.0
+        }
 
         Column {
             anchors.centerIn: parent
@@ -512,7 +590,7 @@ WebViewPage {
 
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
-                running: true
+                running: loadingOverlay.visible
                 size: BusyIndicatorSize.Large
             }
 
