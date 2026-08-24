@@ -65,11 +65,18 @@ jobs:
             fi
             SHOULD=true
           elif [ "${{ github.ref_name }}" = "main" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-              echo "Release ${TAG} already exists — skipping publish."
+            # Match v0.2.4 as well as rebuilds like v0.2.4-2, otherwise
+            # replacing a release with a higher build number would make the
+            # next merge republish the same version as -1.
+            VERSION_RE="$(printf '%s' "$VERSION" | sed 's/\./\\./g')"
+            EXISTING="$(gh release list --repo "${{ github.repository }}" --limit 200 \
+              --json tagName --jq '.[].tagName' \
+              | grep -E "^v${VERSION_RE}(-[0-9]+)?\$" | head -1 || true)"
+            if [ -n "$EXISTING" ]; then
+              echo "Release ${EXISTING} already covers version ${VERSION} — skipping publish."
               SHOULD=false
             else
-              echo "No GitHub release for ${TAG} yet — will build and publish."
+              echo "No GitHub release for version ${VERSION} yet — will build and publish."
               SHOULD=true
             fi
           fi

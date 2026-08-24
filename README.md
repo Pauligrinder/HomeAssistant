@@ -53,8 +53,10 @@ CI builds Sailfish RPMs with the Platform SDK Docker image (`5.2.0.15`)
 for `aarch64`, `armv7hl`, and `i486`.
 
 **Automatic release:** bump `VERSION` in `app/harbour-homeassistant.pro`,
-merge to `main`. If no GitHub release exists for `v$VERSION` yet, the
-Release workflow builds the RPMs and publishes a GitHub Release.
+merge to `main`. If no GitHub release exists for that version yet, the
+Release workflow builds the RPMs and publishes a GitHub Release. Rebuild
+tags count too, so a `v0.2.4-2` release stops `main` from republishing
+`v0.2.4` as build 1.
 
 **Manual tag:** after bumping `VERSION`, you can also tag explicitly:
 
