@@ -14,7 +14,9 @@ WebViewPage {
     property bool readyCheckRunning: false
     property int readyCheckAttempts: 0
     property bool resumeProbeRunning: false
-    property int resumeProbeAttempts: 0
+    property int resumeDeadCount: 0
+    property double lastBackgroundedAt: 0
+    property bool appActive: Qt.application.active
     property bool capturingSnapshot: false
     property int snapshotRevision: 1
     property bool snapshotUsable: false
@@ -78,8 +80,9 @@ WebViewPage {
         page.readyCheckRunning = false
         page.readyCheckAttempts = 0
         page.resumeProbeRunning = false
-        page.resumeProbeAttempts = 0
+        page.resumeDeadCount = 0
         resumeProbeTimer.stop()
+        resumeProbeStartTimer.stop()
         page.overlayBackgroundColor = page.fallbackOverlayBackground
         page.overlayTextColor = page.fallbackOverlayText
         readyCheckTimer.stop()
@@ -137,15 +140,26 @@ WebViewPage {
         dashboardView.url = page.startUrl
     }
 
-    // Keep the live Lovelace document warm across cover/background. Only reload
-    // if the in-page HA connection is actually dead after a short probe.
+    // Keep the live Lovelace document warm across cover/background. Never
+    // hide it for a probe — only reload if the document is confirmed dead.
     function onAppForegrounded() {
         if (!hassClient || !hassClient.loggedIn)
             return
         if (!page.dashboardReady || page.readyCheckRunning)
             return
+        if (page.status !== PageStatus.Active || !Qt.application.active)
+            return
 
         page.ensureSessionFresh()
+
+        var awayMs = page.lastBackgroundedAt > 0
+                ? (Date.now() - page.lastBackgroundedAt)
+                : 0
+        // Short cover / app switches keep the HA websocket alive. Probing
+        // gecko while it is still waking is what triggered the overlay.
+        if (awayMs < 60000)
+            return
+
         page.beginResumeProbe()
     }
 
@@ -162,15 +176,16 @@ WebViewPage {
         if (page.resumeProbeRunning)
             return
         page.resumeProbeRunning = true
-        page.resumeProbeAttempts = 0
-        resumeProbeTimer.start()
-        page.runResumeProbe()
+        page.resumeDeadCount = 0
+        // Let gecko become active again before the first JS call.
+        resumeProbeStartTimer.start()
     }
 
     function finishResumeProbe(ok) {
         resumeProbeTimer.stop()
+        resumeProbeStartTimer.stop()
         page.resumeProbeRunning = false
-        page.resumeProbeAttempts = 0
+        page.resumeDeadCount = 0
         if (ok)
             return
         console.log("Helmsman: warm resume failed — reloading dashboard")
@@ -179,6 +194,8 @@ WebViewPage {
 
     function runResumeProbe() {
         if (!page.resumeProbeRunning)
+            return
+        if (page.status !== PageStatus.Active || !Qt.application.active)
             return
 
         var script = "return (function(){"
@@ -206,17 +223,19 @@ WebViewPage {
                             page.finishResumeProbe(true)
                             return
                         }
-                        page.resumeProbeAttempts += 1
-                        if (page.resumeProbeAttempts >= 10)
-                            page.finishResumeProbe(false)
+                        if (result === "dead") {
+                            page.resumeDeadCount += 1
+                            if (page.resumeDeadCount >= 20)
+                                page.finishResumeProbe(false)
+                            return
+                        }
+                        // wait / reconnecting: keep the live view, do not reload.
+                        page.resumeDeadCount = 0
                     },
                     function(error) {
+                        // Compositor often rejects JS while waking; never treat
+                        // that as a dead document.
                         console.log("Helmsman: resume probe JS failed:", error)
-                        if (!page.resumeProbeRunning)
-                            return
-                        page.resumeProbeAttempts += 2
-                        if (page.resumeProbeAttempts >= 10)
-                            page.finishResumeProbe(false)
                     })
     }
 
@@ -276,7 +295,6 @@ WebViewPage {
         var script = "return (function(){"
                 + "var ha=document.querySelector('home-assistant');"
                 + "if(!ha||!ha.hass||!ha.hass.connection||!ha.hass.connection.connected)return 'wait';"
-                + "if(document.querySelector('ha-circular-progress'))return 'wait';"
                 + "var hui=document.querySelector('hui-root');"
                 + "if(!hui)return 'wait';"
                 + "return 'ready';"
@@ -475,7 +493,9 @@ WebViewPage {
         // Sailfish.WebView already ties `active` to app + page status, which
         // pauses the compositor in the background while keeping the document.
         opacity: page.dashboardReady ? 1.0 : 0.0
-        url: page.startUrl
+        // Assigned explicitly so token refresh / property churn cannot
+        // navigate and flash the loading overlay.
+        url: ""
         onLoadedChanged: {
             if (!loaded)
                 return
@@ -521,13 +541,32 @@ WebViewPage {
     }
 
     Timer {
+        id: resumeProbeStartTimer
+        interval: 800
+        repeat: false
+        onTriggered: {
+            resumeProbeTimer.start()
+            page.runResumeProbe()
+        }
+    }
+
+    Timer {
         id: resumeProbeTimer
-        interval: 400
+        interval: 500
         repeat: true
         onTriggered: page.runResumeProbe()
     }
 
-    Component.onCompleted: page.refreshSnapshotState()
+    Component.onCompleted: {
+        page.refreshSnapshotState()
+        if (page.startUrl.length > 0)
+            dashboardView.url = page.startUrl
+    }
+
+    onAppActiveChanged: {
+        if (!page.appActive)
+            page.lastBackgroundedAt = Date.now()
+    }
 
     Timer {
         id: bridgePollTimer
@@ -539,15 +578,6 @@ WebViewPage {
                  && page.dashboardReady
                  && page.bridgeInstalled
         onTriggered: page.pollBridge()
-    }
-
-    onStatusChanged: {
-        if (status === PageStatus.Active
-                && Qt.application.active
-                && page.dashboardReady
-                && hassClient.loggedIn) {
-            page.onAppForegrounded()
-        }
     }
 
     // Cover the WebView until Lovelace is ready so users do not see partial renders.
