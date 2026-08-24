@@ -10,6 +10,7 @@
 #include <QSslError>
 #include <QList>
 #include <QUrlQuery>
+#include <QTimer>
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -156,9 +157,11 @@ private slots:
     void onTestReplyFinished();
     void onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
     void onPushConnectedChanged();
+    void onPushAuthenticationFailed(const QString &message);
     void onPushNotificationReceived(const QString &title,
                                     const QString &message,
                                     const QVariantMap &data);
+    void onEndpointDebounceTimeout();
 
 private:
     enum RequestKind {
@@ -214,11 +217,15 @@ private:
     void persistSession();
     void clearPersistedTokens();
     void applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing);
+    void refreshAccessToken();
+    void reconnectPushAfterEndpointChange();
+    bool accessTokenStillFresh(int minSecondsLeft = 120) const;
 
     QNetworkAccessManager *m_nam;
     HassPushChannel *m_pushChannel;
     RequestKind m_pendingKind;
     QNetworkReply *m_pendingReply;
+    QTimer m_endpointDebounceTimer;
 
     bool m_busy;
     bool m_connected;
@@ -230,6 +237,8 @@ private:
     bool m_restoringSession;
     bool m_testingConnection;
     bool m_testIgnoreSslErrors;
+    bool m_pendingPushAfterRefresh;
+    int m_pushAuthRetries;
     int m_port;
     QNetworkReply *m_testReply;
     QString m_testEndpoint;
@@ -239,6 +248,7 @@ private:
     QString m_externalUrl;
     QString m_homeWifiSsid;
     QString m_currentWifiSsid;
+    QString m_pendingEndpointSsid;
     QString m_errorMessage;
     QString m_statusText;
     QString m_username;
