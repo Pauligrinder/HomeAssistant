@@ -1,12 +1,12 @@
 {
-  "name": "Restrict branch creation",
+  "name": "Restrict branch writes",
   "target": "branch",
   "source_type": "Repository",
   "enforcement": "active",
   "conditions": {
     "ref_name": {
       "include": ["~ALL"],
-      "exclude": []
+      "exclude": ["~DEFAULT_BRANCH"]
     }
   },
   "bypass_actors": [
@@ -19,6 +19,9 @@
   "rules": [
     {
       "type": "creation"
+    },
+    {
+      "type": "update"
     }
   ]
 }
