@@ -51,6 +51,7 @@ class HassClient : public QObject
     Q_PROPERTY(QString deviceName READ deviceName NOTIFY deviceNameChanged)
     Q_PROPERTY(bool mobileAppRegistered READ mobileAppRegistered NOTIFY mobileAppRegisteredChanged)
     Q_PROPERTY(bool pushConnected READ pushConnected NOTIFY pushConnectedChanged)
+    Q_PROPERTY(QString dashboardSnapshotPath READ dashboardSnapshotPath CONSTANT)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -87,6 +88,7 @@ public:
     QString deviceName() const;
     bool mobileAppRegistered() const;
     bool pushConnected() const;
+    QString dashboardSnapshotPath() const;
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -111,6 +113,10 @@ public slots:
                                 bool ignoreSslErrors);
     void updateCurrentWifiSsid(const QString &ssid);
     bool selectEndpointForWifi(const QString &ssid);
+    void refreshAccessToken();
+    void rememberDashboardSnapshot(const QString &baseUrl);
+    bool dashboardSnapshotMatches(const QString &baseUrl) const;
+    void clearDashboardSnapshot();
 
 signals:
     void busyChanged();
@@ -217,7 +223,6 @@ private:
     void persistSession();
     void clearPersistedTokens();
     void applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing);
-    void refreshAccessToken();
     void reconnectPushAfterEndpointChange();
     bool accessTokenStillFresh(int minSecondsLeft = 120) const;
 

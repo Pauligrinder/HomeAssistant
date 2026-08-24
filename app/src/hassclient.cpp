@@ -153,6 +153,18 @@ QString sessionFilePath()
     return dir + QStringLiteral("/session.json");
 }
 
+QString cacheDirectory()
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    QDir().mkpath(dir);
+    return dir;
+}
+
+QString snapshotMetaPath()
+{
+    return cacheDirectory() + QStringLiteral("/dashboard-snapshot.url");
+}
+
 } // namespace
 
 HassClient::HassClient(QObject *parent)
@@ -233,6 +245,36 @@ QString HassClient::webhookId() const { return m_webhookId; }
 QString HassClient::deviceName() const { return m_deviceName; }
 bool HassClient::mobileAppRegistered() const { return !m_webhookId.isEmpty(); }
 bool HassClient::pushConnected() const { return m_pushChannel && m_pushChannel->connected(); }
+
+QString HassClient::dashboardSnapshotPath() const
+{
+    return cacheDirectory() + QStringLiteral("/dashboard-snapshot.png");
+}
+
+void HassClient::rememberDashboardSnapshot(const QString &baseUrl)
+{
+    QSaveFile file(snapshotMetaPath());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return;
+    file.write(baseUrl.toUtf8());
+    file.commit();
+}
+
+bool HassClient::dashboardSnapshotMatches(const QString &baseUrl) const
+{
+    if (baseUrl.isEmpty() || !QFile::exists(dashboardSnapshotPath()))
+        return false;
+    QFile file(snapshotMetaPath());
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    return QString::fromUtf8(file.readAll()).trimmed() == baseUrl.trimmed();
+}
+
+void HassClient::clearDashboardSnapshot()
+{
+    QFile::remove(dashboardSnapshotPath());
+    QFile::remove(snapshotMetaPath());
+}
 
 void HassClient::setHost(const QString &host)
 {
@@ -854,6 +896,7 @@ void HassClient::logout()
     m_endpointDebounceTimer.stop();
     stopPushChannel();
     clearPersistedTokens();
+    clearDashboardSnapshot();
     setLoggedIn(false);
     setNeedsOtp(false);
     setConnected(false);
