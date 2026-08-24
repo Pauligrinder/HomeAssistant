@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.WebView 1.0
+import QtGraphicalEffects 1.0
 import "../components"
 
 WebViewPage {
@@ -12,6 +13,11 @@ WebViewPage {
     property bool dashboardReady: false
     property bool readyCheckRunning: false
     property int readyCheckAttempts: 0
+    property bool resumeProbeRunning: false
+    property int resumeProbeAttempts: 0
+    property bool capturingSnapshot: false
+    property int snapshotRevision: 1
+    property bool snapshotUsable: false
     property string lastLoadedBase: ""
     property color overlayBackgroundColor: page.fallbackOverlayBackground
     property color overlayTextColor: page.fallbackOverlayText
@@ -29,8 +35,11 @@ WebViewPage {
         var base = hassClient.baseUrl
         if (!base || base.length === 0)
             return ""
-        // No external_auth=1: Sailfish can only inject JS after load, which is too late
-        // for HA's external auth module (it requires window.externalApp at import time).
+        // Prefer Lovelace directly when we already have a native token — gecko
+        // localStorage from a previous run often still has hassTokens, so the
+        // extra "/" hop is unnecessary. Fallback to "/" only for a fresh login.
+        if (hassClient.accessToken && hassClient.accessToken.length > 0)
+            return base + "/lovelace"
         return base + "/"
     }
     property string dashboardUrl: {
@@ -68,6 +77,9 @@ WebViewPage {
         page.bridgeInstalled = false
         page.readyCheckRunning = false
         page.readyCheckAttempts = 0
+        page.resumeProbeRunning = false
+        page.resumeProbeAttempts = 0
+        resumeProbeTimer.stop()
         page.overlayBackgroundColor = page.fallbackOverlayBackground
         page.overlayTextColor = page.fallbackOverlayText
         readyCheckTimer.stop()
@@ -125,11 +137,126 @@ WebViewPage {
         dashboardView.url = page.startUrl
     }
 
+    // Keep the live Lovelace document warm across cover/background. Only reload
+    // if the in-page HA connection is actually dead after a short probe.
+    function onAppForegrounded() {
+        if (!hassClient || !hassClient.loggedIn)
+            return
+        if (!page.dashboardReady || page.readyCheckRunning)
+            return
+
+        page.ensureSessionFresh()
+        page.beginResumeProbe()
+    }
+
+    function ensureSessionFresh() {
+        var expires = hassClient.accessExpiresAtMs
+        if (expires > 0 && (expires - Date.now()) < 120 * 1000) {
+            hassClient.refreshAccessToken()
+            return
+        }
+        page.injectSessionAndBridge(true)
+    }
+
+    function beginResumeProbe() {
+        if (page.resumeProbeRunning)
+            return
+        page.resumeProbeRunning = true
+        page.resumeProbeAttempts = 0
+        resumeProbeTimer.start()
+        page.runResumeProbe()
+    }
+
+    function finishResumeProbe(ok) {
+        resumeProbeTimer.stop()
+        page.resumeProbeRunning = false
+        page.resumeProbeAttempts = 0
+        if (ok)
+            return
+        console.log("Helmsman: warm resume failed — reloading dashboard")
+        page.reloadDashboard()
+    }
+
+    function runResumeProbe() {
+        if (!page.resumeProbeRunning)
+            return
+
+        var script = "return (function(){"
+                + "try {"
+                + "  var ha=document.querySelector('home-assistant');"
+                + "  if(!ha||!ha.hass||!ha.hass.connection)return 'dead';"
+                + "  if(ha.hass.connection.connected){"
+                + "    var hui=document.querySelector('hui-root');"
+                + "    return hui?'ready':'wait';"
+                + "  }"
+                + "  try {"
+                + "    if(typeof ha.hass.connection.reconnect==='function')"
+                + "      ha.hass.connection.reconnect();"
+                + "  } catch (e) {}"
+                + "  return 'reconnecting';"
+                + "} catch (e2) { return 'dead'; }"
+                + "})();"
+
+        dashboardView.runJavaScript(
+                    script,
+                    function(result) {
+                        if (!page.resumeProbeRunning)
+                            return
+                        if (result === "ready") {
+                            page.finishResumeProbe(true)
+                            return
+                        }
+                        page.resumeProbeAttempts += 1
+                        if (page.resumeProbeAttempts >= 10)
+                            page.finishResumeProbe(false)
+                    },
+                    function(error) {
+                        console.log("Helmsman: resume probe JS failed:", error)
+                        if (!page.resumeProbeRunning)
+                            return
+                        page.resumeProbeAttempts += 2
+                        if (page.resumeProbeAttempts >= 10)
+                            page.finishResumeProbe(false)
+                    })
+    }
+
     function finishDashboardLoad() {
         readyCheckTimer.stop()
         page.readyCheckRunning = false
         page.dashboardReady = true
         page.pollBridge()
+        snapshotDelayTimer.restart()
+    }
+
+    function refreshSnapshotState() {
+        page.snapshotUsable = !!(hassClient
+                                 && hassClient.baseUrl
+                                 && hassClient.dashboardSnapshotMatches(hassClient.baseUrl))
+        page.snapshotRevision += 1
+    }
+
+    function captureDashboardSnapshot() {
+        if (page.capturingSnapshot || !page.dashboardReady)
+            return
+        if (!hassClient || !hassClient.loggedIn)
+            return
+        if (dashboardView.width < 8 || dashboardView.height < 8)
+            return
+
+        page.capturingSnapshot = true
+        dashboardView.grabToImage(function(result) {
+            page.capturingSnapshot = false
+            if (!result)
+                return
+            var path = hassClient.dashboardSnapshotPath
+            if (!result.saveToFile(path)) {
+                console.log("Helmsman: failed to save dashboard snapshot")
+                return
+            }
+            hassClient.rememberDashboardSnapshot(hassClient.baseUrl)
+            page.refreshSnapshotState()
+        }, Qt.size(Math.max(48, Math.round(dashboardView.width / 6)),
+                   Math.max(48, Math.round(dashboardView.height / 6))))
     }
 
     function beginReadyCheck() {
@@ -222,7 +349,10 @@ WebViewPage {
                         page.updateLoadingThemeFromWebView()
                         if (!page.tokensInjected) {
                             page.tokensInjected = true
-                            dashboardView.url = page.dashboardUrl
+                            if (page.isLovelaceUrl(dashboardView.url))
+                                page.beginReadyCheck()
+                            else
+                                dashboardView.url = page.dashboardUrl
                             return
                         }
                         if (silent)
@@ -334,6 +464,7 @@ WebViewPage {
                 return
             if (page.lastLoadedBase === hassClient.baseUrl)
                 return
+            page.refreshSnapshotState()
             page.reloadDashboard()
         }
     }
@@ -341,6 +472,8 @@ WebViewPage {
     WebView {
         id: dashboardView
         anchors.fill: parent
+        // Sailfish.WebView already ties `active` to app + page status, which
+        // pauses the compositor in the background while keeping the document.
         opacity: page.dashboardReady ? 1.0 : 0.0
         url: page.startUrl
         onLoadedChanged: {
@@ -381,22 +514,74 @@ WebViewPage {
     }
 
     Timer {
+        id: snapshotDelayTimer
+        interval: 900
+        repeat: false
+        onTriggered: page.captureDashboardSnapshot()
+    }
+
+    Timer {
+        id: resumeProbeTimer
+        interval: 400
+        repeat: true
+        onTriggered: page.runResumeProbe()
+    }
+
+    Component.onCompleted: page.refreshSnapshotState()
+
+    Timer {
         id: bridgePollTimer
         interval: 900
         repeat: true
         running: page.status === PageStatus.Active
+                 && Qt.application.active
                  && hassClient.loggedIn
                  && page.dashboardReady
                  && page.bridgeInstalled
         onTriggered: page.pollBridge()
     }
 
+    onStatusChanged: {
+        if (status === PageStatus.Active
+                && Qt.application.active
+                && page.dashboardReady
+                && hassClient.loggedIn) {
+            page.onAppForegrounded()
+        }
+    }
+
     // Cover the WebView until Lovelace is ready so users do not see partial renders.
     Rectangle {
+        id: loadingOverlay
         anchors.fill: parent
         color: page.overlayBackgroundColor
         visible: !page.dashboardReady
         z: 2
+
+        Image {
+            id: snapshotImage
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: false
+            opacity: 0
+            source: page.snapshotUsable
+                    ? ("file://" + hassClient.dashboardSnapshotPath + "?" + page.snapshotRevision)
+                    : ""
+        }
+
+        FastBlur {
+            anchors.fill: parent
+            source: snapshotImage
+            radius: 48
+            visible: snapshotImage.status === Image.Ready
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: page.overlayBackgroundColor
+            opacity: snapshotImage.status === Image.Ready ? 0.42 : 1.0
+        }
 
         Column {
             anchors.centerIn: parent
@@ -405,7 +590,7 @@ WebViewPage {
 
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
-                running: true
+                running: loadingOverlay.visible
                 size: BusyIndicatorSize.Large
             }
 

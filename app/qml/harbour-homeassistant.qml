@@ -246,9 +246,33 @@ ApplicationWindow
         }
     }
 
+    function findHomePage() {
+        if (!pageStack || typeof pageStack.find !== "function")
+            return null
+        return pageStack.find(function(page) {
+            return page && page.objectName === "HomePage"
+        })
+    }
+
+    function wakeHomePageIfPresent() {
+        var home = appWindow.findHomePage()
+        if (home && typeof home.onAppForegrounded === "function")
+            home.onAppForegrounded()
+    }
+
+    function captureHomeSnapshotIfPresent() {
+        var home = appWindow.findHomePage()
+        if (home && typeof home.captureDashboardSnapshot === "function")
+            home.captureDashboardSnapshot()
+    }
+
     onApplicationActiveChanged: {
-        if (applicationActive)
+        if (applicationActive) {
             appWindow.clearCoverNotification()
+            appWindow.wakeHomePageIfPresent()
+        } else {
+            appWindow.captureHomeSnapshotIfPresent()
+        }
     }
 
     HassClient {
