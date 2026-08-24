@@ -111,8 +111,8 @@ public slots:
                                 const QString &externalUrl,
                                 const QString &homeWifiSsid,
                                 bool ignoreSslErrors);
-    void updateCurrentWifiSsid(const QString &ssid);
-    bool selectEndpointForWifi(const QString &ssid);
+    void updateNetworkState(bool wifiReady, bool wifiConnected, const QString &ssid);
+    void applyEndpointNow();
     void refreshAccessToken();
     void rememberDashboardSnapshot(const QString &baseUrl);
     bool dashboardSnapshotMatches(const QString &baseUrl) const;
@@ -163,7 +163,9 @@ private slots:
     void onTestReplyFinished();
     void onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
     void onPushConnectedChanged();
+    void onPushAccessTokenStale();
     void onPushAuthenticationFailed(const QString &message);
+    void onTokenRefreshTimeout();
     void onPushNotificationReceived(const QString &title,
                                     const QString &message,
                                     const QVariantMap &data);
@@ -180,6 +182,12 @@ private:
         RequestConfig,
         RequestRevoke,
         RequestMobileRegister
+    };
+
+    enum NetworkState {
+        NetworkUnknown,  // ConnMan has not reported yet
+        NetworkNoWifi,   // mobile data or no connectivity at all
+        NetworkWifi
     };
 
     void setBusy(bool busy);
@@ -224,6 +232,10 @@ private:
     void clearPersistedTokens();
     void applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing);
     void reconnectPushAfterEndpointChange();
+    void commitNetworkState();
+    bool selectEndpointForNetwork();
+    void scheduleTokenRefresh();
+    bool startQuietTokenRefresh();
     bool accessTokenStillFresh(int minSecondsLeft = 120) const;
 
     QNetworkAccessManager *m_nam;
@@ -231,6 +243,7 @@ private:
     RequestKind m_pendingKind;
     QNetworkReply *m_pendingReply;
     QTimer m_endpointDebounceTimer;
+    QTimer m_tokenRefreshTimer;
 
     bool m_busy;
     bool m_connected;
@@ -243,7 +256,10 @@ private:
     bool m_testingConnection;
     bool m_testIgnoreSslErrors;
     bool m_pendingPushAfterRefresh;
+    NetworkState m_networkState;
+    NetworkState m_pendingNetworkState;
     int m_pushAuthRetries;
+    int m_pushRefreshFailures;
     int m_port;
     QNetworkReply *m_testReply;
     QString m_testEndpoint;
@@ -253,7 +269,7 @@ private:
     QString m_externalUrl;
     QString m_homeWifiSsid;
     QString m_currentWifiSsid;
-    QString m_pendingEndpointSsid;
+    QString m_pendingWifiSsid;
     QString m_errorMessage;
     QString m_statusText;
     QString m_username;

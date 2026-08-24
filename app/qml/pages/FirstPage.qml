@@ -27,7 +27,7 @@ Page {
 
     function startRestore() {
         // Apply http/https endpoint from Wi‑Fi before token refresh.
-        hassClient.updateCurrentWifiSsid(wifi.ssid)
+        hassClient.updateNetworkState(wifi.ready, wifi.connected, wifi.ssid)
         hassClient.restoreSession()
     }
 
@@ -39,6 +39,7 @@ Page {
 
     WifiChecker {
         id: wifi
+        onNetworkChanged: hassClient.updateNetworkState(wifi.ready, wifi.connected, wifi.ssid)
     }
 
     // Wait so ConnMan can report the SSID before we pick internal/external.

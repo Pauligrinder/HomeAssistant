@@ -5,6 +5,7 @@
 #include <QString>
 #include <QVariantMap>
 #include <QTimer>
+#include <QDateTime>
 #include <QAbstractSocket>
 #include <QList>
 #include <QSslError>
@@ -27,6 +28,7 @@ public:
 public slots:
     void configure(const QString &baseUrl,
                    const QString &accessToken,
+                   const QDateTime &accessExpiresAt,
                    const QString &webhookId,
                    bool ignoreSslErrors);
     void start();
@@ -34,6 +36,7 @@ public slots:
 
 signals:
     void connectedChanged();
+    void accessTokenStale();
     void authenticationFailed(const QString &message);
     void notificationReceived(const QString &title,
                               const QString &message,
@@ -53,6 +56,7 @@ private:
     void subscribePushChannel();
     void confirmNotification(const QString &confirmId);
     void scheduleReconnect();
+    bool accessTokenFresh() const;
     QUrl websocketUrl() const;
     int nextMessageId();
 
@@ -60,6 +64,7 @@ private:
     QTimer m_reconnectTimer;
     QString m_baseUrl;
     QString m_accessToken;
+    QDateTime m_accessExpiresAt;
     QString m_webhookId;
     bool m_ignoreSslErrors;
     bool m_connected;

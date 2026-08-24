@@ -10,8 +10,8 @@ Page {
                                    || hassClient.externalUrl.length > 0
 
     function prepareEndpoint() {
-        hassClient.updateCurrentWifiSsid(wifi.ssid)
-        hassClient.selectEndpointForWifi(wifi.ssid)
+        hassClient.updateNetworkState(wifi.ready, wifi.connected, wifi.ssid)
+        hassClient.applyEndpointNow()
     }
 
     function connectClicked() {
@@ -26,6 +26,7 @@ Page {
 
     WifiChecker {
         id: wifi
+        onNetworkChanged: hassClient.updateNetworkState(wifi.ready, wifi.connected, wifi.ssid)
     }
 
     Connections {
