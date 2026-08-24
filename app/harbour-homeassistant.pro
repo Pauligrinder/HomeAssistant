@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network websockets gui
 PKGCONFIG += qt5embedwidget
 
-VERSION = 0.2.3
+VERSION = 0.2.4
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \

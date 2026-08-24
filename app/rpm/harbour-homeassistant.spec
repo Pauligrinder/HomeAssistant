@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.3
+Version:    0.2.4
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -51,6 +51,9 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Mon Aug 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.4-1
+- Keep the live dashboard on resume instead of showing the loading overlay.
+
 * Fri Aug 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.2-1
 - Internal/external URL configuration with WiFi-based endpoint selection.
 - Theme-aware dashboard loading overlay; larger cover watermarks.
