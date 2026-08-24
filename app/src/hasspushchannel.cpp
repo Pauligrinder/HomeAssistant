@@ -233,11 +233,16 @@ void HassPushChannel::onTextMessageReceived(const QString &message)
     }
 
     if (type == QLatin1String("auth_invalid")) {
-        qWarning() << "Helmsman push: auth_invalid"
-                   << obj.value(QStringLiteral("message")).toString();
+        const QString message = obj.value(QStringLiteral("message")).toString();
+        qWarning() << "Helmsman push: auth_invalid" << message;
+        // Stop reconnecting with the same bad token — HassClient should refresh
+        // and call start() again. Leaving wantRunning true would spam HA with
+        // failed websocket auths (visible as "authentication failure" notifies).
         m_wantRunning = false;
+        m_reconnectTimer.stop();
         m_socket->close();
         setConnected(false);
+        emit authenticationFailed(message);
         return;
     }
 

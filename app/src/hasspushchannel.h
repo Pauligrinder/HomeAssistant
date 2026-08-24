@@ -34,6 +34,7 @@ public slots:
 
 signals:
     void connectedChanged();
+    void authenticationFailed(const QString &message);
     void notificationReceived(const QString &title,
                               const QString &message,
                               const QVariantMap &data);

@@ -41,10 +41,11 @@ Page {
         id: wifi
     }
 
-    // Wait briefly so ConnMan can report the SSID before we pick internal/external.
+    // Wait so ConnMan can report the SSID before we pick internal/external.
+    // Too short and restore hits external HTTPS while still on the LAN.
     Timer {
         id: startRestoreTimer
-        interval: 700
+        interval: 1500
         running: true
         repeat: false
         onTriggered: page.startRestore()
