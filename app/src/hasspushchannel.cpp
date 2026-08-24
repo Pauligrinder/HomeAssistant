@@ -7,6 +7,15 @@
 #include <QUrl>
 #include <QDebug>
 
+namespace {
+
+// Home Assistant issues 30 minute access tokens. Authenticating with one that
+// is already expired makes HA log an invalid-login warning and counts towards
+// its IP ban threshold, so refuse to use a token this close to expiry.
+const qint64 kMinTokenLifetimeMs = 60 * 1000;
+
+} // namespace
+
 HassPushChannel::HassPushChannel(QObject *parent)
     : QObject(parent)
     , m_socket(new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this))
@@ -45,21 +54,26 @@ bool HassPushChannel::connected() const
 
 void HassPushChannel::configure(const QString &baseUrl,
                                 const QString &accessToken,
+                                const QDateTime &accessExpiresAt,
                                 const QString &webhookId,
                                 bool ignoreSslErrors)
 {
-    const bool changed = m_baseUrl != baseUrl
-            || m_accessToken != accessToken
+    // A refreshed token alone must not tear down a healthy socket: HA only
+    // checks the token during the auth handshake, so the new one is simply
+    // picked up on the next connect.
+    const bool endpointChanged = m_baseUrl != baseUrl
             || m_webhookId != webhookId
             || m_ignoreSslErrors != ignoreSslErrors;
 
     m_baseUrl = baseUrl;
     m_accessToken = accessToken;
+    m_accessExpiresAt = accessExpiresAt;
     m_webhookId = webhookId;
     m_ignoreSslErrors = ignoreSslErrors;
 
-    if (changed && m_wantRunning) {
+    if (endpointChanged && m_wantRunning) {
         m_reconnectTimer.stop();
+        m_reconnectAttempt = 0;
         if (m_socket->state() != QAbstractSocket::UnconnectedState)
             m_socket->abort();
         setConnected(false);
@@ -69,7 +83,10 @@ void HassPushChannel::configure(const QString &baseUrl,
 
 void HassPushChannel::start()
 {
+    const bool wasRunning = m_wantRunning;
     m_wantRunning = true;
+    if (!wasRunning)
+        m_reconnectAttempt = 0;
     openSocket();
 }
 
@@ -84,6 +101,16 @@ void HassPushChannel::stop()
     setConnected(false);
 }
 
+bool HassPushChannel::accessTokenFresh() const
+{
+    if (m_accessToken.isEmpty())
+        return false;
+    if (!m_accessExpiresAt.isValid())
+        return true;
+    const qint64 msLeft = QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC());
+    return msLeft > kMinTokenLifetimeMs;
+}
+
 void HassPushChannel::openSocket()
 {
     if (!m_wantRunning)
@@ -92,11 +119,19 @@ void HassPushChannel::openSocket()
         qWarning() << "Helmsman push: missing baseUrl/token/webhook; not starting";
         return;
     }
-    if (m_socket->state() == QAbstractSocket::ConnectedState
-            || m_socket->state() == QAbstractSocket::ConnectingState) {
+    // Also covers ClosingState, so a stop()/start() pair cannot open a second
+    // socket while the previous one is still shutting down.
+    if (m_socket->state() != QAbstractSocket::UnconnectedState)
+        return;
+
+    if (!accessTokenFresh()) {
+        qWarning() << "Helmsman push: access token expired; asking for a refresh before connecting";
+        scheduleReconnect();
+        emit accessTokenStale();
         return;
     }
 
+    m_reconnectTimer.stop();
     m_authenticated = false;
     m_pushSubscriptionId = 0;
     const QUrl url = websocketUrl();

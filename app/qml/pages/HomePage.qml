@@ -460,7 +460,7 @@ WebViewPage {
 
     WifiChecker {
         id: wifi
-        onSsidChanged: hassClient.updateCurrentWifiSsid(wifi.ssid)
+        onNetworkChanged: hassClient.updateNetworkState(wifi.ready, wifi.connected, wifi.ssid)
     }
 
     Connections {

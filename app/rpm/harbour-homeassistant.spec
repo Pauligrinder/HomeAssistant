@@ -51,6 +51,11 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Mon Aug 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.4-2
+- Switch to the external URL on mobile data instead of staying on the LAN address.
+- Renew the access token before it expires so the push channel stops causing
+  invalid-authentication warnings in Home Assistant.
+
 * Mon Aug 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.4-1
 - Keep the live dashboard on resume instead of showing the loading overlay.
 

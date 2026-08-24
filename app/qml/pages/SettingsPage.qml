@@ -20,7 +20,8 @@ Page {
 
     WifiChecker {
         id: wifi
-        onSsidChanged: {
+        onNetworkChanged: {
+            hassClient.updateNetworkState(wifi.ready, wifi.connected, wifi.ssid)
             if (ssidField.text.length === 0 && wifi.ssid.length > 0)
                 ssidField.placeholderText = wifi.ssid
         }
