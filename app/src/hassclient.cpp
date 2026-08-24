@@ -18,6 +18,7 @@
 #include <QUuid>
 #include <QSysInfo>
 #include <QHostInfo>
+#include <QTimer>
 
 namespace {
 
@@ -170,13 +171,22 @@ HassClient::HassClient(QObject *parent)
     , m_restoringSession(false)
     , m_testingConnection(false)
     , m_testIgnoreSslErrors(false)
+    , m_pendingPushAfterRefresh(false)
+    , m_pushAuthRetries(0)
     , m_port(kDefaultHttpPort)
     , m_testReply(nullptr)
 {
+    m_endpointDebounceTimer.setSingleShot(true);
+    m_endpointDebounceTimer.setInterval(1500);
+    connect(&m_endpointDebounceTimer, SIGNAL(timeout()),
+            this, SLOT(onEndpointDebounceTimeout()));
+
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
     connect(m_pushChannel, SIGNAL(connectedChanged()),
             this, SLOT(onPushConnectedChanged()));
+    connect(m_pushChannel, SIGNAL(authenticationFailed(QString)),
+            this, SLOT(onPushAuthenticationFailed(QString)));
     connect(m_pushChannel, SIGNAL(notificationReceived(QString,QString,QVariantMap)),
             this, SLOT(onPushNotificationReceived(QString,QString,QVariantMap)));
 
@@ -579,6 +589,7 @@ void HassClient::cancelRestore()
         m_pendingReply = nullptr;
         m_pendingKind = RequestNone;
     }
+    m_pendingPushAfterRefresh = false;
     setBusy(false);
     setRestoringSession(false);
     setStatus(QStringLiteral("Restore cancelled"));
@@ -659,6 +670,8 @@ void HassClient::onTestReplyFinished()
 void HassClient::restoreSession()
 {
     clearError();
+    // Apply endpoint selection immediately; cancel any pending Wi‑Fi debounce.
+    m_endpointDebounceTimer.stop();
 
     // Pick http vs https endpoint from the configured URLs before refreshing.
     // Without this, a previous external https session can leave useSsl=true and
@@ -696,6 +709,7 @@ void HassClient::restoreSession()
 
 void HassClient::connectToConfiguredInstance()
 {
+    m_endpointDebounceTimer.stop();
     if (!m_internalUrl.isEmpty() || !m_externalUrl.isEmpty())
         selectEndpointForWifi(m_currentWifiSsid);
 
@@ -835,6 +849,9 @@ void HassClient::logout()
     }
     m_flowId.clear();
     m_authCode.clear();
+    m_pendingPushAfterRefresh = false;
+    m_pushAuthRetries = 0;
+    m_endpointDebounceTimer.stop();
     stopPushChannel();
     clearPersistedTokens();
     setLoggedIn(false);
@@ -949,31 +966,109 @@ void HassClient::saveConnectionSettings(const QString &internalUrl,
 
 void HassClient::updateCurrentWifiSsid(const QString &ssid)
 {
-    if (m_currentWifiSsid == ssid)
+    if (m_currentWifiSsid != ssid) {
+        m_currentWifiSsid = ssid;
+        emit currentWifiSsidChanged();
+    }
+    // Debounce endpoint switches — ConnMan can flap briefly when joining Wi‑Fi
+    // or switching between mobile data and WLAN.
+    m_pendingEndpointSsid = ssid;
+    m_endpointDebounceTimer.start();
+}
+
+void HassClient::onEndpointDebounceTimeout()
+{
+    selectEndpointForWifi(m_pendingEndpointSsid);
+}
+
+bool HassClient::accessTokenStillFresh(int minSecondsLeft) const
+{
+    if (m_accessToken.isEmpty() || !m_accessExpiresAt.isValid())
+        return false;
+    const qint64 msLeft = QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC());
+    return msLeft > static_cast<qint64>(minSecondsLeft) * 1000;
+}
+
+void HassClient::refreshAccessToken()
+{
+    if (m_refreshToken.isEmpty() || m_host.isEmpty())
         return;
-    m_currentWifiSsid = ssid;
-    emit currentWifiSsidChanged();
-    selectEndpointForWifi(ssid);
+
+    QUrlQuery form;
+    form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("refresh_token"));
+    form.addQueryItem(QStringLiteral("refresh_token"), m_refreshToken);
+    form.addQueryItem(QStringLiteral("client_id"), clientId());
+    postForm(QStringLiteral("/auth/token"), form, RequestRefresh, false);
+}
+
+void HassClient::reconnectPushAfterEndpointChange()
+{
+    // Always stop first so we do not authenticate against the previous URL
+    // (or with a soon-to-expire token) — that shows up in HA as login failures.
+    stopPushChannel();
+
+    if (!m_loggedIn || m_webhookId.isEmpty())
+        return;
+
+    if (accessTokenStillFresh(120)) {
+        startPushChannel();
+        return;
+    }
+
+    if (m_refreshToken.isEmpty()) {
+        qWarning() << "Helmsman: endpoint switched but no refresh token; push left stopped";
+        return;
+    }
+
+    qWarning() << "Helmsman: refreshing access token after endpoint switch to" << m_baseUrl;
+    m_pendingPushAfterRefresh = true;
+    refreshAccessToken();
 }
 
 bool HassClient::selectEndpointForWifi(const QString &ssid)
 {
-    const bool onHomeWifi = !m_homeWifiSsid.isEmpty()
-            && !ssid.isEmpty()
+    const bool ssidKnown = !ssid.trimmed().isEmpty();
+    const bool onHomeWifi = ssidKnown
+            && !m_homeWifiSsid.isEmpty()
             && ssid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0;
 
-    // Internal only on the configured home SSID; otherwise external (different
-    // Wi‑Fi, mobile data, or not connected). Fall back to internal if external
-    // is not configured.
+    // Prefer the configured URL that matches current Wi‑Fi. When the SSID is
+    // still unknown (startup / ConnMan lag), keep the last selected endpoint
+    // instead of jumping to external HTTPS while the phone may still be on LAN.
     QString chosen;
-    if (onHomeWifi && !m_internalUrl.isEmpty())
+    bool defaultSsl = false;
+    if (onHomeWifi && !m_internalUrl.isEmpty()) {
         chosen = m_internalUrl;
-    else if (!m_externalUrl.isEmpty())
+        defaultSsl = false;
+    } else if (ssidKnown && !m_externalUrl.isEmpty()) {
         chosen = m_externalUrl;
-    else if (!m_internalUrl.isEmpty())
+        defaultSsl = true;
+    } else if (!ssidKnown) {
+        if (m_usingInternalUrl && !m_internalUrl.isEmpty()) {
+            chosen = m_internalUrl;
+            defaultSsl = false;
+        } else if (!m_usingInternalUrl && !m_externalUrl.isEmpty()) {
+            chosen = m_externalUrl;
+            defaultSsl = true;
+        } else if (!m_internalUrl.isEmpty()) {
+            chosen = m_internalUrl;
+            defaultSsl = false;
+        } else {
+            chosen = m_externalUrl;
+            defaultSsl = true;
+        }
+    } else if (!m_internalUrl.isEmpty()) {
         chosen = m_internalUrl;
-    else
+        defaultSsl = false;
+    } else {
         return false;
+    }
+
+    if (chosen.isEmpty())
+        return false;
+
+    // Re-normalize so scheme (http vs https) always comes from the URL itself.
+    chosen = normalizeInstanceUrl(chosen, defaultSsl);
 
     QString parseError;
     const QString previousBase = m_baseUrl;
@@ -983,10 +1078,11 @@ bool HassClient::selectEndpointForWifi(const QString &ssid)
         return false;
     }
 
-    setUsingInternalUrl(chosen == m_internalUrl);
+    const QString internalNorm = normalizeInstanceUrl(m_internalUrl, false);
+    setUsingInternalUrl(!internalNorm.isEmpty() && chosen == internalNorm);
     persistConnectionSettings();
     if (m_loggedIn && previousBase != m_baseUrl)
-        startPushChannel();
+        reconnectPushAfterEndpointChange();
     return previousBase != m_baseUrl || previousInternal != m_usingInternalUrl;
 }
 
@@ -1088,6 +1184,11 @@ void HassClient::onReplyFinished()
         setBusy(false);
         const QString message = QStringLiteral("Could not reach %1 (%2)")
                 .arg(m_baseUrl, netErrorString);
+        if (kind == RequestRefresh && m_pendingPushAfterRefresh) {
+            m_pendingPushAfterRefresh = false;
+            qWarning() << "Helmsman: endpoint-switch token refresh unreachable:" << message;
+            return;
+        }
         setError(message);
         setStatus(QStringLiteral("Connection failed"));
         if (kind == RequestRefresh) {
@@ -1139,6 +1240,14 @@ void HassClient::onReplyFinished()
         if (status != 200) {
             setBusy(false);
             const QString message = jsonErrorMessage(data, QStringLiteral("Token request failed"));
+            if (kind == RequestRefresh && m_pendingPushAfterRefresh) {
+                // Background refresh after Wi‑Fi/endpoint switch — do not tear down
+                // the session or spam the UI. Leave push stopped rather than
+                // reconnecting with a token HA already rejected.
+                m_pendingPushAfterRefresh = false;
+                qWarning() << "Helmsman: endpoint-switch token refresh failed:" << message;
+                return;
+            }
             setError(message);
             if (kind == RequestRefresh) {
                 // Keep tokens so the user can retry. Wiping here forced a full
@@ -1356,6 +1465,11 @@ void HassClient::handleToken(const QByteArray &data, bool fromRefresh)
     if (!doc.isObject()) {
         setBusy(false);
         const QString message = QStringLiteral("Malformed token response");
+        if (fromRefresh && m_pendingPushAfterRefresh) {
+            m_pendingPushAfterRefresh = false;
+            qWarning() << "Helmsman: endpoint-switch token refresh malformed";
+            return;
+        }
         setError(message);
         if (fromRefresh) {
             setRestoringSession(false);
@@ -1369,6 +1483,11 @@ void HassClient::handleToken(const QByteArray &data, bool fromRefresh)
     if (m_accessToken.isEmpty()) {
         setBusy(false);
         const QString message = QStringLiteral("No access token in response");
+        if (fromRefresh && m_pendingPushAfterRefresh) {
+            m_pendingPushAfterRefresh = false;
+            qWarning() << "Helmsman: endpoint-switch token refresh missing access_token";
+            return;
+        }
         setError(message);
         if (fromRefresh) {
             setRestoringSession(false);
@@ -1380,6 +1499,18 @@ void HassClient::handleToken(const QByteArray &data, bool fromRefresh)
 
     if (m_authClientId.isEmpty())
         m_authClientId = canonicalClientId(m_baseUrl);
+
+    // Quiet path: refresh only so the push channel can reconnect after an
+    // internal↔external switch (or after auth_invalid). Skip config reload.
+    if (fromRefresh && m_pendingPushAfterRefresh) {
+        m_pendingPushAfterRefresh = false;
+        setBusy(false);
+        setConnected(true);
+        persistSession();
+        qWarning() << "Helmsman: access token refreshed for" << m_baseUrl;
+        startPushChannel();
+        return;
+    }
 
     setConnected(true);
     persistSession();
@@ -1533,7 +1664,29 @@ void HassClient::stopPushChannel()
 
 void HassClient::onPushConnectedChanged()
 {
+    if (m_pushChannel && m_pushChannel->connected())
+        m_pushAuthRetries = 0;
     emit pushConnectedChanged();
+}
+
+void HassClient::onPushAuthenticationFailed(const QString &message)
+{
+    qWarning() << "Helmsman: push authentication failed:" << message;
+    if (!m_loggedIn || m_refreshToken.isEmpty())
+        return;
+    if (m_pushAuthRetries >= 1) {
+        qWarning() << "Helmsman: not retrying push auth again until next successful connect";
+        return;
+    }
+    if (m_pendingPushAfterRefresh) {
+        qWarning() << "Helmsman: token refresh already in flight after push auth failure";
+        return;
+    }
+
+    ++m_pushAuthRetries;
+    m_pendingPushAfterRefresh = true;
+    qWarning() << "Helmsman: refreshing access token after push auth_invalid";
+    refreshAccessToken();
 }
 
 void HassClient::onPushNotificationReceived(const QString &title,
