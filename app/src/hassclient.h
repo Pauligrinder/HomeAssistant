@@ -111,6 +111,7 @@ public slots:
                                 bool ignoreSslErrors);
     void updateCurrentWifiSsid(const QString &ssid);
     bool selectEndpointForWifi(const QString &ssid);
+    void refreshAccessToken();
 
 signals:
     void busyChanged();
@@ -217,7 +218,6 @@ private:
     void persistSession();
     void clearPersistedTokens();
     void applyTokens(const QVariantMap &obj, bool keepRefreshIfMissing);
-    void refreshAccessToken();
     void reconnectPushAfterEndpointChange();
     bool accessTokenStillFresh(int minSecondsLeft = 120) const;
 
