@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.2
+Version:    0.2.3
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
