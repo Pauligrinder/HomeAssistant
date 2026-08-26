@@ -1,22 +1,24 @@
 TARGET = harbour-helmsman
 
 CONFIG += sailfishapp
-QT += network websockets gui
+QT += network websockets gui positioning
 PKGCONFIG += qt5embedwidget
 
-VERSION = 0.2.4
+VERSION = 0.2.5
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
     src/harbour-homeassistant.cpp \
     src/hassclient.cpp \
     src/hasspushchannel.cpp \
-    src/mdiiconrenderer.cpp
+    src/mdiiconrenderer.cpp \
+    src/sensorcoordinator.cpp
 
 HEADERS += \
     src/hassclient.h \
     src/hasspushchannel.h \
-    src/mdiiconrenderer.h
+    src/mdiiconrenderer.h \
+    src/sensorcoordinator.h
 
 RESOURCES += mdi.qrc
 

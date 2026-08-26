@@ -179,6 +179,7 @@ HassClient::HassClient(QObject *parent)
     : QObject(parent)
     , m_nam(new QNetworkAccessManager(this))
     , m_pushChannel(new HassPushChannel(this))
+    , m_sensors(new SensorCoordinator(this))
     , m_pendingKind(RequestNone)
     , m_pendingReply(nullptr)
     , m_busy(false)
@@ -262,6 +263,7 @@ QString HassClient::webhookId() const { return m_webhookId; }
 QString HassClient::deviceName() const { return m_deviceName; }
 bool HassClient::mobileAppRegistered() const { return !m_webhookId.isEmpty(); }
 bool HassClient::pushConnected() const { return m_pushChannel && m_pushChannel->connected(); }
+SensorCoordinator *HassClient::sensors() const { return m_sensors; }
 
 QString HassClient::dashboardSnapshotPath() const
 {
@@ -326,6 +328,7 @@ void HassClient::setIgnoreSslErrors(bool ignore)
         return;
     m_ignoreSslErrors = ignore;
     emit ignoreSslErrorsChanged();
+    configureSensors();
     if (m_loggedIn)
         startPushChannel();
 }
@@ -360,6 +363,8 @@ void HassClient::setUsingInternalUrl(bool usingInternal)
         return;
     m_usingInternalUrl = usingInternal;
     emit usingInternalUrlChanged();
+    if (m_sensors)
+        m_sensors->setUsingInternalUrl(usingInternal);
 }
 
 void HassClient::setBusy(bool busy)
@@ -441,6 +446,7 @@ void HassClient::rebuildBaseUrl()
         return;
     m_baseUrl = next;
     emit baseUrlChanged();
+    configureSensors();
 }
 
 QUrl HassClient::apiUrl(const QString &path) const
@@ -911,6 +917,7 @@ void HassClient::logout()
     m_pushAuthRetries = 0;
     m_pushRefreshFailures = 0;
     m_endpointDebounceTimer.stop();
+    stopSensors();
     stopPushChannel();
     clearPersistedTokens();
     clearDashboardSnapshot();
@@ -1063,6 +1070,10 @@ void HassClient::commitNetworkState()
     if (m_currentWifiSsid != m_pendingWifiSsid) {
         m_currentWifiSsid = m_pendingWifiSsid;
         emit currentWifiSsidChanged();
+    }
+    if (m_sensors) {
+        m_sensors->updateWifi(m_currentWifiSsid,
+                              m_networkState == NetworkWifi && !m_currentWifiSsid.isEmpty());
     }
     selectEndpointForNetwork();
 }
@@ -1731,6 +1742,7 @@ void HassClient::ensureMobileAppRegistration()
 
     if (!m_webhookId.isEmpty()) {
         startPushChannel();
+        startSensors();
         return;
     }
 
@@ -1788,11 +1800,13 @@ void HassClient::handleMobileRegistration(const QByteArray &data)
     emit webhookIdChanged();
     qWarning() << "Helmsman: mobile_app registered, webhook set";
     startPushChannel();
+    startSensors();
 }
 
 void HassClient::clearMobileRegistration()
 {
     const bool hadWebhook = !m_webhookId.isEmpty();
+    stopSensors();
     m_webhookId.clear();
     m_webhookSecret.clear();
     m_cloudhookUrl.clear();
@@ -1801,6 +1815,38 @@ void HassClient::clearMobileRegistration()
         emit webhookIdChanged();
         emit mobileAppRegisteredChanged();
     }
+}
+
+void HassClient::configureSensors()
+{
+    if (!m_sensors)
+        return;
+    m_sensors->configure(m_webhookId, m_cloudhookUrl, m_remoteUiUrl,
+                         m_baseUrl, m_ignoreSslErrors);
+}
+
+void HassClient::startSensors()
+{
+    if (!m_sensors || m_webhookId.isEmpty())
+        return;
+    configureSensors();
+    m_sensors->setUsingInternalUrl(m_usingInternalUrl);
+    m_sensors->start();
+    // Push current Wi-Fi immediately after start.
+    m_sensors->updateWifi(m_currentWifiSsid,
+                          m_networkState == NetworkWifi && !m_currentWifiSsid.isEmpty());
+}
+
+void HassClient::stopSensors()
+{
+    if (m_sensors)
+        m_sensors->stop();
+}
+
+void HassClient::notifyAppForegrounded()
+{
+    if (m_sensors)
+        m_sensors->onAppForegrounded();
 }
 
 void HassClient::startPushChannel()

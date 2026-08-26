@@ -4,6 +4,7 @@ import Nemo.Notifications 1.0
 import harbour.helmsman 1.0
 import "cover" as CoverDir
 import "pages"
+import "components"
 
 ApplicationWindow
 {
@@ -270,6 +271,7 @@ ApplicationWindow
         if (applicationActive) {
             appWindow.clearCoverNotification()
             appWindow.wakeHomePageIfPresent()
+            hassClientInstance.notifyAppForegrounded()
         } else {
             appWindow.captureHomeSnapshotIfPresent()
         }
@@ -277,6 +279,21 @@ ApplicationWindow
 
     HassClient {
         id: hassClientInstance
+    }
+
+    BatteryMonitor {
+        hassClient: hassClientInstance
+    }
+
+    LocationReporter {
+        hassClient: hassClientInstance
+    }
+
+    WifiChecker {
+        id: appWifi
+        onNetworkChanged: {
+            hassClientInstance.updateNetworkState(appWifi.ready, appWifi.connected, appWifi.ssid)
+        }
     }
 
     MdiIconRenderer {

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.4
+Version:    0.2.5
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -10,15 +10,18 @@ Requires:   qt5-qtcore
 Requires:   qt5-qtdeclarative
 Requires:   qt5-qtnetwork
 Requires:   qt5-qtwebsockets
+Requires:   qt5-qtpositioning
 Requires:   sailfish-components-webview-qt5
 Requires:   nemo-qml-plugin-dbus-qt5
 Requires:   nemo-qml-plugin-notifications-qt5
+Requires:   nemo-qml-plugin-contextkit-qt5
 BuildRequires:  pkgconfig(sailfishapp) >= 1.0.2
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5WebSockets)
+BuildRequires:  pkgconfig(Qt5Positioning)
 BuildRequires:  pkgconfig(qt5embedwidget)
 BuildRequires:  desktop-file-utils
 
@@ -26,7 +29,8 @@ BuildRequires:  desktop-file-utils
 Sailfish-native Home Assistant client. Connect to a Home Assistant instance
 by IP or hostname, then log in with username/password and optional TOTP
 two-step verification. Receives companion notifications over a WebSocket
-push channel after mobile_app registration.
+push channel after mobile_app registration, and reports battery, Wi-Fi, and
+location sensors via the mobile_app webhook.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -51,6 +55,11 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Wed Aug 26 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.5-1
+- Report battery, Wi-Fi, OS version, and location via the mobile_app webhook.
+- Mark the device as home when using the internal URL (configurable).
+- Improve location seeking with Wi-Fi/GPS hybrid fixes and ConnMan GPS power.
+
 * Mon Aug 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.4-2
 - Switch to the external URL on mobile data instead of staying on the LAN address.
 - Renew the access token before it expires so the push channel stops causing

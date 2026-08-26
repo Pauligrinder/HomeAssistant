@@ -12,6 +12,8 @@
 #include <QUrlQuery>
 #include <QTimer>
 
+#include "sensorcoordinator.h"
+
 class QNetworkAccessManager;
 class QNetworkReply;
 class QNetworkRequest;
@@ -52,6 +54,7 @@ class HassClient : public QObject
     Q_PROPERTY(bool mobileAppRegistered READ mobileAppRegistered NOTIFY mobileAppRegisteredChanged)
     Q_PROPERTY(bool pushConnected READ pushConnected NOTIFY pushConnectedChanged)
     Q_PROPERTY(QString dashboardSnapshotPath READ dashboardSnapshotPath CONSTANT)
+    Q_PROPERTY(SensorCoordinator *sensors READ sensors CONSTANT)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -89,6 +92,7 @@ public:
     bool mobileAppRegistered() const;
     bool pushConnected() const;
     QString dashboardSnapshotPath() const;
+    SensorCoordinator *sensors() const;
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -117,6 +121,7 @@ public slots:
     void rememberDashboardSnapshot(const QString &baseUrl);
     bool dashboardSnapshotMatches(const QString &baseUrl) const;
     void clearDashboardSnapshot();
+    void notifyAppForegrounded();
 
 signals:
     void busyChanged();
@@ -227,6 +232,9 @@ private:
     void startPushChannel();
     void stopPushChannel();
     void clearMobileRegistration();
+    void configureSensors();
+    void startSensors();
+    void stopSensors();
     void loadSession();
     void persistSession();
     void clearPersistedTokens();
@@ -240,6 +248,7 @@ private:
 
     QNetworkAccessManager *m_nam;
     HassPushChannel *m_pushChannel;
+    SensorCoordinator *m_sensors;
     RequestKind m_pendingKind;
     QNetworkReply *m_pendingReply;
     QTimer m_endpointDebounceTimer;
