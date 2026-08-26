@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="86" height="86" viewBox="0 0 86 86">
+  <!-- Sailfish launcher silhouette: sharp top-left / bottom-right,
+       quarter-circle top-right / bottom-left (official double-shape). -->
+  <title>harbour-helmsman</title>
+  <defs>
+    <path id="sfos-shape"
+          d="M 1.723 0.3 H 43
+             c 23.583 0 42.7 19.118 42.7 42.7
+             v 41.277
+             c 0 0.786 -0.637 1.423 -1.423 1.423
+             H 43
+             C 19.417 85.7 0.3 66.582 0.3 43
+             V 1.723
+             C 0.3 0.937 0.937 0.3 1.723 0.3 Z"/>
+    <clipPath id="sfos">
+      <use href="#sfos-shape"/>
+    </clipPath>
+  </defs>
+  <use href="#sfos-shape" fill="#03A9F4"/>
+  <!-- Same house glyph as the cover watermark (100x100 design space). -->
+  <g clip-path="url(#sfos)">
+    <g transform="translate(10 10) scale(0.66)" fill="#FFFFFF" fill-rule="evenodd">
+      <path d="M 21 97
+               Q 16.5 97 16.5 92.5
+               L 16.5 41
+               L 6 41
+               L 25 24.5909
+               L 25 6.5
+               L 33.5 6.5
+               L 33.5 17.25
+               L 50 3
+               L 94 41
+               L 83.5 41
+               L 83.5 92.5
+               Q 83.5 97 79 97
+               L 58 97
+               L 58 70
+               Q 50 62 42 70
+               L 42 97 Z
+               M 25.4 50
+               L 32.1 50
+               Q 34.5 50 34.5 52.4
+               L 34.5 63.6
+               Q 34.5 66 32.1 66
+               L 25.4 66
+               Q 23 66 23 63.6
+               L 23 52.4
+               Q 23 50 25.4 50 Z
+               M 67.9 50
+               L 74.6 50
+               Q 77 50 77 52.4
+               L 77 63.6
+               Q 77 66 74.6 66
+               L 67.9 66
+               Q 65.5 66 65.5 63.6
+               L 65.5 52.4
+               Q 65.5 50 67.9 50 Z
+               M 54.6 26.5
+               A 4.6 4.6 0 1 1 45.4 26.5
+               A 4.6 4.6 0 1 1 54.6 26.5 Z"/>
+    </g>
+  </g>
+</svg>
