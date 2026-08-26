@@ -5,6 +5,7 @@
 
 #include "hassclient.h"
 #include "mdiiconrenderer.h"
+#include "sensorcoordinator.h"
 
 int main(int argc, char *argv[])
 {
@@ -16,6 +17,9 @@ int main(int argc, char *argv[])
 
     qmlRegisterType<HassClient>("harbour.helmsman", 1, 0, "HassClient");
     qmlRegisterType<MdiIconRenderer>("harbour.helmsman", 1, 0, "MdiIconRenderer");
+    qmlRegisterUncreatableType<SensorCoordinator>(
+                "harbour.helmsman", 1, 0, "SensorCoordinator",
+                QStringLiteral("Use HassClient.sensors"));
 
     view->setSource(SailfishApp::pathTo(QStringLiteral("qml/harbour-homeassistant.qml")));
     view->show();

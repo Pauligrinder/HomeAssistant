@@ -184,6 +184,111 @@ Page {
                 }
             }
 
+            SectionHeader { text: "Sensors" }
+
+            TextSwitch {
+                id: homeOnInternalSwitch
+                text: "Mark home on internal connection"
+                checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
+                description: "When connected via the internal URL (home Wi‑Fi), report location as home to Home Assistant."
+                onCheckedChanged: {
+                    if (hassClient.sensors
+                            && hassClient.sensors.homeOnInternal !== checked)
+                        hassClient.sensors.homeOnInternal = checked
+                }
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: "Battery, Wi‑Fi, OS version, and location are reported to Home Assistant. "
+                      + "Enable or disable each entity under Settings → Devices → "
+                      + hassClient.deviceName + " in Home Assistant."
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: hassClient.sensors && hassClient.sensors.lastError.length > 0
+                text: hassClient.sensors ? ("Last error: " + hassClient.sensors.lastError) : ""
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: {
+                    if (!hassClient.sensors)
+                        return "Sensors: unavailable"
+                    if (!hassClient.mobileAppRegistered)
+                        return "Sensors: waiting for mobile_app registration…"
+                    if (hassClient.sensors.active)
+                        return "Sensors: reporting"
+                    return "Sensors: idle"
+                }
+            }
+
+            Repeater {
+                model: hassClient.sensors ? hassClient.sensors.sensorStatuses : []
+                delegate: Item {
+                    width: column.width
+                    height: sensorColumn.height + Theme.paddingSmall
+
+                    Column {
+                        id: sensorColumn
+                        width: parent.width
+                        spacing: Theme.paddingSmall / 2
+
+                        Label {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.margins: Theme.horizontalPageMargin
+                            color: Theme.primaryColor
+                            font.pixelSize: Theme.fontSizeSmall
+                            text: modelData.name
+                        }
+
+                        Label {
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.margins: Theme.horizontalPageMargin
+                            wrapMode: Text.Wrap
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            text: {
+                                var bits = []
+                                bits.push(modelData.disabled ? "Disabled in HA" : "Enabled")
+                                if (modelData.state && modelData.state.length)
+                                    bits.push(modelData.state)
+                                if (modelData.lastUpdated && modelData.lastUpdated.length)
+                                    bits.push("updated " + modelData.lastUpdated)
+                                if (modelData.lastError && modelData.lastError.length)
+                                    bits.push(modelData.lastError)
+                                return bits.join(" · ")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Refresh sensor config"
+                enabled: hassClient.sensors && hassClient.sensors.active
+                onClicked: hassClient.sensors.refreshConfig()
+            }
+
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: "Save"

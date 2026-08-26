@@ -5,15 +5,18 @@ Built as a Harbour app (Qt 5 / QML + C++) the same way most SFOS apps are,
 and tested against Platform SDK target `SailfishOS-5.2.0.15-aarch64`.
 
 This first cut covers connecting to an instance and signing in, including
-TOTP two-step verification, dashboards (webview-wrapped) and notifications.
+TOTP two-step verification, dashboards (webview-wrapped), notifications, and
+mobile_app sensors (battery, Wi‑Fi, location).
 
 ## Layout
 
 ```
 app/
   harbour-homeassistant.pro
-  src/hassclient.{h,cpp}     HA HTTP auth + session
-  qml/pages/                 Connection, login, OTP, home
+  src/hassclient.{h,cpp}           HA HTTP auth + session
+  src/sensorcoordinator.{h,cpp}    mobile_app sensor webhooks
+  qml/pages/                       Connection, login, OTP, home, settings
+  qml/components/                  WifiChecker, BatteryMonitor, LocationReporter
   rpm/harbour-homeassistant.spec
 ```
 
@@ -26,6 +29,10 @@ app/
    (or other MFA) code, then exchanges the auth code for tokens.
 4. **Session** — Refresh token is stored in the sandboxed app settings and
    restored on launch.
+5. **Sensors** — After mobile_app registration, Helmsman reports battery level/
+   state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
+   location. On the internal URL it can mark the device as `home`. Enable or
+   disable each entity under HA → Settings → Devices → Helmsman.
 
 ## Build
 
@@ -40,12 +47,12 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.4-2.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.5-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.2.4-2.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.2.5-1.aarch64.rpm
 ```
 
-Sailjail permissions used: `Internet`, `Notifications`.
+Sailjail permissions used: `Internet`, `Notifications`, `Location`.
 
 ## Releases (GitHub Actions)
 
