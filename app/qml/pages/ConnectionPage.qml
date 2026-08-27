@@ -84,9 +84,12 @@ Page {
                         lines.push("Internal: " + hassClient.internalUrl)
                     if (hassClient.externalUrl.length > 0)
                         lines.push("External: " + hassClient.externalUrl)
-                    if (hassClient.baseUrl.length > 0)
-                        lines.push("Using: " + hassClient.baseUrl
-                                   + (hassClient.usingInternalUrl ? " (internal)" : " (external)"))
+                    if (hassClient.baseUrl.length > 0) {
+                        var using = "Using: " + hassClient.baseUrl
+                        if (hassClient.internalUrl.length > 0)
+                            using += hassClient.usingInternalUrl ? " (internal)" : " (external)"
+                        lines.push(using)
+                    }
                     return lines.join("\n")
                 }
             }

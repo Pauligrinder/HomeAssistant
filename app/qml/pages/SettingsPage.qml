@@ -132,9 +132,20 @@ Page {
                 text: externalTestResult
             }
 
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: "If you only have one address, put it in External URL and leave Internal URL empty. Helmsman will not switch between addresses in that case."
+            }
+
             TextField {
                 id: ssidField
                 width: parent.width
+                visible: internalField.text.length > 0
                 label: "Home Wi‑Fi SSID"
                 placeholderText: wifi.ssid.length > 0 ? wifi.ssid : "MyHomeWifi"
                 text: hassClient.homeWifiSsid
@@ -143,6 +154,7 @@ Page {
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
+                visible: internalField.text.length > 0
                 text: "Use current Wi‑Fi"
                 enabled: wifi.ssid.length > 0
                 onClicked: ssidField.text = wifi.ssid
@@ -155,6 +167,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryHighlightColor
                 font.pixelSize: Theme.fontSizeExtraSmall
+                visible: internalField.text.length > 0
                 text: wifi.ssid.length > 0
                       ? ("Current Wi‑Fi: " + wifi.ssid
                          + (hassClient.usingInternalUrl ? " · using internal" : " · using external"))
@@ -184,10 +197,31 @@ Page {
                 }
             }
 
+            SectionHeader { text: "Cover favorites" }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: "Pick lights to show on the app cover. Dimmable lights include a brightness slider here; tap a light on the cover to toggle it."
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Choose cover favorites"
+                enabled: hassClient.loggedIn
+                onClicked: pageStack.push(Qt.resolvedUrl("EventsViewSettingsPage.qml"),
+                                          { hassClient: hassClient })
+            }
+
             SectionHeader { text: "Sensors" }
 
             TextSwitch {
                 id: homeOnInternalSwitch
+                visible: internalField.text.length > 0
                 text: "Mark home on internal connection"
                 checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
                 description: "When connected via the internal URL (home Wi‑Fi), report location as home to Home Assistant."

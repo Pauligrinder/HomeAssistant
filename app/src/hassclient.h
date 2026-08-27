@@ -13,6 +13,7 @@
 #include <QTimer>
 
 #include "sensorcoordinator.h"
+#include "widgetcoordinator.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -55,6 +56,7 @@ class HassClient : public QObject
     Q_PROPERTY(bool pushConnected READ pushConnected NOTIFY pushConnectedChanged)
     Q_PROPERTY(QString dashboardSnapshotPath READ dashboardSnapshotPath CONSTANT)
     Q_PROPERTY(SensorCoordinator *sensors READ sensors CONSTANT)
+    Q_PROPERTY(WidgetCoordinator *widget READ widget CONSTANT)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -93,6 +95,7 @@ public:
     bool pushConnected() const;
     QString dashboardSnapshotPath() const;
     SensorCoordinator *sensors() const;
+    WidgetCoordinator *widget() const;
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -168,13 +171,15 @@ private slots:
     void onTestReplyFinished();
     void onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
     void onPushConnectedChanged();
-    void onPushAccessTokenStale();
+    void onAccessTokenStale();
     void onPushAuthenticationFailed(const QString &message);
     void onTokenRefreshTimeout();
     void onPushNotificationReceived(const QString &title,
                                     const QString &message,
                                     const QVariantMap &data);
     void onEndpointDebounceTimeout();
+    void configureWidget();
+    void syncWidgetRunning();
 
 private:
     enum RequestKind {
@@ -235,6 +240,8 @@ private:
     void configureSensors();
     void startSensors();
     void stopSensors();
+    void startWidget();
+    void stopWidget();
     void loadSession();
     void persistSession();
     void clearPersistedTokens();
@@ -249,6 +256,7 @@ private:
     QNetworkAccessManager *m_nam;
     HassPushChannel *m_pushChannel;
     SensorCoordinator *m_sensors;
+    WidgetCoordinator *m_widget;
     RequestKind m_pendingKind;
     QNetworkReply *m_pendingReply;
     QTimer m_endpointDebounceTimer;

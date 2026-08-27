@@ -1,10 +1,10 @@
 TARGET = harbour-helmsman
 
 CONFIG += sailfishapp
-QT += network websockets gui positioning
+QT += network websockets gui positioning dbus
 PKGCONFIG += qt5embedwidget
 
-VERSION = 0.2.5
+VERSION = 0.2.6
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
@@ -12,13 +12,15 @@ SOURCES += \
     src/hassclient.cpp \
     src/hasspushchannel.cpp \
     src/mdiiconrenderer.cpp \
-    src/sensorcoordinator.cpp
+    src/sensorcoordinator.cpp \
+    src/widgetcoordinator.cpp
 
 HEADERS += \
     src/hassclient.h \
     src/hasspushchannel.h \
     src/mdiiconrenderer.h \
-    src/sensorcoordinator.h
+    src/sensorcoordinator.h \
+    src/widgetcoordinator.h
 
 RESOURCES += mdi.qrc
 
@@ -29,6 +31,7 @@ DISTFILES += \
     qml/cover/CoverPage.qml \
     qml/pages/*.qml \
     qml/components/*.qml \
+    qml/eventsview/*.qml \
     data/mdi/LICENSE.txt
 
 icon86.files = icons/86x86/harbour-helmsman.png

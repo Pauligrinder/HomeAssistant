@@ -12,7 +12,7 @@ namespace {
 // Home Assistant issues 30 minute access tokens. Authenticating with one that
 // is already expired makes HA log an invalid-login warning and counts towards
 // its IP ban threshold, so refuse to use a token this close to expiry.
-const qint64 kMinTokenLifetimeMs = 60 * 1000;
+const qint64 kMinTokenLifetimeMs = 120 * 1000;
 
 } // namespace
 
@@ -106,7 +106,7 @@ bool HassPushChannel::accessTokenFresh() const
     if (m_accessToken.isEmpty())
         return false;
     if (!m_accessExpiresAt.isValid())
-        return true;
+        return false;
     const qint64 msLeft = QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC());
     return msLeft > kMinTokenLifetimeMs;
 }
@@ -126,7 +126,6 @@ void HassPushChannel::openSocket()
 
     if (!accessTokenFresh()) {
         qWarning() << "Helmsman push: access token expired; asking for a refresh before connecting";
-        scheduleReconnect();
         emit accessTokenStale();
         return;
     }
@@ -184,8 +183,13 @@ void HassPushChannel::onDisconnected()
     m_authenticated = false;
     m_pushSubscriptionId = 0;
     setConnected(false);
-    if (m_wantRunning)
+    if (m_wantRunning) {
+        if (!accessTokenFresh()) {
+            emit accessTokenStale();
+            return;
+        }
         scheduleReconnect();
+    }
 }
 
 void HassPushChannel::onError(QAbstractSocket::SocketError error)
@@ -253,6 +257,12 @@ void HassPushChannel::onTextMessageReceived(const QString &message)
     const QString type = obj.value(QStringLiteral("type")).toString();
 
     if (type == QLatin1String("auth_required")) {
+        if (!accessTokenFresh()) {
+            qWarning() << "Helmsman push: token expired before auth handshake";
+            m_socket->close();
+            emit accessTokenStale();
+            return;
+        }
         QJsonObject auth;
         auth.insert(QStringLiteral("type"), QStringLiteral("auth"));
         auth.insert(QStringLiteral("access_token"), m_accessToken);

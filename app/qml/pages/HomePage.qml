@@ -37,19 +37,13 @@ WebViewPage {
         var base = hassClient.baseUrl
         if (!base || base.length === 0)
             return ""
-        // Prefer Lovelace directly when we already have a native token — gecko
-        // localStorage from a previous run often still has hassTokens, so the
-        // extra "/" hop is unnecessary. Fallback to "/" only for a fresh login.
-        if (hassClient.accessToken && hassClient.accessToken.length > 0)
-            return base + "/lovelace"
+        // Load "/" so Home Assistant can route to the user/system default
+        // dashboard instead of always opening the generic Overview.
+        if (base.charAt(base.length - 1) === "/")
+            return base
         return base + "/"
     }
-    property string dashboardUrl: {
-        var base = hassClient.baseUrl
-        if (!base || base.length === 0)
-            return ""
-        return base + "/lovelace"
-    }
+    property string dashboardUrl: page.startUrl
     property string loadStatusText: {
         if (!page.tokensInjected)
             return "Preparing session..."
@@ -65,8 +59,16 @@ WebViewPage {
         return JSON.stringify(value ? String(value) : "")
     }
 
-    function isLovelaceUrl(value) {
-        return String(value).indexOf("/lovelace") >= 0
+    function isHassFrontendUrl(value) {
+        var url = String(value)
+        var base = hassClient.baseUrl
+        if (!base || url.length === 0 || url.indexOf(base) !== 0)
+            return false
+        if (url.indexOf("/auth/authorize") >= 0 || url.indexOf("/auth/login_flow") >= 0)
+            return false
+        if (url.indexOf("/_my_redirect/companion_app") >= 0)
+            return false
+        return true
     }
 
     function openSettings() {
@@ -203,8 +205,9 @@ WebViewPage {
                 + "  var ha=document.querySelector('home-assistant');"
                 + "  if(!ha||!ha.hass||!ha.hass.connection)return 'dead';"
                 + "  if(ha.hass.connection.connected){"
-                + "    var hui=document.querySelector('hui-root');"
-                + "    return hui?'ready':'wait';"
+                + "    var main=ha.shadowRoot&&ha.shadowRoot.querySelector('home-assistant-main');"
+                + "    if(main||document.querySelector('hui-root'))return 'ready';"
+                + "    return 'wait';"
                 + "  }"
                 + "  try {"
                 + "    if(typeof ha.hass.connection.reconnect==='function')"
@@ -293,11 +296,12 @@ WebViewPage {
             return
 
         var script = "return (function(){"
+                + "try{window.__helmsmanAttachExternal&&window.__helmsmanAttachExternal();}catch(e){}"
                 + "var ha=document.querySelector('home-assistant');"
                 + "if(!ha||!ha.hass||!ha.hass.connection||!ha.hass.connection.connected)return 'wait';"
-                + "var hui=document.querySelector('hui-root');"
-                + "if(!hui)return 'wait';"
-                + "return 'ready';"
+                + "var main=ha.shadowRoot&&ha.shadowRoot.querySelector('home-assistant-main');"
+                + "if(main||document.querySelector('hui-root'))return 'ready';"
+                + "return 'wait';"
                 + "})();"
 
         dashboardView.runJavaScript(
@@ -345,14 +349,33 @@ WebViewPage {
                 + "  sessionStorage.setItem('hassTokens', JSON.stringify(tokens));"
                 + "} catch (e) { return 'storage-error'; }"
                 + "window.__helmsmanQueue = window.__helmsmanQueue || [];"
-                + "if (!window.__helmsmanBridge) {"
-                + "  window.externalApp = {"
-                + "    externalBus: function(message) {"
-                + "      window.__helmsmanQueue.push({type:'externalBus', opts: typeof message === 'string' ? message : JSON.stringify(message || {})});"
+                + "window.externalApp = window.externalApp || {"
+                + "  externalBus: function(message) {"
+                + "    window.__helmsmanQueue.push({type:'externalBus', opts: typeof message === 'string' ? message : JSON.stringify(message || {})});"
+                + "  }"
+                + "};"
+                + "window.__helmsmanAttachExternal = function() {"
+                + "  var ha=document.querySelector('home-assistant');"
+                + "  if(!ha||!ha.hass||!ha.hass.auth)return false;"
+                + "  var existing=ha.hass.auth.external;"
+                + "  if(existing&&!existing.__helmsman){"
+                + "    if(existing.config)existing.config.hasSettingsScreen=true;"
+                + "    return true;"
+                + "  }"
+                + "  if(existing&&existing.__helmsman&&existing.config&&existing.config.hasSettingsScreen)return true;"
+                + "  ha.hass.auth.external={"
+                + "    __helmsman:true,"
+                + "    config:{hasSettingsScreen:true,appVersion:" + page.jsString(hassClient.appVersion) + "},"
+                + "    fireMessage:function(msg){"
+                + "      window.__helmsmanQueue=window.__helmsmanQueue||[];"
+                + "      window.__helmsmanQueue.push({type:'externalBus',opts:typeof msg==='string'?msg:JSON.stringify(msg||{})});"
                 + "    }"
                 + "  };"
-                + "  window.__helmsmanBridge = true;"
-                + "}"
+                + "  try{ha.requestUpdate();}catch(e){}"
+                + "  return true;"
+                + "};"
+                + "try{window.__helmsmanAttachExternal();}catch(e){}"
+                + "window.__helmsmanBridge = true;"
                 + "return 'ok';"
                 + "})();"
 
@@ -367,7 +390,7 @@ WebViewPage {
                         page.updateLoadingThemeFromWebView()
                         if (!page.tokensInjected) {
                             page.tokensInjected = true
-                            if (page.isLovelaceUrl(dashboardView.url))
+                            if (page.isHassFrontendUrl(dashboardView.url))
                                 page.beginReadyCheck()
                             else
                                 dashboardView.url = page.dashboardUrl
@@ -375,7 +398,7 @@ WebViewPage {
                         }
                         if (silent)
                             return
-                        if (page.isLovelaceUrl(dashboardView.url))
+                        if (page.isHassFrontendUrl(dashboardView.url))
                             page.beginReadyCheck()
                         else
                             page.pollBridge()
@@ -390,7 +413,10 @@ WebViewPage {
             return
 
         dashboardView.runJavaScript(
-                    "return (function(){var q=window.__helmsmanQueue||[]; window.__helmsmanQueue=[]; return JSON.stringify(q);})();",
+                    "return (function(){"
+                    + "try{window.__helmsmanAttachExternal&&window.__helmsmanAttachExternal();}catch(e){}"
+                    + "var q=window.__helmsmanQueue||[]; window.__helmsmanQueue=[]; return JSON.stringify(q);"
+                    + "})();",
                     function(result) {
                         page.handleBridgeQueue(result)
                     },
@@ -432,7 +458,7 @@ WebViewPage {
 
         dashboardView.runJavaScript(
                     "window.externalBus && window.externalBus("
-                    + page.jsString(JSON.stringify(payload))
+                    + JSON.stringify(payload)
                     + "); return true;")
     }
 
@@ -506,8 +532,11 @@ WebViewPage {
             if (!hassClient.loggedIn)
                 return
             var value = String(url)
-            if (value.indexOf("/_my_redirect/companion_app") >= 0) {
+            if (value.indexOf("/_my_redirect/companion_app") >= 0
+                    || value.indexOf("#external-app-configuration") >= 0) {
                 page.openSettings()
+                if (page.dashboardUrl.length > 0 && value.indexOf("/_my_redirect/companion_app") >= 0)
+                    dashboardView.url = page.dashboardUrl
                 return
             }
             if (page.tokensInjected
@@ -570,7 +599,7 @@ WebViewPage {
 
     Timer {
         id: bridgePollTimer
-        interval: 900
+        interval: 300
         repeat: true
         running: page.status === PageStatus.Active
                  && Qt.application.active
