@@ -33,17 +33,11 @@ WebViewPage {
     readonly property color fallbackOverlayText: Theme.colorScheme === Theme.LightOnDark
             ? page.haDarkText
             : page.haLightText
-    property string startUrl: {
-        var base = hassClient.baseUrl
-        if (!base || base.length === 0)
-            return ""
-        // Load "/" so Home Assistant can route to the user/system default
-        // dashboard instead of always opening the generic Overview.
-        if (base.charAt(base.length - 1) === "/")
-            return base
-        return base + "/"
-    }
+    property string startUrl: (hassClient && hassClient.baseUrl.length > 0)
+                              ? page.instancePath("/lovelace")
+                              : ""
     property string dashboardUrl: page.startUrl
+    property int authHops: 0
     property string loadStatusText: {
         if (!page.tokensInjected)
             return "Preparing session..."
@@ -57,6 +51,17 @@ WebViewPage {
 
     function jsString(value) {
         return JSON.stringify(value ? String(value) : "")
+    }
+
+    function instancePath(path) {
+        var base = hassClient.baseUrl
+        if (!base || base.length === 0)
+            return ""
+        if (base.charAt(base.length - 1) === "/")
+            base = base.substring(0, base.length - 1)
+        if (!path || path.charAt(0) !== "/")
+            path = "/" + (path || "")
+        return base + path
     }
 
     function isHassFrontendUrl(value) {
@@ -75,12 +80,23 @@ WebViewPage {
         pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { hassClient: hassClient })
     }
 
+    function openFrontendAfterAuth() {
+        if (page.authHops >= 2) {
+            console.log("Helmsman: auth redirect loop — showing webview")
+            page.finishDashboardLoad()
+            return
+        }
+        page.authHops += 1
+        dashboardView.url = page.dashboardUrl
+    }
+
     function resetDashboardState() {
         page.dashboardReady = false
         page.tokensInjected = false
         page.bridgeInstalled = false
         page.readyCheckRunning = false
         page.readyCheckAttempts = 0
+        page.authHops = 0
         page.resumeProbeRunning = false
         page.resumeDeadCount = 0
         resumeProbeTimer.stop()
@@ -299,6 +315,27 @@ WebViewPage {
                 + "try{window.__helmsmanAttachExternal&&window.__helmsmanAttachExternal();}catch(e){}"
                 + "var ha=document.querySelector('home-assistant');"
                 + "if(!ha||!ha.hass||!ha.hass.connection||!ha.hass.connection.connected)return 'wait';"
+                + "var hass=ha.hass;"
+                + "if(!hass.panels)return 'wait';"
+                + "try{"
+                + "  var def='';"
+                + "  if(hass.userData&&hass.userData.default_panel)def=hass.userData.default_panel;"
+                + "  else if(hass.systemData&&hass.systemData.default_panel)def=hass.systemData.default_panel;"
+                + "  else{try{var raw=localStorage.getItem('defaultPanel');if(raw)def=JSON.parse(raw);}catch(e1){}}"
+                + "  if(!def&&hass.userData===undefined&&" + String(page.readyCheckAttempts) + "<8)return 'wait';"
+                + "  if(!def)def=(hass.panels.home)?'home':'lovelace';"
+                + "  if(def==='lovelace'&&hass.panels.home&&!(hass.panels.lovelace&&hass.panels.lovelace.config))def='home';"
+                + "  if(def&&hass.panels[def]){"
+                + "    var want='/'+def;"
+                + "    var cur=location.pathname||'/';"
+                + "    if(cur.length>1&&cur.charAt(cur.length-1)==='/')cur=cur.slice(0,-1);"
+                + "    if(cur!==want&&cur.indexOf(want+'/')!==0){"
+                + "      history.replaceState(history.state,'',want);"
+                + "      window.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:true},bubbles:true,composed:true}));"
+                + "      return 'wait';"
+                + "    }"
+                + "  }"
+                + "}catch(e2){}"
                 + "var main=ha.shadowRoot&&ha.shadowRoot.querySelector('home-assistant-main');"
                 + "if(main||document.querySelector('hui-root'))return 'ready';"
                 + "return 'wait';"
@@ -393,7 +430,7 @@ WebViewPage {
                             if (page.isHassFrontendUrl(dashboardView.url))
                                 page.beginReadyCheck()
                             else
-                                dashboardView.url = page.dashboardUrl
+                                page.openFrontendAfterAuth()
                             return
                         }
                         if (silent)
@@ -496,12 +533,10 @@ WebViewPage {
                 pageStack.replaceAbove(null, Qt.resolvedUrl("ConnectionPage.qml"), { hassClient: hassClient })
         }
         onAccessTokenChanged: {
-            if (!hassClient.loggedIn)
+            if (!hassClient.loggedIn || !hassClient.accessToken
+                    || hassClient.accessToken.length === 0)
                 return
-            if (page.dashboardReady)
-                page.injectSessionAndBridge(true)
-            else
-                page.tokensInjected = false
+            page.injectSessionAndBridge(page.dashboardReady)
         }
         onBaseUrlChanged: {
             if (page.status !== PageStatus.Active || !hassClient.loggedIn)

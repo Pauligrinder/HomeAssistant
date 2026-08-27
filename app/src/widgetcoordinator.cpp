@@ -67,6 +67,8 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     , m_dbusRegistered(false)
     , m_loadingSelected(false)
     , m_tokenRejected(false)
+    , m_selectedOutstanding(0)
+    , m_allStatesReply(nullptr)
 {
     m_pollTimer.setInterval(kPollIntervalMs);
     connect(&m_pollTimer, SIGNAL(timeout()), this, SLOT(onPollTimeout()));
@@ -196,7 +198,12 @@ void WidgetCoordinator::setEntitySelected(const QString &entityId, bool selected
 
 void WidgetCoordinator::refresh()
 {
-    getStates();
+    getSelectedStates();
+}
+
+void WidgetCoordinator::refreshAvailable()
+{
+    getAllStates();
 }
 
 void WidgetCoordinator::toggleLight(const QString &entityId)
@@ -380,22 +387,62 @@ bool WidgetCoordinator::accessTokenUsable() const
 
 void WidgetCoordinator::getStates()
 {
+    getSelectedStates();
+}
+
+void WidgetCoordinator::getSelectedStates()
+{
     if (!m_active || m_baseUrl.isEmpty() || m_accessToken.isEmpty())
         return;
     if (!accessTokenUsable()) {
         emit accessTokenStale();
         return;
     }
+    if (m_selectedOutstanding > 0 || m_allStatesReply)
+        return;
+    if (m_selectedEntityIds.isEmpty()) {
+        rebuildWidgetEntities();
+        return;
+    }
+
+    setBusy(true);
+    for (const QString &id : m_selectedEntityIds)
+        getEntityState(id);
+}
+
+void WidgetCoordinator::getAllStates()
+{
+    if (!m_active || m_baseUrl.isEmpty() || m_accessToken.isEmpty())
+        return;
+    if (!accessTokenUsable()) {
+        emit accessTokenStale();
+        return;
+    }
+    if (m_allStatesReply)
+        return;
 
     QNetworkRequest request(apiUrl(QStringLiteral("/api/states")));
     request.setRawHeader("Accept", "application/json");
     request.setRawHeader("User-Agent", kClientName);
     request.setRawHeader("Authorization", QByteArray("Bearer ") + m_accessToken.toUtf8());
+    m_allStatesReply = m_nam->get(request);
+    m_allStatesReply->setProperty("kind", int(RequestStates));
+    m_allStatesReply->setProperty("token", m_accessToken);
+    connect(m_allStatesReply, SIGNAL(finished()), this, SLOT(onReplyFinished()));
+    setBusy(true);
+}
+
+void WidgetCoordinator::getEntityState(const QString &entityId)
+{
+    QNetworkRequest request(apiUrl(QStringLiteral("/api/states/") + entityId));
+    request.setRawHeader("Accept", "application/json");
+    request.setRawHeader("User-Agent", kClientName);
+    request.setRawHeader("Authorization", QByteArray("Bearer ") + m_accessToken.toUtf8());
     QNetworkReply *reply = m_nam->get(request);
-    reply->setProperty("kind", int(RequestStates));
+    reply->setProperty("kind", int(RequestOneState));
     reply->setProperty("token", m_accessToken);
     connect(reply, SIGNAL(finished()), this, SLOT(onReplyFinished()));
-    setBusy(true);
+    ++m_selectedOutstanding;
 }
 
 void WidgetCoordinator::callService(const QString &domain, const QString &service, const QJsonObject &body)
@@ -452,6 +499,31 @@ void WidgetCoordinator::applyStates(const QByteArray &data)
     }
     rebuildWidgetEntities();
     setError(QString());
+}
+
+void WidgetCoordinator::applyOneState(const QByteArray &data)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject())
+        return;
+    const QJsonObject state = doc.object();
+    const QString entityId = state.value(QStringLiteral("entity_id")).toString();
+    if (entityId.isEmpty())
+        return;
+
+    const QVariantMap map = overlayExpectation(entityFromState(state));
+    bool found = false;
+    for (int i = 0; i < m_availableEntities.size(); ++i) {
+        if (m_availableEntities.at(i).toMap().value(QStringLiteral("entityId")).toString() != entityId)
+            continue;
+        m_availableEntities[i] = map;
+        found = true;
+        break;
+    }
+    if (!found)
+        m_availableEntities.append(map);
+    emit availableEntitiesChanged();
+    rebuildWidgetEntities();
 }
 
 QVariantMap WidgetCoordinator::entityFromState(const QJsonObject &state) const
@@ -627,9 +699,13 @@ void WidgetCoordinator::onReplyFinished()
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QNetworkReply::NetworkError netError = reply->error();
     const QString netErrorString = reply->errorString();
+    if (reply == m_allStatesReply)
+        m_allStatesReply = nullptr;
+    if (kind == RequestOneState)
+        m_selectedOutstanding = qMax(0, m_selectedOutstanding - 1);
     reply->deleteLater();
 
-    if (kind == RequestStates)
+    if (kind == RequestStates || (kind == RequestOneState && m_selectedOutstanding == 0))
         setBusy(false);
 
     if (netError != QNetworkReply::NoError && status == 0) {
@@ -651,6 +727,8 @@ void WidgetCoordinator::onReplyFinished()
 
     if (kind == RequestStates)
         applyStates(data);
+    else if (kind == RequestOneState)
+        applyOneState(data);
     else if (kind == RequestService)
         mergeServiceStates(data);
 }
