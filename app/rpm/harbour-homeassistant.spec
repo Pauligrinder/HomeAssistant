@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.7
+Version:    0.2.8
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -59,6 +59,12 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.8-1
+- Treat Wi-Fi as connected only when it is ConnMan's default route (online).
+- If the internal URL times out, fall back to the external address.
+- Show a connection-failed error with Settings on the splash instead of hanging.
+- Report Wi-Fi as null in Home Assistant when it is not connected.
+
 * Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.7-1
 - Fix external connections freezing the app after sign-in (cover poller
   no longer downloads every Home Assistant state on the UI thread).

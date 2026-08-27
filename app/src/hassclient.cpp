@@ -33,6 +33,8 @@ const qint64 kTokenRefreshLeadMs = 5 * 60 * 1000;
 // Give up after this many rejected refreshes so a revoked refresh token cannot
 // turn into an endless stream of failed logins on the Home Assistant side.
 const int kMaxPushRefreshFailures = 3;
+const int kInternalRequestTimeoutMs = 4000;
+const int kExternalRequestTimeoutMs = 12000;
 
 QString canonicalClientId(const QString &baseUrl)
 {
@@ -189,11 +191,13 @@ HassClient::HassClient(QObject *parent)
     , m_needsOtp(false)
     , m_useSsl(false)
     , m_ignoreSslErrors(false)
-    , m_usingInternalUrl(true)
+    , m_usingInternalUrl(false)
     , m_restoringSession(false)
     , m_testingConnection(false)
     , m_testIgnoreSslErrors(false)
     , m_pendingPushAfterRefresh(false)
+    , m_requestTimedOut(false)
+    , m_forceExternalEndpoint(false)
     , m_networkState(NetworkUnknown)
     , m_pendingNetworkState(NetworkUnknown)
     , m_pushAuthRetries(0)
@@ -210,6 +214,11 @@ HassClient::HassClient(QObject *parent)
     m_tokenRefreshTimer.setInterval(60 * 1000);
     connect(&m_tokenRefreshTimer, SIGNAL(timeout()),
             this, SLOT(onTokenRefreshTimeout()));
+
+    m_requestTimeoutTimer.setSingleShot(true);
+    m_requestTimeoutTimer.setInterval(12000);
+    connect(&m_requestTimeoutTimer, SIGNAL(timeout()),
+            this, SLOT(onRequestTimeout()));
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -292,12 +301,10 @@ void HassClient::rememberDashboardSnapshot(const QString &baseUrl)
 
 bool HassClient::dashboardSnapshotMatches(const QString &baseUrl) const
 {
-    if (baseUrl.isEmpty() || !QFile::exists(dashboardSnapshotPath()))
-        return false;
-    QFile file(snapshotMetaPath());
-    if (!file.open(QIODevice::ReadOnly))
-        return false;
-    return QString::fromUtf8(file.readAll()).trimmed() == baseUrl.trimmed();
+    Q_UNUSED(baseUrl);
+    // Cleared on sign-out. Do not require an exact base URL match — that
+    // dropped the blur after internal/external switches and QUrl rebuilds.
+    return QFile::exists(dashboardSnapshotPath());
 }
 
 void HassClient::clearDashboardSnapshot()
@@ -554,9 +561,6 @@ void HassClient::loadSession()
 
     rebuildBaseUrl();
 
-    if (m_authClientId.isEmpty())
-        m_authClientId = canonicalClientId(m_baseUrl);
-
     ensureDeviceId();
     ensureDeviceName();
 
@@ -564,6 +568,28 @@ void HassClient::loadSession()
     // when the user left it empty on purpose (single-address setup).
     if (m_internalUrl.isEmpty() && m_externalUrl.isEmpty() && !m_host.isEmpty())
         m_internalUrl = m_baseUrl;
+
+    // A previous dual-URL session can leave host/port on the LAN address.
+    // With Internal empty, restore must use External immediately — waiting
+    // for Wi‑Fi would briefly (or permanently) hit the unreachable LAN host.
+    if (m_internalUrl.isEmpty() && !m_externalUrl.isEmpty()) {
+        QString parseError;
+        parseEndpoint(m_externalUrl, &parseError);
+        setUsingInternalUrl(false);
+    } else if (!m_internalUrl.isEmpty() && m_externalUrl.isEmpty()) {
+        QString parseError;
+        parseEndpoint(m_internalUrl, &parseError);
+        setUsingInternalUrl(true);
+    } else if (!m_internalUrl.isEmpty() && !m_externalUrl.isEmpty()) {
+        // Last session may have saved the LAN host. Until Wi-Fi is confirmed
+        // online, do not show or contact Internal.
+        QString parseError;
+        parseEndpoint(m_externalUrl, &parseError);
+        setUsingInternalUrl(false);
+    }
+
+    if (m_authClientId.isEmpty())
+        m_authClientId = canonicalClientId(m_baseUrl);
 
     // Recover a refresh token left only in legacy QSettings.
     if (m_refreshToken.isEmpty()) {
@@ -614,7 +640,10 @@ void HassClient::watch(QNetworkReply *reply, RequestKind kind, bool busy)
     }
     m_pendingKind = kind;
     m_pendingReply = reply;
+    m_requestTimedOut = false;
     connect(reply, SIGNAL(finished()), this, SLOT(onReplyFinished()));
+    m_requestTimeoutTimer.start(m_usingInternalUrl ? kInternalRequestTimeoutMs
+                                                   : kExternalRequestTimeoutMs);
     if (busy)
         setBusy(true);
 }
@@ -666,8 +695,19 @@ void HassClient::onSslErrors(QNetworkReply *reply, const QList<QSslError> &error
         reply->ignoreSslErrors();
 }
 
+void HassClient::onRequestTimeout()
+{
+    if (!m_pendingReply)
+        return;
+    qWarning() << "Helmsman: request timed out for" << m_baseUrl;
+    m_requestTimedOut = true;
+    m_pendingReply->abort();
+}
+
 void HassClient::cancelRestore()
 {
+    m_requestTimeoutTimer.stop();
+    m_requestTimedOut = false;
     if (m_pendingReply) {
         m_pendingReply->disconnect(this);
         m_pendingReply->abort();
@@ -756,6 +796,7 @@ void HassClient::onTestReplyFinished()
 void HassClient::restoreSession()
 {
     clearError();
+    m_forceExternalEndpoint = false;
     // Pick http vs https endpoint from the configured URLs before refreshing,
     // skipping the Wi‑Fi debounce. Without this, a previous external https
     // session can leave useSsl=true and break restore on a plain http LAN
@@ -792,6 +833,7 @@ void HassClient::restoreSession()
 
 void HassClient::connectToConfiguredInstance()
 {
+    m_forceExternalEndpoint = false;
     applyEndpointNow();
 
     QString endpoint = m_baseUrl;
@@ -1045,8 +1087,10 @@ void HassClient::saveConnectionSettings(const QString &internalUrl,
     setExternalUrl(normalizeInstanceUrl(externalUrl, true));
     setHomeWifiSsid(homeWifiSsid.trimmed());
     setIgnoreSslErrors(ignoreSslErrors);
-    persistConnectionSettings();
+    // Pick host/port from the URLs before persisting so an emptied Internal
+    // field cannot leave the session stuck on the old LAN address.
     selectEndpointForNetwork();
+    persistConnectionSettings();
 }
 
 void HassClient::updateNetworkState(bool wifiReady, bool wifiConnected, const QString &ssid)
@@ -1085,6 +1129,8 @@ void HassClient::commitNetworkState()
     }
 
     m_networkState = m_pendingNetworkState;
+    if (m_networkState != NetworkWifi)
+        m_forceExternalEndpoint = false;
     if (m_currentWifiSsid != m_pendingWifiSsid) {
         m_currentWifiSsid = m_pendingWifiSsid;
         emit currentWifiSsidChanged();
@@ -1196,6 +1242,39 @@ void HassClient::reconnectPushAfterEndpointChange()
     startQuietTokenRefresh();
 }
 
+bool HassClient::fallbackToExternalAndRetry(RequestKind kind)
+{
+    if (m_forceExternalEndpoint || !m_usingInternalUrl)
+        return false;
+    if (m_internalUrl.isEmpty() || m_externalUrl.isEmpty())
+        return false;
+    if (kind != RequestConfig && kind != RequestRefresh && kind != RequestProviders)
+        return false;
+
+    m_forceExternalEndpoint = true;
+    qWarning() << "Helmsman: internal unreachable, falling back to" << m_externalUrl;
+    setStatus(QStringLiteral("Internal unreachable — trying external..."));
+    clearError();
+    if (!selectEndpointForNetwork())
+        return false;
+
+    if (kind == RequestConfig) {
+        fetchConfig();
+        return true;
+    }
+    if (kind == RequestProviders) {
+        get(QStringLiteral("/auth/providers"), RequestProviders);
+        return true;
+    }
+
+    QUrlQuery form;
+    form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("refresh_token"));
+    form.addQueryItem(QStringLiteral("refresh_token"), m_refreshToken);
+    form.addQueryItem(QStringLiteral("client_id"), clientId());
+    postForm(QStringLiteral("/auth/token"), form, RequestRefresh, m_restoringSession);
+    return true;
+}
+
 bool HassClient::selectEndpointForNetwork()
 {
     const bool haveInternal = !m_internalUrl.isEmpty();
@@ -1210,24 +1289,24 @@ bool HassClient::selectEndpointForNetwork()
         // Single-address setup: stay on the configured URL, never bounce.
         chosen = m_externalUrl;
         defaultSsl = true;
+    } else if (m_forceExternalEndpoint && haveExternal) {
+        // Internal ping failed (Wi-Fi radio still on, LAN dead). Stay on
+        // external until ConnMan reports Wi-Fi is actually gone.
+        chosen = m_externalUrl;
+        defaultSsl = true;
     } else {
         const bool onHomeWifi = m_networkState == NetworkWifi
                 && !m_homeWifiSsid.isEmpty()
                 && m_currentWifiSsid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0;
 
         if (m_networkState == NetworkUnknown) {
-            // ConnMan has not reported yet (startup / lag). Stay where we are
-            // instead of guessing and breaking a working LAN session.
-            if (m_usingInternalUrl && haveInternal) {
-                chosen = m_internalUrl;
-            } else if (!m_usingInternalUrl && haveExternal) {
+            // Not confirmed on Wi-Fi yet — the LAN address is the wrong guess
+            // when the phone is on mobile data.
+            if (haveExternal) {
                 chosen = m_externalUrl;
                 defaultSsl = true;
-            } else if (haveInternal) {
-                chosen = m_internalUrl;
             } else {
-                chosen = m_externalUrl;
-                defaultSsl = true;
+                chosen = m_internalUrl;
             }
         } else if (onHomeWifi && haveInternal) {
             chosen = m_internalUrl;
@@ -1353,12 +1432,15 @@ void HassClient::onReplyFinished()
     if (reply == m_pendingReply) {
         m_pendingReply = nullptr;
         m_pendingKind = RequestNone;
+        m_requestTimeoutTimer.stop();
     }
 
     const QByteArray data = reply->readAll();
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QNetworkReply::NetworkError netError = reply->error();
     const QString netErrorString = reply->errorString();
+    const bool timedOut = m_requestTimedOut;
+    m_requestTimedOut = false;
     reply->deleteLater();
 
     if (kind == RequestRevoke) {
@@ -1368,33 +1450,23 @@ void HassClient::onReplyFinished()
 
     if (netError != QNetworkReply::NoError && status == 0) {
         setBusy(false);
-        const QString message = QStringLiteral("Could not reach %1 (%2)")
-                .arg(m_baseUrl, netErrorString);
+        const QString message = timedOut
+                ? QStringLiteral("Could not reach %1 (timed out)").arg(m_baseUrl)
+                : QStringLiteral("Could not reach %1 (%2)").arg(m_baseUrl, netErrorString);
         if (kind == RequestRefresh && m_pendingPushAfterRefresh) {
-            // Transient network failure, not a rejected token — let the push
-            // channel's own backoff ask again instead of counting a failure.
             m_pendingPushAfterRefresh = false;
             qWarning() << "Helmsman: background token refresh unreachable:" << message;
             return;
         }
         setError(message);
         setStatus(QStringLiteral("Connection failed"));
-        if (kind == RequestRefresh) {
-            // Keep tokens on transient network errors so a later launch can retry.
-            const qint64 msLeft = QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC());
-            if (!m_accessToken.isEmpty() && msLeft > 0) {
-                setConnected(true);
-                setLoggedIn(true);
-                setRestoringSession(false);
-                emit loginSucceeded();
-                emit restoreFinished(true);
-            } else {
-                setRestoringSession(false);
-                emit restoreFinished(false);
-            }
-        } else {
+        if (fallbackToExternalAndRetry(kind))
+            return;
+        setRestoringSession(false);
+        if (kind == RequestRefresh || kind == RequestConfig || kind == RequestProviders)
+            emit restoreFinished(false);
+        else
             emit loginFailed(message);
-        }
         return;
     }
 
@@ -1469,7 +1541,7 @@ void HassClient::onReplyFinished()
             setRestoringSession(false);
             emit loginSucceeded();
             emit restoreFinished(true);
-            ensureMobileAppRegistration();
+            QTimer::singleShot(0, this, SLOT(startCompanionServices()));
             return;
         }
         handleConfig(data);
@@ -1741,7 +1813,7 @@ void HassClient::handleConfig(const QByteArray &data)
               : QStringLiteral("Signed in to %1").arg(m_instanceName));
     emit loginSucceeded();
     emit restoreFinished(true);
-    ensureMobileAppRegistration();
+    QTimer::singleShot(0, this, SLOT(startCompanionServices()));
 }
 
 void HassClient::ensureDeviceId()
@@ -1897,9 +1969,14 @@ void HassClient::stopWidget()
 void HassClient::syncWidgetRunning()
 {
     if (m_loggedIn)
-        startWidget();
+        QTimer::singleShot(0, this, SLOT(startWidget()));
     else
         stopWidget();
+}
+
+void HassClient::startCompanionServices()
+{
+    ensureMobileAppRegistration();
 }
 
 void HassClient::notifyAppForegrounded()

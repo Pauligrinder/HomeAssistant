@@ -36,7 +36,9 @@ app/
 6. **Cover favorites** — Pick lights in settings to show on the app cover.
    Cover actions toggle them (and page when there are more than two).
 7. **URLs** — Internal and external addresses with Wi‑Fi switching. If you only
-   have one address, put it in External URL and leave Internal URL empty.
+   have one address, put it in External URL and leave Internal URL empty. If
+   the internal address does not respond, Helmsman falls back to the external
+   URL. A failed restore shows an error and a Settings button instead of hanging.
 
 ## Build
 

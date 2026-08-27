@@ -7,10 +7,15 @@ Page {
     objectName: "SplashPage"
     property var hassClient
     property bool decided: false
-    property bool showEscape: false
+    property bool restoreFailed: false
     property bool restoreCancelled: false
 
     backNavigation: false
+
+    readonly property bool showSettings: !page.decided
+            && (page.restoreFailed
+                || hassClient.errorMessage.length > 0
+                || page.restoreCancelled)
 
     function finish(loggedIn) {
         if (page.decided)
@@ -26,7 +31,8 @@ Page {
     }
 
     function startRestore() {
-        // Apply http/https endpoint from Wi‑Fi before token refresh.
+        page.restoreFailed = false
+        page.restoreCancelled = false
         hassClient.updateNetworkState(wifi.ready, wifi.connected, wifi.ssid)
         hassClient.restoreSession()
     }
@@ -34,6 +40,7 @@ Page {
     function openSettings() {
         hassClient.cancelRestore()
         page.restoreCancelled = true
+        page.restoreFailed = true
         pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { hassClient: hassClient })
     }
 
@@ -44,36 +51,24 @@ Page {
 
     // Wait so ConnMan can report the SSID before we pick internal/external.
     // Too short and restore hits external HTTPS while still on the LAN.
+    // Always wait at least one frame so the splash can paint first.
     Timer {
         id: startRestoreTimer
-        interval: 1500
+        interval: hassClient.internalUrl.length > 0 ? 1500 : 50
         running: true
         repeat: false
         onTriggered: page.startRestore()
     }
 
-    // Offer a way out if restore hangs on a bad endpoint.
-    Timer {
-        interval: 3000
-        running: !page.decided
-        repeat: false
-        onTriggered: page.showEscape = true
-    }
-
-    // Don't leave the user on the splash forever if restore hangs.
-    Timer {
-        interval: 20000
-        running: true
-        repeat: false
-        onTriggered: {
-            if (!page.decided)
-                page.finish(hassClient.loggedIn)
-        }
-    }
-
     Connections {
         target: hassClient
-        onRestoreFinished: page.finish(loggedIn)
+        onRestoreFinished: {
+            if (loggedIn)
+                page.finish(true)
+            else
+                page.restoreFailed = true
+        }
+        onLoginFailed: page.restoreFailed = true
         onLoggedInChanged: {
             if (hassClient.loggedIn)
                 page.finish(true)
@@ -94,7 +89,7 @@ Page {
 
         BusyIndicator {
             anchors.horizontalCenter: parent.horizontalCenter
-            running: !page.decided
+            running: !page.decided && !page.restoreFailed
             size: BusyIndicatorSize.Large
         }
 
@@ -106,6 +101,10 @@ Page {
             color: Theme.secondaryColor
             font.pixelSize: Theme.fontSizeSmall
             text: {
+                if (page.restoreFailed || hassClient.errorMessage.length > 0)
+                    return hassClient.statusText.length > 0
+                            ? hassClient.statusText
+                            : "Connection failed"
                 if (hassClient.restoringSession || hassClient.statusText.indexOf("Restoring") === 0)
                     return "Restoring session..."
                 if (hassClient.statusText.length > 0)
@@ -127,19 +126,16 @@ Page {
 
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            visible: page.showEscape && !page.decided
-            text: "Edit addresses"
+            visible: page.showSettings
+            text: "Settings"
             onClicked: page.openSettings()
         }
 
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            visible: page.restoreCancelled && !page.decided
-            text: "Retry restore"
-            onClicked: {
-                page.restoreCancelled = false
-                page.startRestore()
-            }
+            visible: page.restoreFailed && !page.decided
+            text: "Retry"
+            onClicked: page.startRestore()
         }
     }
 }
