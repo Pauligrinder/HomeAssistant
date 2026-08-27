@@ -34,6 +34,20 @@ double haversineMeters(double lat1, double lon1, double lat2, double lon2)
     return 2 * r * qAtan2(qSqrt(a), qSqrt(1 - a));
 }
 
+void insertSensorState(QJsonObject &obj, const QVariant &state)
+{
+    if (!state.isValid() || state.isNull())
+        obj.insert(QStringLiteral("state"), QJsonValue::Null);
+    else if (state.type() == QVariant::Bool)
+        obj.insert(QStringLiteral("state"), state.toBool());
+    else if (state.type() == QVariant::Int || state.type() == QVariant::LongLong)
+        obj.insert(QStringLiteral("state"), state.toLongLong());
+    else if (state.type() == QVariant::Double)
+        obj.insert(QStringLiteral("state"), state.toDouble());
+    else
+        obj.insert(QStringLiteral("state"), state.toString());
+}
+
 } // namespace
 
 SensorCoordinator::SensorCoordinator(QObject *parent)
@@ -464,7 +478,7 @@ void SensorCoordinator::registerNextPending()
 
     SensorRuntime &rt = m_runtime[uniqueId];
     // Need a placeholder state for first registration.
-    if (!rt.state.isValid()) {
+    if (!rt.state.isValid() && uniqueId != QLatin1String("wifi_connection")) {
         if (def.type == QLatin1String("binary_sensor"))
             rt.state = false;
         else if (def.unit == QLatin1String("%"))
@@ -500,14 +514,7 @@ QJsonObject SensorCoordinator::buildRegisterPayload(const SensorDef &def, const 
         data.insert(QStringLiteral("attributes"), QJsonObject::fromVariantMap(rt.attributes));
 
     const QVariant &state = rt.state;
-    if (state.type() == QVariant::Bool)
-        data.insert(QStringLiteral("state"), state.toBool());
-    else if (state.type() == QVariant::Int || state.type() == QVariant::LongLong)
-        data.insert(QStringLiteral("state"), state.toLongLong());
-    else if (state.type() == QVariant::Double)
-        data.insert(QStringLiteral("state"), state.toDouble());
-    else
-        data.insert(QStringLiteral("state"), state.toString());
+    insertSensorState(data, state);
 
     return data;
 }
@@ -668,10 +675,9 @@ void SensorCoordinator::updateBattery(int levelPercent, bool charging, const QSt
 void SensorCoordinator::updateWifi(const QString &ssid, bool connected)
 {
     m_haveWifi = true;
-    const QString state = (connected && !ssid.isEmpty())
-            ? ssid
-            : QStringLiteral("<not connected>");
-    const QString icon = (connected && !ssid.isEmpty())
+    const bool on = connected && !ssid.isEmpty();
+    const QVariant state = on ? QVariant(ssid) : QVariant();
+    const QString icon = on
             ? QStringLiteral("mdi:wifi")
             : QStringLiteral("mdi:wifi-off");
 
@@ -880,7 +886,10 @@ void SensorCoordinator::flushSensorUpdates()
     QJsonArray updates;
     for (const SensorDef &def : m_defs) {
         SensorRuntime &rt = m_runtime[def.uniqueId];
-        if (!rt.registered || rt.disabled || !rt.dirty || !rt.state.isValid())
+        if (!rt.registered || rt.disabled || !rt.dirty)
+            continue;
+        const bool allowNull = (def.uniqueId == QLatin1String("wifi_connection"));
+        if (!rt.state.isValid() && !allowNull)
             continue;
 
         QJsonObject item;
@@ -890,15 +899,7 @@ void SensorCoordinator::flushSensorUpdates()
         if (!rt.attributes.isEmpty())
             item.insert(QStringLiteral("attributes"), QJsonObject::fromVariantMap(rt.attributes));
 
-        const QVariant &state = rt.state;
-        if (state.type() == QVariant::Bool)
-            item.insert(QStringLiteral("state"), state.toBool());
-        else if (state.type() == QVariant::Int || state.type() == QVariant::LongLong)
-            item.insert(QStringLiteral("state"), state.toLongLong());
-        else if (state.type() == QVariant::Double)
-            item.insert(QStringLiteral("state"), state.toDouble());
-        else
-            item.insert(QStringLiteral("state"), state.toString());
+        insertSensorState(item, rt.state);
 
         updates.append(item);
         rt.dirty = false;
@@ -970,7 +971,8 @@ void SensorCoordinator::rebuildStatusList()
         QVariantMap row;
         row.insert(QStringLiteral("uniqueId"), def.uniqueId);
         row.insert(QStringLiteral("name"), def.name);
-        row.insert(QStringLiteral("state"), rt.state.isValid() ? rt.state.toString() : QStringLiteral("—"));
+        row.insert(QStringLiteral("state"),
+                   rt.state.isValid() ? rt.state.toString() : QStringLiteral("—"));
         row.insert(QStringLiteral("registered"), rt.registered);
         row.insert(QStringLiteral("disabled"), rt.disabled);
         row.insert(QStringLiteral("lastError"), rt.lastError);

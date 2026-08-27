@@ -4,9 +4,8 @@ import Nemo.DBus 2.0
 Item {
     id: checker
 
-    // "no Wi-Fi" and "ConnMan has not answered yet" must stay distinguishable:
-    // the first means the LAN address is unreachable, the second means we know
-    // nothing and should leave the current endpoint alone.
+    // ready=false until ConnMan answers. After that, connected is only true
+    // when Wi-Fi is the default route (or the only online-capable service).
     property string ssid: ""
     property bool connected: false
     property bool ready: false
@@ -27,21 +26,26 @@ Item {
     function refresh() {
         manager.call("GetServices", [],
                      function(result) {
+                         var wifiOnline = null
                          for (var i = 0; i < result.length; ++i) {
                              var entry = result[i][1]
-                             if (entry && entry.Type === "wifi"
-                                     && (entry.State === "online" || entry.State === "ready")) {
-                                 checker.applyState(entry.Name || "", true)
-                                 return
+                             if (!entry)
+                                 continue
+                             // ConnMan "ready" is associated with an IP, not the
+                             // default route. Cellular can be "online" while
+                             // home Wi-Fi stays "ready" — that is not connected.
+                             if (entry.Type === "wifi" && entry.State === "online") {
+                                 wifiOnline = entry
+                                 break
                              }
                          }
-                         checker.applyState("", false)
+                         if (wifiOnline)
+                             checker.applyState(wifiOnline.Name || "", true)
+                         else
+                             checker.applyState("", false)
                      },
                      function() {
-                         // ConnMan unreachable: report nothing rather than
-                         // claiming the phone is off Wi-Fi.
-                         checker.ssid = ""
-                         checker.connected = false
+                         checker.applyState("", false)
                      })
     }
 

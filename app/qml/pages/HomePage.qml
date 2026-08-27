@@ -1,7 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.WebView 1.0
-import QtGraphicalEffects 1.0
 import "../components"
 
 WebViewPage {
@@ -101,6 +100,8 @@ WebViewPage {
         page.resumeDeadCount = 0
         resumeProbeTimer.stop()
         resumeProbeStartTimer.stop()
+        defaultPanelTimer.stop()
+        snapshotDelayTimer.stop()
         page.overlayBackgroundColor = page.fallbackOverlayBackground
         page.overlayTextColor = page.fallbackOverlayText
         readyCheckTimer.stop()
@@ -263,12 +264,45 @@ WebViewPage {
         page.readyCheckRunning = false
         page.dashboardReady = true
         page.pollBridge()
-        snapshotDelayTimer.restart()
+        // Navigate only after the dashboard is on screen. Doing this during
+        // the ready-check hangs Gecko on external/reverse-proxy origins.
+        defaultPanelTimer.restart()
+    }
+
+    function navigateDefaultPanelOnce() {
+        var script = "return (function(){"
+                + "try{"
+                + "  var ha=document.querySelector('home-assistant');"
+                + "  if(!ha||!ha.hass||!ha.hass.panels)return 'skip';"
+                + "  var hass=ha.hass;"
+                + "  var def='';"
+                + "  if(hass.userData&&hass.userData.default_panel)def=hass.userData.default_panel;"
+                + "  else if(hass.systemData&&hass.systemData.default_panel)def=hass.systemData.default_panel;"
+                + "  else{try{var raw=localStorage.getItem('defaultPanel');if(raw)def=JSON.parse(raw);}catch(e1){}}"
+                + "  if(!def)def=(hass.panels.home)?'home':'lovelace';"
+                + "  if(def==='lovelace'&&hass.panels.home&&!(hass.panels.lovelace&&hass.panels.lovelace.config))def='home';"
+                + "  if(!def||!hass.panels[def])return 'skip';"
+                + "  var want='/'+def;"
+                + "  var cur=location.pathname||'/';"
+                + "  if(cur.length>1&&cur.charAt(cur.length-1)==='/')cur=cur.slice(0,-1);"
+                + "  if(cur===want||cur.indexOf(want+'/')===0)return 'ok';"
+                + "  history.replaceState(history.state,'',want);"
+                + "  window.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:true},bubbles:true,composed:true}));"
+                + "  return 'moved';"
+                + "}catch(e){return 'skip';}"
+                + "})();"
+
+        dashboardView.runJavaScript(
+                    script,
+                    function() { snapshotDelayTimer.restart() },
+                    function() { snapshotDelayTimer.restart() })
     }
 
     function refreshSnapshotState() {
+        // The PNG is cleared on sign-out. Show it whenever it exists so the
+        // blur still appears after an internal↔external (or host:port) change.
         page.snapshotUsable = !!(hassClient
-                                 && hassClient.baseUrl
+                                 && hassClient.dashboardSnapshotPath
                                  && hassClient.dashboardSnapshotMatches(hassClient.baseUrl))
         page.snapshotRevision += 1
     }
@@ -315,27 +349,6 @@ WebViewPage {
                 + "try{window.__helmsmanAttachExternal&&window.__helmsmanAttachExternal();}catch(e){}"
                 + "var ha=document.querySelector('home-assistant');"
                 + "if(!ha||!ha.hass||!ha.hass.connection||!ha.hass.connection.connected)return 'wait';"
-                + "var hass=ha.hass;"
-                + "if(!hass.panels)return 'wait';"
-                + "try{"
-                + "  var def='';"
-                + "  if(hass.userData&&hass.userData.default_panel)def=hass.userData.default_panel;"
-                + "  else if(hass.systemData&&hass.systemData.default_panel)def=hass.systemData.default_panel;"
-                + "  else{try{var raw=localStorage.getItem('defaultPanel');if(raw)def=JSON.parse(raw);}catch(e1){}}"
-                + "  if(!def&&hass.userData===undefined&&" + String(page.readyCheckAttempts) + "<8)return 'wait';"
-                + "  if(!def)def=(hass.panels.home)?'home':'lovelace';"
-                + "  if(def==='lovelace'&&hass.panels.home&&!(hass.panels.lovelace&&hass.panels.lovelace.config))def='home';"
-                + "  if(def&&hass.panels[def]){"
-                + "    var want='/'+def;"
-                + "    var cur=location.pathname||'/';"
-                + "    if(cur.length>1&&cur.charAt(cur.length-1)==='/')cur=cur.slice(0,-1);"
-                + "    if(cur!==want&&cur.indexOf(want+'/')!==0){"
-                + "      history.replaceState(history.state,'',want);"
-                + "      window.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:true},bubbles:true,composed:true}));"
-                + "      return 'wait';"
-                + "    }"
-                + "  }"
-                + "}catch(e2){}"
                 + "var main=ha.shadowRoot&&ha.shadowRoot.querySelector('home-assistant-main');"
                 + "if(main||document.querySelector('hui-root'))return 'ready';"
                 + "return 'wait';"
@@ -372,11 +385,13 @@ WebViewPage {
         var expiresIn = Math.max(60, Math.floor((expires - Date.now()) / 1000))
 
         var script = "return (function(){"
+                + "var origin=(typeof location!=='undefined'&&location.origin)?location.origin:"
+                + page.jsString(hassClient.baseUrl) + ";"
                 + "var tokens={"
                 + "access_token:" + page.jsString(hassClient.accessToken) + ","
                 + "expires_in:" + String(expiresIn) + ","
                 + "token_type:'Bearer',"
-                + "hassUrl:" + page.jsString(hassClient.baseUrl) + ","
+                + "hassUrl:origin,"
                 + "clientId:" + page.jsString(hassClient.authClientId) + ","
                 + "expires:" + String(expires) + ","
                 + "refresh_token:" + page.jsString(hassClient.refreshToken)
@@ -605,6 +620,13 @@ WebViewPage {
     }
 
     Timer {
+        id: defaultPanelTimer
+        interval: 800
+        repeat: false
+        onTriggered: page.navigateDefaultPanelOnce()
+    }
+
+    Timer {
         id: resumeProbeStartTimer
         interval: 800
         repeat: false
@@ -621,10 +643,26 @@ WebViewPage {
         onTriggered: page.runResumeProbe()
     }
 
-    Component.onCompleted: {
-        page.refreshSnapshotState()
-        if (page.startUrl.length > 0)
-            dashboardView.url = page.startUrl
+    Component.onCompleted: page.refreshSnapshotState()
+
+    onStatusChanged: {
+        if (status === PageStatus.Active)
+            startWebViewTimer.start()
+    }
+
+    Timer {
+        id: startWebViewTimer
+        interval: 50
+        repeat: false
+        onTriggered: {
+            if (!hassClient || !hassClient.loggedIn)
+                return
+            var current = String(dashboardView.url)
+            if (current.length > 0 && current.indexOf("about:blank") < 0)
+                return
+            if (page.startUrl.length > 0)
+                dashboardView.url = page.startUrl
+        }
     }
 
     onAppActiveChanged: {
@@ -658,23 +696,16 @@ WebViewPage {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: false
-            opacity: 0
+            visible: status === Image.Ready
             source: page.snapshotUsable
                     ? ("file://" + hassClient.dashboardSnapshotPath + "?" + page.snapshotRevision)
                     : ""
         }
 
-        FastBlur {
-            anchors.fill: parent
-            source: snapshotImage
-            radius: 48
-            visible: snapshotImage.status === Image.Ready
-        }
-
         Rectangle {
             anchors.fill: parent
             color: page.overlayBackgroundColor
-            opacity: snapshotImage.status === Image.Ready ? 0.42 : 1.0
+            opacity: snapshotImage.status === Image.Ready ? 0.55 : 1.0
         }
 
         Column {
