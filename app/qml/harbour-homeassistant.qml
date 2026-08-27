@@ -335,18 +335,12 @@ ApplicationWindow
     }
     cover: CoverDir.CoverPage {
         hassClient: hassClientInstance
+        mdiIcons: mdiIcons
         notificationCount: appWindow.notificationCount
         notificationTitle: appWindow.coverNotificationTitle
         notificationBody: appWindow.coverNotificationBody
         notificationColor: appWindow.coverNotificationColor
         notificationIcon: appWindow.coverNotificationIcon
-        onRequestSettings: {
-            if (!hassClientInstance.loggedIn)
-                return
-            pageStack.push(Qt.resolvedUrl("pages/SettingsPage.qml"),
-                           { hassClient: hassClientInstance })
-            appWindow.activate()
-        }
     }
     allowedOrientations: Orientation.All
 }

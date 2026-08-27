@@ -33,6 +33,10 @@ app/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
    location. On the internal URL it can mark the device as `home`. Enable or
    disable each entity under HA → Settings → Devices → Helmsman.
+6. **Cover favorites** — Pick lights in settings to show on the app cover.
+   Cover actions toggle them (and page when there are more than two).
+7. **URLs** — Internal and external addresses with Wi‑Fi switching. If you only
+   have one address, put it in External URL and leave Internal URL empty.
 
 ## Build
 
@@ -47,9 +51,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.5-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.6-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.2.5-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.2.6-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`.

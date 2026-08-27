@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.5
+Version:    0.2.6
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -11,10 +11,12 @@ Requires:   qt5-qtdeclarative
 Requires:   qt5-qtnetwork
 Requires:   qt5-qtwebsockets
 Requires:   qt5-qtpositioning
+Requires:   qt5-qtdbus
 Requires:   sailfish-components-webview-qt5
 Requires:   nemo-qml-plugin-dbus-qt5
 Requires:   nemo-qml-plugin-notifications-qt5
 Requires:   nemo-qml-plugin-contextkit-qt5
+Requires:   nemo-qml-plugin-configuration-qt5
 BuildRequires:  pkgconfig(sailfishapp) >= 1.0.2
 BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
@@ -22,6 +24,7 @@ BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5WebSockets)
 BuildRequires:  pkgconfig(Qt5Positioning)
+BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(qt5embedwidget)
 BuildRequires:  desktop-file-utils
 
@@ -30,7 +33,8 @@ Sailfish-native Home Assistant client. Connect to a Home Assistant instance
 by IP or hostname, then log in with username/password and optional TOTP
 two-step verification. Receives companion notifications over a WebSocket
 push channel after mobile_app registration, and reports battery, Wi-Fi, and
-location sensors via the mobile_app webhook.
+location sensors via the mobile_app webhook. Selected lights can be shown
+on the app cover, with paging arrows when they do not all fit.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -55,6 +59,12 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.6-1
+- Show selected lights on the app cover, with paging when there are many.
+- Leave Internal URL empty when there is only one address; skip switching.
+- Open Home Assistant's default dashboard; Companion app opens Helmsman settings.
+- Refresh access tokens before they expire so cover and push stay authenticated.
+
 * Wed Aug 26 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.5-1
 - Report battery, Wi-Fi, OS version, and location via the mobile_app webhook.
 - Mark the device as home when using the internal URL (configurable).

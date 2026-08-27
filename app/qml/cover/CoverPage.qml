@@ -4,6 +4,7 @@ import Sailfish.Silica 1.0
 CoverBackground {
     id: cover
     property var hassClient
+    property var mdiIcons
     property int notificationCount: 0
     property string notificationTitle: ""
     property string notificationBody: ""
@@ -11,7 +12,132 @@ CoverBackground {
     property string notificationIcon: ""
     property bool showingNotification: notificationCount > 0
             && (notificationTitle.length > 0 || notificationBody.length > 0)
-    signal requestSettings
+    property int coverPage: 0
+    property int entitiesGen: 0
+    property bool coverActionOdd: false
+
+    readonly property var favorites: {
+        var _ = cover.entitiesGen
+        return (hassClient && hassClient.widget)
+                ? (hassClient.widget.widgetEntities || [])
+                : []
+    }
+    readonly property bool showingFavorites: !showingNotification
+            && hassClient && hassClient.loggedIn
+            && favorites.length > 0
+    // Lipstick only delivers taps to CoverAction (max two). More than two
+    // favorites are shown one at a time so the left action can stay "toggle".
+    readonly property int itemsPerPage: favorites.length > 2 ? 1 : 2
+    readonly property int pageCount: Math.max(1, Math.ceil(favorites.length / itemsPerPage))
+    readonly property var pageEntities: {
+        var all = favorites
+        var start = coverPage * itemsPerPage
+        var out = []
+        for (var i = 0; i < itemsPerPage; ++i) {
+            var idx = start + i
+            if (idx >= all.length)
+                break
+            out.push(all[idx])
+        }
+        return out
+    }
+    readonly property var leftEntity: pageEntities.length > 0 ? pageEntities[0] : null
+    readonly property var rightEntity: pageEntities.length > 1 ? pageEntities[1] : null
+    readonly property string leftEntityId: leftEntity && leftEntity.entityId ? leftEntity.entityId : ""
+    readonly property string rightEntityId: rightEntity && rightEntity.entityId ? rightEntity.entityId : ""
+    readonly property string leftToggleIcon: coverToggleIcon(leftEntity)
+    readonly property string rightToggleIcon: coverToggleIcon(rightEntity)
+    readonly property bool watermarkOn: !!(leftEntity && leftEntity.on === true)
+    readonly property string watermarkIconName: (leftEntity && leftEntity.icon) ? String(leftEntity.icon) : ""
+    property string favoriteWatermarkPath: ""
+
+    function favoriteStateLabel(entity) {
+        if (!entity)
+            return ""
+        if (entity.available === false)
+            return entity.state || "unavailable"
+        if (entity.dimmable === true && entity.on)
+            return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
+        return entity.on ? "On" : "Off"
+    }
+
+    function favoriteName(entity) {
+        if (!entity)
+            return ""
+        return entity.name || entity.entityId || ""
+    }
+
+    function coverToggleIcon(entity) {
+        if (!entity || entity.available === false)
+            return "image://theme/icon-cover-refresh"
+        if (entity.on)
+            return "image://theme/icon-cover-pause"
+        return "image://theme/icon-cover-play"
+    }
+
+    function favoriteWatermarkMdi(entity) {
+        if (!entity)
+            return ""
+        var icon = entity.icon ? String(entity.icon) : ""
+        if (entity.on === true)
+            return icon.length ? icon : "mdi:lightbulb"
+        if (!icon.length)
+            return "mdi:lightbulb-outline"
+        if (icon.indexOf("-outline") >= 0)
+            return icon
+        var outline = icon + "-outline"
+        if (mdiIcons && mdiIcons.hasIcon && mdiIcons.hasIcon(outline))
+            return outline
+        return icon
+    }
+
+    function updateFavoriteWatermark() {
+        if (!cover.showingFavorites || !mdiIcons || !mdiIcons.ready || !cover.leftEntity) {
+            cover.favoriteWatermarkPath = ""
+            return
+        }
+        var name = cover.favoriteWatermarkMdi(cover.leftEntity)
+        var path = name.length ? mdiIcons.renderIconFile(name, "#FFFFFF", 256) : ""
+        cover.favoriteWatermarkPath = path || ""
+    }
+
+    function toggleFavorite(entityId) {
+        if (!entityId || !hassClient || !hassClient.widget)
+            return
+        hassClient.widget.toggleLight(entityId)
+        cover.coverActionOdd = !cover.coverActionOdd
+    }
+
+    function syncCoverPage() {
+        var last = Math.max(0, pageCount - 1)
+        if (coverPage > last)
+            coverPage = last
+    }
+
+    function nextCoverPage() {
+        coverPage = (coverPage + 1) % pageCount
+    }
+
+    onPageCountChanged: syncCoverPage()
+    onStatusChanged: {
+        if (status === Cover.Active && hassClient && hassClient.widget && hassClient.loggedIn)
+            hassClient.widget.refresh()
+    }
+
+    Connections {
+        target: (hassClient && hassClient.widget) ? hassClient.widget : null
+        onWidgetEntitiesChanged: cover.entitiesGen += 1
+    }
+
+    Connections {
+        target: mdiIcons
+        onReadyChanged: cover.updateFavoriteWatermark()
+    }
+
+    onShowingFavoritesChanged: cover.updateFavoriteWatermark()
+    onLeftEntityIdChanged: cover.updateFavoriteWatermark()
+    onWatermarkOnChanged: cover.updateFavoriteWatermark()
+    onWatermarkIconNameChanged: cover.updateFavoriteWatermark()
 
     // Required for the ambience wallpaper to remain visible behind the tint.
     transparent: true
@@ -32,7 +158,7 @@ CoverBackground {
         anchors.horizontalCenter: parent.right
         width: height
         opacity: 0.22
-        visible: !cover.showingNotification
+        visible: !cover.showingNotification && !cover.showingFavorites
         z: 0
 
         Canvas {
@@ -135,12 +261,13 @@ CoverBackground {
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.right
         width: height
-        opacity: 0.28
-        visible: cover.showingNotification && cover.notificationIcon.length > 0
+        opacity: cover.showingFavorites && cover.watermarkOn ? 0.34 : 0.22
+        visible: (cover.showingNotification && cover.notificationIcon.length > 0)
+                 || (cover.showingFavorites && cover.favoriteWatermarkPath.length > 0)
         source: {
-            if (cover.notificationIcon.length === 0)
+            var path = cover.showingNotification ? cover.notificationIcon : cover.favoriteWatermarkPath
+            if (!path || path.length === 0)
                 return ""
-            var path = cover.notificationIcon
             if (path.indexOf("http://") === 0 || path.indexOf("https://") === 0
                     || path.indexOf("file://") === 0)
                 return path
@@ -156,7 +283,7 @@ CoverBackground {
         width: parent.width - Theme.paddingLarge * 2
         spacing: Theme.paddingSmall
         z: 1
-        visible: !cover.showingNotification
+        visible: !cover.showingNotification && !cover.showingFavorites
 
         Label {
             width: parent.width
@@ -180,8 +307,11 @@ CoverBackground {
             text: {
                 if (!hassClient)
                     return ""
-                if (hassClient.loggedIn)
-                    return hassClient.usingInternalUrl ? "Internal" : "External"
+                if (hassClient.loggedIn) {
+                    if (hassClient.internalUrl.length > 0)
+                        return hassClient.usingInternalUrl ? "Internal" : "External"
+                    return "Connected"
+                }
                 if (hassClient.connected)
                     return "Connected"
                 return "Not connected"
@@ -247,12 +377,159 @@ CoverBackground {
         }
     }
 
+    Column {
+        id: favoritesColumn
+        visible: cover.showingFavorites
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.topMargin: Theme.paddingMedium
+        anchors.leftMargin: Theme.paddingSmall
+        anchors.rightMargin: Theme.paddingSmall
+        anchors.bottomMargin: Theme.itemSizeSmall
+        spacing: Theme.paddingSmall
+        z: 1
+
+        // One light: name in the middle, toggle is the left CoverAction.
+        Column {
+            visible: cover.pageEntities.length === 1
+            width: parent.width
+            spacing: Theme.paddingSmall
+
+            Label {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+                color: "white"
+                font.pixelSize: Theme.fontSizeMedium
+                font.bold: cover.leftEntity && cover.leftEntity.on === true
+                text: cover.favoriteName(cover.leftEntity)
+            }
+
+            Label {
+                width: parent.width
+                horizontalAlignment: Text.AlignHCenter
+                color: "#CCFFFFFF"
+                font.pixelSize: Theme.fontSizeSmall
+                text: cover.favoriteStateLabel(cover.leftEntity)
+            }
+        }
+
+        // Two lights: columns sit above the left/right CoverAction buttons.
+        Row {
+            visible: cover.pageEntities.length >= 2
+            width: parent.width
+            spacing: Theme.paddingSmall
+
+            Repeater {
+                model: cover.pageEntities
+                delegate: Column {
+                    width: (favoritesColumn.width - Theme.paddingSmall) / 2
+                    spacing: Theme.paddingSmall
+
+                    Label {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 3
+                        elide: Text.ElideRight
+                        color: "white"
+                        font.pixelSize: Theme.fontSizeSmall
+                        font.bold: modelData.on === true
+                        text: cover.favoriteName(modelData)
+                    }
+
+                    Label {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        color: "#CCFFFFFF"
+                        font.pixelSize: Theme.fontSizeTiny
+                        text: cover.favoriteStateLabel(modelData)
+                    }
+                }
+            }
+        }
+
+        Item {
+            width: 1
+            height: Theme.paddingSmall
+            visible: cover.pageCount > 1
+        }
+
+        Label {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            visible: cover.pageCount > 1
+            color: "#B3FFFFFF"
+            font.pixelSize: Theme.fontSizeTiny
+            text: (cover.coverPage + 1) + " / " + cover.pageCount
+        }
+    }
+
     CoverActionList {
-        enabled: hassClient && hassClient.loggedIn
+        enabled: cover.showingFavorites && cover.pageEntities.length >= 2 && !cover.coverActionOdd
         CoverAction {
-            // Bundled cog — theme has no settings-style cover icon.
-            iconSource: Qt.resolvedUrl("icon-cover-settings.png")
-            onTriggered: cover.requestSettings()
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+        }
+        CoverAction {
+            iconSource: cover.rightToggleIcon
+            onTriggered: cover.toggleFavorite(cover.rightEntityId)
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.showingFavorites && cover.pageEntities.length >= 2 && cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+        }
+        CoverAction {
+            iconSource: cover.rightToggleIcon
+            onTriggered: cover.toggleFavorite(cover.rightEntityId)
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1 && !cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+        }
+        CoverAction {
+            iconSource: "image://theme/icon-cover-next"
+            onTriggered: cover.nextCoverPage()
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1 && cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+        }
+        CoverAction {
+            iconSource: "image://theme/icon-cover-next"
+            onTriggered: cover.nextCoverPage()
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1 && !cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1 && cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntityId)
         }
     }
 }

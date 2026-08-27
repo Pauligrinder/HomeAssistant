@@ -1,5 +1,6 @@
 #include "hassclient.h"
 #include "hasspushchannel.h"
+#include "widgetcoordinator.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -29,7 +30,6 @@ const int kDefaultHttpsPort = 443;
 // Renew the access token this long before Home Assistant expires it, so the
 // push channel never has to authenticate with a dead token.
 const qint64 kTokenRefreshLeadMs = 5 * 60 * 1000;
-const qint64 kMinTokenRefreshDelayMs = 5 * 1000;
 // Give up after this many rejected refreshes so a revoked refresh token cannot
 // turn into an endless stream of failed logins on the Home Assistant side.
 const int kMaxPushRefreshFailures = 3;
@@ -180,6 +180,7 @@ HassClient::HassClient(QObject *parent)
     , m_nam(new QNetworkAccessManager(this))
     , m_pushChannel(new HassPushChannel(this))
     , m_sensors(new SensorCoordinator(this))
+    , m_widget(new WidgetCoordinator(this))
     , m_pendingKind(RequestNone)
     , m_pendingReply(nullptr)
     , m_busy(false)
@@ -205,7 +206,8 @@ HassClient::HassClient(QObject *parent)
     connect(&m_endpointDebounceTimer, SIGNAL(timeout()),
             this, SLOT(onEndpointDebounceTimeout()));
 
-    m_tokenRefreshTimer.setSingleShot(true);
+    m_tokenRefreshTimer.setSingleShot(false);
+    m_tokenRefreshTimer.setInterval(60 * 1000);
     connect(&m_tokenRefreshTimer, SIGNAL(timeout()),
             this, SLOT(onTokenRefreshTimeout()));
 
@@ -214,11 +216,19 @@ HassClient::HassClient(QObject *parent)
     connect(m_pushChannel, SIGNAL(connectedChanged()),
             this, SLOT(onPushConnectedChanged()));
     connect(m_pushChannel, SIGNAL(accessTokenStale()),
-            this, SLOT(onPushAccessTokenStale()));
+            this, SLOT(onAccessTokenStale()));
     connect(m_pushChannel, SIGNAL(authenticationFailed(QString)),
             this, SLOT(onPushAuthenticationFailed(QString)));
     connect(m_pushChannel, SIGNAL(notificationReceived(QString,QString,QVariantMap)),
             this, SLOT(onPushNotificationReceived(QString,QString,QVariantMap)));
+    connect(m_widget, SIGNAL(accessTokenStale()),
+            this, SLOT(onAccessTokenStale()));
+
+    connect(this, SIGNAL(accessTokenChanged()), this, SLOT(configureWidget()));
+    connect(this, SIGNAL(accessExpiresAtChanged()), this, SLOT(configureWidget()));
+    connect(this, SIGNAL(baseUrlChanged()), this, SLOT(configureWidget()));
+    connect(this, SIGNAL(ignoreSslErrorsChanged()), this, SLOT(configureWidget()));
+    connect(this, SIGNAL(loggedInChanged()), this, SLOT(syncWidgetRunning()));
 
     m_authClientId = QString();
     loadSession();
@@ -264,6 +274,7 @@ QString HassClient::deviceName() const { return m_deviceName; }
 bool HassClient::mobileAppRegistered() const { return !m_webhookId.isEmpty(); }
 bool HassClient::pushConnected() const { return m_pushChannel && m_pushChannel->connected(); }
 SensorCoordinator *HassClient::sensors() const { return m_sensors; }
+WidgetCoordinator *HassClient::widget() const { return m_widget; }
 
 QString HassClient::dashboardSnapshotPath() const
 {
@@ -410,6 +421,10 @@ void HassClient::setLoggedIn(bool loggedIn)
         return;
     m_loggedIn = loggedIn;
     emit loggedInChanged();
+    if (loggedIn)
+        scheduleTokenRefresh();
+    else
+        m_tokenRefreshTimer.stop();
 }
 
 void HassClient::setNeedsOtp(bool needsOtp)
@@ -545,7 +560,9 @@ void HassClient::loadSession()
     ensureDeviceId();
     ensureDeviceName();
 
-    if (m_internalUrl.isEmpty() && !m_host.isEmpty())
+    // Legacy sessions stored only host/port. Do not invent an internal URL
+    // when the user left it empty on purpose (single-address setup).
+    if (m_internalUrl.isEmpty() && m_externalUrl.isEmpty() && !m_host.isEmpty())
         m_internalUrl = m_baseUrl;
 
     // Recover a refresh token left only in legacy QSettings.
@@ -836,7 +853,7 @@ void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ig
     if (!previousHost.isEmpty() && previousHost.compare(m_host, Qt::CaseInsensitive) != 0)
         clearMobileRegistration();
 
-    if (m_internalUrl.isEmpty())
+    if (m_internalUrl.isEmpty() && m_externalUrl.isEmpty())
         setInternalUrl(m_baseUrl);
     persistConnectionSettings();
 
@@ -918,6 +935,7 @@ void HassClient::logout()
     m_pushRefreshFailures = 0;
     m_endpointDebounceTimer.stop();
     stopSensors();
+    stopWidget();
     stopPushChannel();
     clearPersistedTokens();
     clearDashboardSnapshot();
@@ -1107,25 +1125,28 @@ void HassClient::refreshAccessToken()
 
 void HassClient::scheduleTokenRefresh()
 {
-    m_tokenRefreshTimer.stop();
-    if (!m_loggedIn || m_refreshToken.isEmpty() || !m_accessExpiresAt.isValid())
+    if (!m_loggedIn || m_refreshToken.isEmpty()) {
+        m_tokenRefreshTimer.stop();
         return;
-
-    const qint64 msLeft = QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC());
-    const qint64 delayMs = qMax(kMinTokenRefreshDelayMs, msLeft - kTokenRefreshLeadMs);
-    m_tokenRefreshTimer.start(static_cast<int>(qMin<qint64>(delayMs, 24 * 60 * 60 * 1000)));
+    }
+    if (!m_tokenRefreshTimer.isActive())
+        m_tokenRefreshTimer.start();
+    // Catch an already-stale token immediately (app thaw, missed single-shot).
+    if (!accessTokenStillFresh(static_cast<int>(kTokenRefreshLeadMs / 1000)))
+        startQuietTokenRefresh();
 }
 
 bool HassClient::startQuietTokenRefresh()
 {
     if (!m_loggedIn || m_refreshToken.isEmpty() || m_host.isEmpty())
         return false;
-    // A refresh already on the wire will start the push channel when it lands.
+    // A refresh already on the wire will restart push/widget when it lands.
     if (m_pendingPushAfterRefresh || (m_pendingKind == RequestRefresh && m_pendingReply))
         return true;
     if (m_pushRefreshFailures >= kMaxPushRefreshFailures) {
-        qWarning() << "Helmsman: refresh token keeps being rejected; leaving push stopped";
+        qWarning() << "Helmsman: refresh token keeps being rejected; stopping HA polling";
         stopPushChannel();
+        stopWidget();
         return false;
     }
 
@@ -1136,18 +1157,18 @@ bool HassClient::startQuietTokenRefresh()
 
 void HassClient::onTokenRefreshTimeout()
 {
-    // Renew ahead of expiry so the push channel can reconnect at any time
-    // without HA seeing a login attempt with a dead token.
-    if (accessTokenStillFresh(static_cast<int>(kTokenRefreshLeadMs / 1000))) {
-        scheduleTokenRefresh();
+    if (!m_loggedIn || m_refreshToken.isEmpty()) {
+        m_tokenRefreshTimer.stop();
         return;
     }
+    if (accessTokenStillFresh(static_cast<int>(kTokenRefreshLeadMs / 1000)))
+        return;
     if (!startQuietTokenRefresh())
         return;
     qWarning() << "Helmsman: renewing access token before it expires";
 }
 
-void HassClient::onPushAccessTokenStale()
+void HassClient::onAccessTokenStale()
 {
     startQuietTokenRefresh();
 }
@@ -1182,35 +1203,42 @@ bool HassClient::selectEndpointForNetwork()
     if (!haveInternal && !haveExternal)
         return false;
 
-    const bool onHomeWifi = m_networkState == NetworkWifi
-            && !m_homeWifiSsid.isEmpty()
-            && m_currentWifiSsid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0;
-
     QString chosen;
     bool defaultSsl = false;
-    if (m_networkState == NetworkUnknown) {
-        // ConnMan has not reported yet (startup / lag). Stay where we are
-        // instead of guessing and breaking a working LAN session.
-        if (m_usingInternalUrl && haveInternal) {
-            chosen = m_internalUrl;
-        } else if (!m_usingInternalUrl && haveExternal) {
-            chosen = m_externalUrl;
-            defaultSsl = true;
-        } else if (haveInternal) {
-            chosen = m_internalUrl;
-        } else {
-            chosen = m_externalUrl;
-            defaultSsl = true;
-        }
-    } else if (onHomeWifi && haveInternal) {
-        chosen = m_internalUrl;
-    } else if (haveExternal) {
-        // Foreign Wi‑Fi, mobile data, or no connectivity at all — the LAN
-        // address is unreachable, so the external one is the only option.
+
+    if (!haveInternal) {
+        // Single-address setup: stay on the configured URL, never bounce.
         chosen = m_externalUrl;
         defaultSsl = true;
     } else {
-        chosen = m_internalUrl;
+        const bool onHomeWifi = m_networkState == NetworkWifi
+                && !m_homeWifiSsid.isEmpty()
+                && m_currentWifiSsid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0;
+
+        if (m_networkState == NetworkUnknown) {
+            // ConnMan has not reported yet (startup / lag). Stay where we are
+            // instead of guessing and breaking a working LAN session.
+            if (m_usingInternalUrl && haveInternal) {
+                chosen = m_internalUrl;
+            } else if (!m_usingInternalUrl && haveExternal) {
+                chosen = m_externalUrl;
+                defaultSsl = true;
+            } else if (haveInternal) {
+                chosen = m_internalUrl;
+            } else {
+                chosen = m_externalUrl;
+                defaultSsl = true;
+            }
+        } else if (onHomeWifi && haveInternal) {
+            chosen = m_internalUrl;
+        } else if (haveExternal) {
+            // Foreign Wi‑Fi, mobile data, or no connectivity at all — the LAN
+            // address is unreachable, so the external one is the only option.
+            chosen = m_externalUrl;
+            defaultSsl = true;
+        } else {
+            chosen = m_internalUrl;
+        }
     }
 
     if (chosen.isEmpty())
@@ -1228,7 +1256,7 @@ bool HassClient::selectEndpointForNetwork()
     }
 
     const QString internalNorm = normalizeInstanceUrl(m_internalUrl, false);
-    setUsingInternalUrl(!internalNorm.isEmpty() && chosen == internalNorm);
+    setUsingInternalUrl(haveInternal && chosen == internalNorm);
 
     const bool changed = previousBase != m_baseUrl || previousInternal != m_usingInternalUrl;
     if (!changed)
@@ -1407,8 +1435,10 @@ void HassClient::onReplyFinished()
                 m_pendingPushAfterRefresh = false;
                 ++m_pushRefreshFailures;
                 qWarning() << "Helmsman: background token refresh rejected:" << message;
-                if (m_pushRefreshFailures >= kMaxPushRefreshFailures)
+                if (m_pushRefreshFailures >= kMaxPushRefreshFailures) {
                     stopPushChannel();
+                    stopWidget();
+                }
                 return;
             }
             setError(message);
@@ -1843,10 +1873,49 @@ void HassClient::stopSensors()
         m_sensors->stop();
 }
 
+void HassClient::configureWidget()
+{
+    if (!m_widget)
+        return;
+    m_widget->configure(m_baseUrl, m_accessToken, m_accessExpiresAt, m_ignoreSslErrors);
+}
+
+void HassClient::startWidget()
+{
+    if (!m_widget)
+        return;
+    configureWidget();
+    m_widget->start();
+}
+
+void HassClient::stopWidget()
+{
+    if (m_widget)
+        m_widget->stop();
+}
+
+void HassClient::syncWidgetRunning()
+{
+    if (m_loggedIn)
+        startWidget();
+    else
+        stopWidget();
+}
+
 void HassClient::notifyAppForegrounded()
 {
     if (m_sensors)
         m_sensors->onAppForegrounded();
+    if (!m_loggedIn)
+        return;
+    // After suspend the access token may already be dead. Refresh first so
+    // the cover poller does not hit /api/states with an expired bearer.
+    if (!accessTokenStillFresh(120)) {
+        startQuietTokenRefresh();
+        return;
+    }
+    if (m_widget)
+        m_widget->refresh();
 }
 
 void HassClient::startPushChannel()
@@ -1861,7 +1930,8 @@ void HassClient::startPushChannel()
 
 void HassClient::stopPushChannel()
 {
-    m_tokenRefreshTimer.stop();
+    // Keep the refresh watchdog running while logged in: the cover poller
+    // still needs a live token even if the push socket is down.
     if (m_pushChannel)
         m_pushChannel->stop();
 }
