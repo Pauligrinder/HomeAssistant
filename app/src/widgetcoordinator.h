@@ -69,6 +69,7 @@ public slots:
     void setSelectedEntityIds(const QStringList &ids);
     void setEntitySelected(const QString &entityId, bool selected);
     void refresh();
+    void refreshAvailable();
     void toggleLight(const QString &entityId);
     void setBrightnessPct(const QString &entityId, int pct);
     Q_SCRIPTABLE QString GetEntitiesJson() const;
@@ -96,6 +97,7 @@ private:
     enum RequestKind {
         RequestNone,
         RequestStates,
+        RequestOneState,
         RequestService
     };
 
@@ -109,8 +111,12 @@ private:
     bool accessTokenUsable() const;
     QUrl apiUrl(const QString &path) const;
     void getStates();
+    void getSelectedStates();
+    void getAllStates();
+    void getEntityState(const QString &entityId);
     void callService(const QString &domain, const QString &service, const QJsonObject &body);
     void applyStates(const QByteArray &data);
+    void applyOneState(const QByteArray &data);
     QVariantMap entityFromState(const QJsonObject &state) const;
     QVariantMap overlayExpectation(QVariantMap map);
     void mergeServiceStates(const QByteArray &data);
@@ -130,6 +136,8 @@ private:
     bool m_dbusRegistered;
     bool m_loadingSelected;
     bool m_tokenRejected;
+    int m_selectedOutstanding;
+    QNetworkReply *m_allStatesReply;
     QString m_lastError;
     QStringList m_selectedEntityIds;
     QVariantList m_availableEntities;

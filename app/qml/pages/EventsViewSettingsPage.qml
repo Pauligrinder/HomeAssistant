@@ -26,7 +26,7 @@ Page {
 
     onStatusChanged: {
         if (status === PageStatus.Active && hassClient.widget)
-            hassClient.widget.refresh()
+            hassClient.widget.refreshAvailable()
     }
 
     SilicaFlickable {

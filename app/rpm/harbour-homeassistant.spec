@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.6
+Version:    0.2.7
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -59,6 +59,12 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.7-1
+- Fix external connections freezing the app after sign-in (cover poller
+  no longer downloads every Home Assistant state on the UI thread).
+- Load the dashboard via /lovelace and then switch to the default panel,
+  so Nabu Casa no longer gets stuck on a root-URL auth bounce.
+
 * Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.6-1
 - Show selected lights on the app cover, with paging when there are many.
 - Leave Internal URL empty when there is only one address; skip switching.
