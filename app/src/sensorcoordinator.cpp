@@ -12,12 +12,18 @@
 #include <QSysInfo>
 #include <QtMath>
 
+#include "appsettings.h"
+
 namespace {
 
 const char kClientName[] = "Helmsman";
 const int kPeriodicMs = 15 * 60 * 1000;
 const int kConfigRefreshMs = 20 * 60 * 1000;
 const int kUpdateDebounceMs = 750;
+// Gap between the first webhook calls after start. Issuing config, sensor
+// registration, and the first state update together stalled the UI thread on
+// slow external endpoints.
+const int kStartupStepMs = 500;
 const int kMinLocationIntervalMs = 60 * 1000;
 const double kMinLocationMoveMeters = 25.0;
 const double kAccuracyImproveMeters = 15.0;
@@ -60,6 +66,7 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_usingInternalUrl(false)
     , m_started(false)
     , m_registrationInFlight(false)
+    , m_startupStep(0)
     , m_batteryLevel(-1)
     , m_haveBattery(false)
     , m_haveWifi(false)
@@ -88,6 +95,9 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     m_updateDebounce.setSingleShot(true);
     m_updateDebounce.setInterval(kUpdateDebounceMs);
     connect(&m_updateDebounce, SIGNAL(timeout()), this, SLOT(onUpdateDebounceTimeout()));
+
+    m_startupTimer.setInterval(kStartupStepMs);
+    connect(&m_startupTimer, SIGNAL(timeout()), this, SLOT(onStartupStepTimeout()));
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -159,7 +169,7 @@ QString SensorCoordinator::lastLocationText() const { return m_lastLocationText;
 
 void SensorCoordinator::loadPersistedState()
 {
-    QSettings settings;
+    QSettings settings(AppSettings::filePath(), QSettings::IniFormat);
     settings.beginGroup(QStringLiteral("sensors"));
     const QStringList registered = settings.value(QStringLiteral("registered")).toStringList();
     for (const QString &id : registered) {
@@ -175,7 +185,7 @@ void SensorCoordinator::loadPersistedState()
 
 void SensorCoordinator::persistState() const
 {
-    QSettings settings;
+    QSettings settings(AppSettings::filePath(), QSettings::IniFormat);
     settings.beginGroup(QStringLiteral("sensors"));
     settings.setValue(QStringLiteral("registered"), registeredIds());
     settings.setValue(QStringLiteral("locationReporting"), m_locationReporting);
@@ -244,8 +254,11 @@ void SensorCoordinator::configure(const QString &webhookId,
     m_ignoreSslErrors = ignoreSslErrors;
 
     if (changed && m_started && !m_webhookId.isEmpty()) {
-        refreshConfig();
-        ensureRegistrations();
+        // Endpoint switched (internal<->external). Re-sync through the same
+        // paced steps as start(): firing these inline hit the new, possibly
+        // slow host while the push channel and dashboard were also reloading.
+        m_startupStep = 0;
+        m_startupTimer.start();
     }
 }
 
@@ -260,13 +273,35 @@ void SensorCoordinator::start()
     setLastError(QString());
     m_periodicTimer.start();
     m_configTimer.start();
-    refreshConfig();
-    ensureRegistrations();
     ensureOsVersionSensor();
-    scheduleSensorUpdate();
-    if (m_homeOnInternal && m_usingInternalUrl)
-        postLocationUpdate(true);
+    m_startupStep = 0;
+    m_startupTimer.start();
     qWarning() << "Helmsman sensors: started";
+}
+
+void SensorCoordinator::onStartupStepTimeout()
+{
+    if (!m_started) {
+        m_startupTimer.stop();
+        return;
+    }
+
+    switch (m_startupStep++) {
+    case 0:
+        refreshConfig();
+        break;
+    case 1:
+        ensureRegistrations();
+        break;
+    case 2:
+        scheduleSensorUpdate();
+        if (m_homeOnInternal && m_usingInternalUrl)
+            postLocationUpdate(true);
+        break;
+    default:
+        m_startupTimer.stop();
+        break;
+    }
 }
 
 void SensorCoordinator::stop()
@@ -275,6 +310,7 @@ void SensorCoordinator::stop()
     m_periodicTimer.stop();
     m_configTimer.stop();
     m_updateDebounce.stop();
+    m_startupTimer.stop();
     m_registerQueue.clear();
     m_registrationInFlight = false;
     setActive(false);

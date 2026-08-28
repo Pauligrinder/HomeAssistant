@@ -264,6 +264,10 @@ WebViewPage {
         page.readyCheckRunning = false
         page.dashboardReady = true
         page.pollBridge()
+        // Sensor startup waits for this: its webhook calls must not compete
+        // with the dashboard for the UI thread.
+        if (hassClient)
+            hassClient.notifyDashboardReady()
         // Navigate only after the dashboard is on screen. Doing this during
         // the ready-check hangs Gecko on external/reverse-proxy origins.
         defaultPanelTimer.restart()

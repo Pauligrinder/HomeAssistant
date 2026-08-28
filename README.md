@@ -32,13 +32,13 @@ app/
 5. **Sensors** — After mobile_app registration, Helmsman reports battery level/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
    location. On the internal URL it can mark the device as `home`. Enable or
-   disable each entity under HA → Settings → Devices → Helmsman.
+   disable each entity under HA → Settings → Devices → Helmsman. Sensors start
+   a few seconds after the dashboard has loaded so their webhook calls cannot
+   stall the UI, and GPS follows shortly after that.
 6. **Cover favorites** — Pick lights in settings to show on the app cover.
    Cover actions toggle them (and page when there are more than two).
 7. **URLs** — Internal and external addresses with Wi‑Fi switching. If you only
-   have one address, put it in External URL and leave Internal URL empty. If
-   the internal address does not respond, Helmsman falls back to the external
-   URL. A failed restore shows an error and a Settings button instead of hanging.
+   have one address, put it in External URL and leave Internal URL empty.
 
 ## Build
 

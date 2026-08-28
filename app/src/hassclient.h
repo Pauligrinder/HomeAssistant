@@ -125,6 +125,7 @@ public slots:
     bool dashboardSnapshotMatches(const QString &baseUrl) const;
     void clearDashboardSnapshot();
     void notifyAppForegrounded();
+    void notifyDashboardReady();
 
 signals:
     void busyChanged();
@@ -178,11 +179,9 @@ private slots:
                                     const QString &message,
                                     const QVariantMap &data);
     void onEndpointDebounceTimeout();
-    void onRequestTimeout();
+    void onSensorStartTimeout();
     void configureWidget();
     void syncWidgetRunning();
-    void startWidget();
-    void startCompanionServices();
 
 private:
     enum RequestKind {
@@ -241,8 +240,10 @@ private:
     void stopPushChannel();
     void clearMobileRegistration();
     void configureSensors();
+    void scheduleSensorStart(int delayMs);
     void startSensors();
     void stopSensors();
+    void startWidget();
     void stopWidget();
     void loadSession();
     void persistSession();
@@ -254,7 +255,6 @@ private:
     void scheduleTokenRefresh();
     bool startQuietTokenRefresh();
     bool accessTokenStillFresh(int minSecondsLeft = 120) const;
-    bool fallbackToExternalAndRetry(RequestKind kind);
 
     QNetworkAccessManager *m_nam;
     HassPushChannel *m_pushChannel;
@@ -264,7 +264,7 @@ private:
     QNetworkReply *m_pendingReply;
     QTimer m_endpointDebounceTimer;
     QTimer m_tokenRefreshTimer;
-    QTimer m_requestTimeoutTimer;
+    QTimer m_sensorStartTimer;
 
     bool m_busy;
     bool m_connected;
@@ -277,8 +277,6 @@ private:
     bool m_testingConnection;
     bool m_testIgnoreSslErrors;
     bool m_pendingPushAfterRefresh;
-    bool m_requestTimedOut;
-    bool m_forceExternalEndpoint;
     NetworkState m_networkState;
     NetworkState m_pendingNetworkState;
     int m_pushAuthRetries;

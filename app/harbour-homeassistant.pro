@@ -4,10 +4,11 @@ CONFIG += sailfishapp
 QT += network websockets gui positioning dbus
 PKGCONFIG += qt5embedwidget
 
-VERSION = 0.2.8
+VERSION = 0.2.9
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
+    src/appsettings.cpp \
     src/harbour-homeassistant.cpp \
     src/hassclient.cpp \
     src/hasspushchannel.cpp \
@@ -16,6 +17,7 @@ SOURCES += \
     src/widgetcoordinator.cpp
 
 HEADERS += \
+    src/appsettings.h \
     src/hassclient.h \
     src/hasspushchannel.h \
     src/mdiiconrenderer.h \
