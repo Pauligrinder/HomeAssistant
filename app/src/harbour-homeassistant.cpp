@@ -3,6 +3,7 @@
 #include <QQuickView>
 #include <QtQml>
 
+#include "appsettings.h"
 #include "hassclient.h"
 #include "mdiiconrenderer.h"
 #include "sensorcoordinator.h"
@@ -13,6 +14,8 @@ int main(int argc, char *argv[])
     QGuiApplication *app = SailfishApp::application(argc, argv);
     app->setOrganizationName(QStringLiteral("org.helmsman"));
     app->setApplicationName(QStringLiteral("harbour-helmsman"));
+
+    AppSettings::migrateLegacyFile();
 
     qmlRegisterType<HassClient>("harbour.helmsman", 1, 0, "HassClient");
     qmlRegisterType<MdiIconRenderer>("harbour.helmsman", 1, 0, "MdiIconRenderer");

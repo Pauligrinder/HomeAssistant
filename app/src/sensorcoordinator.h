@@ -71,6 +71,7 @@ private slots:
     void onPeriodicTimeout();
     void onConfigRefreshTimeout();
     void onUpdateDebounceTimeout();
+    void onStartupStepTimeout();
 
 private:
     enum WebhookKind {
@@ -140,6 +141,8 @@ private:
     QTimer m_periodicTimer;
     QTimer m_configTimer;
     QTimer m_updateDebounce;
+    QTimer m_startupTimer;
+    int m_startupStep;
 
     QString m_webhookId;
     QString m_cloudhookUrl;

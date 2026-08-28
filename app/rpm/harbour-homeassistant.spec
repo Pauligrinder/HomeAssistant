@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.8
+Version:    0.2.9
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -59,6 +59,16 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Fri Aug 28 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.9-1
+- Fix the app freezing on launch and on internal/external switches: mobile_app
+  sensors now start after the dashboard has loaded, and their first webhook
+  calls are spaced out instead of all firing at once.
+- Delay GPS start until sensors are running, so Geoclue cannot block the UI.
+- Store settings inside the Sailjail-visible config directory so sensor and
+  connection preferences survive launches from the app grid.
+- Revert the 0.2.8 endpoint changes (request timeouts, internal-to-external
+  fallback, splash error screen) that were chasing the wrong root cause.
+
 * Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.8-1
 - Treat Wi-Fi as connected only when it is ConnMan's default route (online).
 - If the internal URL times out, fall back to the external address.
