@@ -25,6 +25,10 @@ const char *kClientName = "Helmsman";
 const char *kDbusService = "org.helmsman.harbour-helmsman";
 const char *kDbusPath = "/widget";
 const int kPollIntervalMs = 8000;
+// Never fetch states straight from start()/configure(): those run inside the
+// login reply handler and during endpoint switches, where an immediate request
+// to a slow remote host wedged the UI thread.
+const int kStartupDelayMs = 700;
 
 QString widgetFilePath()
 {
@@ -72,6 +76,10 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
 {
     m_pollTimer.setInterval(kPollIntervalMs);
     connect(&m_pollTimer, SIGNAL(timeout()), this, SLOT(onPollTimeout()));
+
+    m_startupTimer.setSingleShot(true);
+    m_startupTimer.setInterval(kStartupDelayMs);
+    connect(&m_startupTimer, SIGNAL(timeout()), this, SLOT(onStartupTimeout()));
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
     connect(m_watcher, SIGNAL(fileChanged(QString)),
@@ -143,7 +151,7 @@ void WidgetCoordinator::configure(const QString &baseUrl,
     if (tokenChanged)
         m_tokenRejected = false;
     if (changed && m_active)
-        getStates();
+        scheduleStates();
 }
 
 void WidgetCoordinator::start()
@@ -151,13 +159,26 @@ void WidgetCoordinator::start()
     setActive(true);
     if (!m_pollTimer.isActive())
         m_pollTimer.start();
-    getStates();
+    scheduleStates();
 }
 
 void WidgetCoordinator::stop()
 {
     m_pollTimer.stop();
+    m_startupTimer.stop();
     setActive(false);
+}
+
+void WidgetCoordinator::scheduleStates()
+{
+    if (!m_startupTimer.isActive())
+        m_startupTimer.start();
+}
+
+void WidgetCoordinator::onStartupTimeout()
+{
+    if (m_active)
+        getStates();
 }
 
 void WidgetCoordinator::setSelectedEntityIds(const QStringList &ids)
