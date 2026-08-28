@@ -180,6 +180,7 @@ private slots:
                                     const QVariantMap &data);
     void onEndpointDebounceTimeout();
     void onSensorStartTimeout();
+    void onWidgetStartTimeout();
     void configureWidget();
     void syncWidgetRunning();
 
@@ -243,6 +244,7 @@ private:
     void scheduleSensorStart(int delayMs);
     void startSensors();
     void stopSensors();
+    void scheduleWidgetStart(int delayMs);
     void startWidget();
     void stopWidget();
     void loadSession();
@@ -265,6 +267,7 @@ private:
     QTimer m_endpointDebounceTimer;
     QTimer m_tokenRefreshTimer;
     QTimer m_sensorStartTimer;
+    QTimer m_widgetStartTimer;
 
     bool m_busy;
     bool m_connected;

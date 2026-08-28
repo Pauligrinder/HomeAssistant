@@ -91,6 +91,7 @@ private slots:
     void onReplyFinished();
     void onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
     void onPollTimeout();
+    void onStartupTimeout();
     void onWidgetFileChanged(const QString &path);
 
 private:
@@ -110,6 +111,7 @@ private:
     bool registerDBus();
     bool accessTokenUsable() const;
     QUrl apiUrl(const QString &path) const;
+    void scheduleStates();
     void getStates();
     void getSelectedStates();
     void getAllStates();
@@ -127,6 +129,7 @@ private:
     QNetworkAccessManager *m_nam;
     QFileSystemWatcher *m_watcher;
     QTimer m_pollTimer;
+    QTimer m_startupTimer;
     QString m_baseUrl;
     QString m_accessToken;
     QDateTime m_accessExpiresAt;

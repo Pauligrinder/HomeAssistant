@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.9
+Version:    0.2.10
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -59,6 +59,11 @@ desktop-file-install --delete-original \
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 
 %changelog
+* Sat Aug 29 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.10-1
+- Fix cover favorites freezing the app the same way sensors did: the cover
+  poller no longer fetches states from inside the login reply handler or
+  immediately on an internal/external switch.
+
 * Fri Aug 28 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.9-1
 - Fix the app freezing on launch and on internal/external switches: mobile_app
   sensors now start after the dashboard has loaded, and their first webhook

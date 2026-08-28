@@ -41,6 +41,10 @@ const int kMaxPushRefreshFailures = 3;
 // (sign-in screen, failed WebView).
 const int kSensorStartAfterDashboardMs = 1500;
 const int kSensorStartFallbackMs = 15000;
+// Staggered behind the sensors so the cover poller's first /api/states does
+// not land in the same turn as the sensor webhook calls.
+const int kWidgetStartAfterDashboardMs = 3000;
+const int kWidgetStartFallbackMs = 16000;
 
 QString canonicalClientId(const QString &baseUrl)
 {
@@ -222,6 +226,10 @@ HassClient::HassClient(QObject *parent)
     m_sensorStartTimer.setSingleShot(true);
     connect(&m_sensorStartTimer, SIGNAL(timeout()),
             this, SLOT(onSensorStartTimeout()));
+
+    m_widgetStartTimer.setSingleShot(true);
+    connect(&m_widgetStartTimer, SIGNAL(timeout()),
+            this, SLOT(onWidgetStartTimeout()));
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -1885,6 +1893,7 @@ void HassClient::onSensorStartTimeout()
 void HassClient::notifyDashboardReady()
 {
     scheduleSensorStart(kSensorStartAfterDashboardMs);
+    scheduleWidgetStart(kWidgetStartAfterDashboardMs);
 }
 
 void HassClient::startSensors()
@@ -1923,6 +1932,7 @@ void HassClient::startWidget()
 
 void HassClient::stopWidget()
 {
+    m_widgetStartTimer.stop();
     if (m_widget)
         m_widget->stop();
 }
@@ -1930,9 +1940,26 @@ void HassClient::stopWidget()
 void HassClient::syncWidgetRunning()
 {
     if (m_loggedIn)
-        startWidget();
+        scheduleWidgetStart(kWidgetStartFallbackMs);
     else
         stopWidget();
+}
+
+void HassClient::scheduleWidgetStart(int delayMs)
+{
+    if (!m_widget || !m_loggedIn)
+        return;
+    if (m_widget->active())
+        return;
+    // Never push an already-armed start further out.
+    if (m_widgetStartTimer.isActive() && m_widgetStartTimer.remainingTime() <= delayMs)
+        return;
+    m_widgetStartTimer.start(delayMs);
+}
+
+void HassClient::onWidgetStartTimeout()
+{
+    startWidget();
 }
 
 void HassClient::notifyAppForegrounded()
