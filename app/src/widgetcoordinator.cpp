@@ -1,5 +1,7 @@
 #include "widgetcoordinator.h"
 
+#include "mdiiconrenderer.h"
+
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -65,6 +67,7 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     : QObject(parent)
     , m_nam(new QNetworkAccessManager(this))
     , m_watcher(new QFileSystemWatcher(this))
+    , m_iconRenderer(nullptr)
     , m_ignoreSslErrors(false)
     , m_busy(false)
     , m_active(false)
@@ -109,9 +112,19 @@ QVariantList WidgetCoordinator::widgetEntities() const
     return m_widgetEntities;
 }
 
+QVariantList WidgetCoordinator::eventsViewWidgetEntities() const
+{
+    return m_eventsViewWidgetEntities;
+}
+
 QStringList WidgetCoordinator::selectedEntityIds() const
 {
     return m_selectedEntityIds;
+}
+
+QStringList WidgetCoordinator::eventsViewSelectedEntityIds() const
+{
+    return m_eventsViewSelectedEntityIds;
 }
 
 bool WidgetCoordinator::busy() const
@@ -132,6 +145,20 @@ QString WidgetCoordinator::lastError() const
 bool WidgetCoordinator::dbusRegistered() const
 {
     return m_dbusRegistered;
+}
+
+MdiIconRenderer *WidgetCoordinator::iconRenderer() const
+{
+    return m_iconRenderer;
+}
+
+void WidgetCoordinator::setIconRenderer(MdiIconRenderer *renderer)
+{
+    if (m_iconRenderer == renderer)
+        return;
+    m_iconRenderer = renderer;
+    emit iconRendererChanged();
+    rebuildWidgetEntities();
 }
 
 void WidgetCoordinator::configure(const QString &baseUrl,
@@ -217,6 +244,42 @@ void WidgetCoordinator::setEntitySelected(const QString &entityId, bool selected
     setSelectedEntityIds(next);
 }
 
+void WidgetCoordinator::setEventsViewSelectedEntityIds(const QStringList &ids)
+{
+    QStringList clean;
+    clean.reserve(ids.size());
+    for (const QString &id : ids) {
+        const QString trimmed = id.trimmed();
+        if (trimmed.isEmpty() || clean.contains(trimmed))
+            continue;
+        clean.append(trimmed);
+    }
+    if (clean == m_eventsViewSelectedEntityIds)
+        return;
+    m_eventsViewSelectedEntityIds = clean;
+    persistSelected();
+    emit eventsViewSelectedEntityIdsChanged();
+    rebuildWidgetEntities();
+    if (m_active)
+        getStates();
+}
+
+void WidgetCoordinator::setEventsViewEntitySelected(const QString &entityId, bool selected)
+{
+    const QString id = entityId.trimmed();
+    if (id.isEmpty())
+        return;
+    QStringList next = m_eventsViewSelectedEntityIds;
+    const int index = next.indexOf(id);
+    if (selected && index < 0)
+        next.append(id);
+    else if (!selected && index >= 0)
+        next.removeAt(index);
+    else
+        return;
+    setEventsViewSelectedEntityIds(next);
+}
+
 void WidgetCoordinator::refresh()
 {
     getSelectedStates();
@@ -272,7 +335,8 @@ void WidgetCoordinator::setBrightnessPct(const QString &entityId, int pct)
 
 QString WidgetCoordinator::GetEntitiesJson() const
 {
-    return QString::fromUtf8(QJsonDocument::fromVariant(m_widgetEntities).toJson(QJsonDocument::Compact));
+    return QString::fromUtf8(QJsonDocument::fromVariant(
+                                 m_eventsViewWidgetEntities).toJson(QJsonDocument::Compact));
 }
 
 void WidgetCoordinator::Refresh()
@@ -322,7 +386,8 @@ void WidgetCoordinator::loadSelected()
         const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         file.close();
         if (doc.isObject()) {
-            const QJsonArray array = doc.object().value(QStringLiteral("selectedEntityIds")).toArray();
+            const QJsonObject object = doc.object();
+            const QJsonArray array = object.value(QStringLiteral("selectedEntityIds")).toArray();
             QStringList ids;
             for (const QJsonValue &value : array) {
                 const QString id = value.toString().trimmed();
@@ -332,6 +397,20 @@ void WidgetCoordinator::loadSelected()
             if (ids != m_selectedEntityIds) {
                 m_selectedEntityIds = ids;
                 emit selectedEntityIdsChanged();
+                rebuildWidgetEntities();
+            }
+
+            const QJsonArray eventsArray = object.value(
+                        QStringLiteral("eventsViewSelectedEntityIds")).toArray();
+            QStringList eventsIds;
+            for (const QJsonValue &value : eventsArray) {
+                const QString id = value.toString().trimmed();
+                if (!id.isEmpty() && !eventsIds.contains(id))
+                    eventsIds.append(id);
+            }
+            if (eventsIds != m_eventsViewSelectedEntityIds) {
+                m_eventsViewSelectedEntityIds = eventsIds;
+                emit eventsViewSelectedEntityIdsChanged();
                 rebuildWidgetEntities();
             }
         }
@@ -346,8 +425,12 @@ void WidgetCoordinator::persistSelected()
     QJsonArray array;
     for (const QString &id : m_selectedEntityIds)
         array.append(id);
+    QJsonArray eventsArray;
+    for (const QString &id : m_eventsViewSelectedEntityIds)
+        eventsArray.append(id);
     QJsonObject obj;
     obj.insert(QStringLiteral("selectedEntityIds"), array);
+    obj.insert(QStringLiteral("eventsViewSelectedEntityIds"), eventsArray);
 
     const QString path = widgetFilePath();
     QSaveFile file(path);
@@ -421,13 +504,18 @@ void WidgetCoordinator::getSelectedStates()
     }
     if (m_selectedOutstanding > 0 || m_allStatesReply)
         return;
-    if (m_selectedEntityIds.isEmpty()) {
+    QStringList ids = m_selectedEntityIds;
+    for (const QString &id : m_eventsViewSelectedEntityIds) {
+        if (!ids.contains(id))
+            ids.append(id);
+    }
+    if (ids.isEmpty()) {
         rebuildWidgetEntities();
         return;
     }
 
     setBusy(true);
-    for (const QString &id : m_selectedEntityIds)
+    for (const QString &id : ids)
         getEntityState(id);
 }
 
@@ -637,6 +725,22 @@ void WidgetCoordinator::mergeServiceStates(const QByteArray &data)
 
 void WidgetCoordinator::rebuildWidgetEntities()
 {
+    const QVariantList nextCover = entitiesForSelection(m_selectedEntityIds);
+    const QVariantList nextEvents = entitiesForSelection(m_eventsViewSelectedEntityIds);
+
+    if (nextCover != m_widgetEntities) {
+        m_widgetEntities = nextCover;
+        emit widgetEntitiesChanged();
+    }
+    if (nextEvents != m_eventsViewWidgetEntities) {
+        m_eventsViewWidgetEntities = nextEvents;
+        emit eventsViewWidgetEntitiesChanged();
+        emit EntitiesChanged();
+    }
+}
+
+QVariantList WidgetCoordinator::entitiesForSelection(const QStringList &ids) const
+{
     QHash<QString, QVariantMap> byId;
     for (const QVariant &value : m_availableEntities) {
         const QVariantMap map = value.toMap();
@@ -644,10 +748,13 @@ void WidgetCoordinator::rebuildWidgetEntities()
     }
 
     QVariantList next;
-    for (const QString &id : m_selectedEntityIds) {
+    for (const QString &id : ids) {
         if (byId.contains(id)) {
-            QVariantMap map = overlayExpectation(byId.value(id));
+            QVariantMap map = byId.value(id);
             map.insert(QStringLiteral("selected"), true);
+            const QString iconPath = watermarkIconPath(map);
+            if (!iconPath.isEmpty())
+                map.insert(QStringLiteral("iconPath"), iconPath);
             next.append(map);
         } else {
             QVariantMap map;
@@ -664,17 +771,45 @@ void WidgetCoordinator::rebuildWidgetEntities()
             next.append(map);
         }
     }
+    return next;
+}
 
-    if (next == m_widgetEntities)
-        return;
-    m_widgetEntities = next;
-    emit widgetEntitiesChanged();
-    emit EntitiesChanged();
+// White glyph, matching the cover watermark, written to a file lipstick can read.
+QString WidgetCoordinator::watermarkIconPath(const QVariantMap &entity) const
+{
+    if (!m_iconRenderer)
+        return QString();
+
+    QString icon = entity.value(QStringLiteral("icon")).toString();
+    const bool on = entity.value(QStringLiteral("on")).toBool();
+    if (on) {
+        if (icon.isEmpty())
+            icon = QStringLiteral("mdi:lightbulb");
+    } else if (icon.isEmpty()) {
+        icon = QStringLiteral("mdi:lightbulb-outline");
+    } else if (!icon.contains(QLatin1String("-outline"))) {
+        const QString outline = icon + QStringLiteral("-outline");
+        if (m_iconRenderer->hasIcon(outline))
+            icon = outline;
+    }
+
+    auto cached = m_iconPathCache.constFind(icon);
+    if (cached != m_iconPathCache.constEnd())
+        return cached.value();
+
+    const QString path = m_iconRenderer->renderIconFile(icon, QStringLiteral("#FFFFFF"), 256);
+    m_iconPathCache.insert(icon, path);
+    return path;
 }
 
 QVariantMap WidgetCoordinator::entityById(const QString &entityId) const
 {
     for (const QVariant &value : m_widgetEntities) {
+        const QVariantMap map = value.toMap();
+        if (map.value(QStringLiteral("entityId")).toString() == entityId)
+            return map;
+    }
+    for (const QVariant &value : m_eventsViewWidgetEntities) {
         const QVariantMap map = value.toMap();
         if (map.value(QStringLiteral("entityId")).toString() == entityId)
             return map;
@@ -689,13 +824,17 @@ QVariantMap WidgetCoordinator::entityById(const QString &entityId) const
 
 void WidgetCoordinator::applyOptimistic(const QString &entityId, const QVariantMap &patch)
 {
-    auto patchList = [entityId, patch](QVariantList list) {
+    auto patchList = [this, entityId, patch](QVariantList list) {
         for (int i = 0; i < list.size(); ++i) {
             QVariantMap map = list.at(i).toMap();
             if (map.value(QStringLiteral("entityId")).toString() != entityId)
                 continue;
             for (auto it = patch.begin(); it != patch.end(); ++it)
                 map.insert(it.key(), it.value());
+            // The on/off state decides between filled and outline glyphs.
+            const QString iconPath = watermarkIconPath(map);
+            if (!iconPath.isEmpty())
+                map.insert(QStringLiteral("iconPath"), iconPath);
             list[i] = map;
             break;
         }
@@ -706,6 +845,8 @@ void WidgetCoordinator::applyOptimistic(const QString &entityId, const QVariantM
     emit availableEntitiesChanged();
     m_widgetEntities = patchList(m_widgetEntities);
     emit widgetEntitiesChanged();
+    m_eventsViewWidgetEntities = patchList(m_eventsViewWidgetEntities);
+    emit eventsViewWidgetEntitiesChanged();
     emit EntitiesChanged();
 }
 
@@ -771,8 +912,10 @@ void WidgetCoordinator::onWidgetFileChanged(const QString &path)
 {
     Q_UNUSED(path);
     watchSelectedFile();
-    const QStringList previous = m_selectedEntityIds;
+    const QStringList previousCover = m_selectedEntityIds;
+    const QStringList previousEvents = m_eventsViewSelectedEntityIds;
     loadSelected();
-    if (previous != m_selectedEntityIds && m_active)
+    if ((previousCover != m_selectedEntityIds
+         || previousEvents != m_eventsViewSelectedEntityIds) && m_active)
         getStates();
 }

@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network websockets gui positioning dbus
 PKGCONFIG += qt5embedwidget
 
-VERSION = 0.2.10
+VERSION = 0.2.11
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
@@ -34,6 +34,8 @@ DISTFILES += \
     qml/pages/*.qml \
     qml/components/*.qml \
     qml/eventsview/*.qml \
+    eventsview/*.qml \
+    eventsview/*.json \
     data/mdi/LICENSE.txt
 
 icon86.files = icons/86x86/harbour-helmsman.png
@@ -45,4 +47,10 @@ icon128.path = /usr/share/icons/hicolor/128x128/apps
 icon172.files = icons/172x172/harbour-helmsman.png
 icon172.path = /usr/share/icons/hicolor/172x172/apps
 
-INSTALLS += icon86 icon108 icon128 icon172
+eventsWidgetQml.files = eventsview/HelmsmanEventsWidget.qml
+eventsWidgetQml.path = /usr/share/harbour-helmsman/eventsview
+
+eventsWidgetJson.files = eventsview/harbour-helmsman.json
+eventsWidgetJson.path = /usr/share/lipstick/eventswidgets
+
+INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson

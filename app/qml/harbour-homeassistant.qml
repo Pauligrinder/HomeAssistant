@@ -298,6 +298,7 @@ ApplicationWindow
 
     MdiIconRenderer {
         id: mdiIcons
+        Component.onCompleted: hassClientInstance.widget.iconRenderer = mdiIcons
     }
 
     Component {

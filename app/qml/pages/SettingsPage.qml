@@ -206,7 +206,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Pick lights to show on the app cover. Dimmable lights include a brightness slider here; tap a light on the cover to toggle it."
+                text: "Pick lights to show on the app cover. Tap a light on the cover to toggle it."
             }
 
             Button {
@@ -214,7 +214,29 @@ Page {
                 text: "Choose cover favorites"
                 enabled: hassClient.loggedIn
                 onClicked: pageStack.push(Qt.resolvedUrl("EventsViewSettingsPage.qml"),
-                                          { hassClient: hassClient })
+                                          { hassClient: hassClient,
+                                            eventsViewMode: false })
+            }
+
+            SectionHeader { text: "Events View favorites" }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: "Pick lights to show in the Events View. Each light gets its own card there; tap a card to toggle it, or hold a dimmable light to set its brightness."
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Choose Events View favorites"
+                enabled: hassClient.loggedIn
+                onClicked: pageStack.push(Qt.resolvedUrl("EventsViewSettingsPage.qml"),
+                                          { hassClient: hassClient,
+                                            eventsViewMode: true })
             }
 
             SectionHeader { text: "Sensors" }

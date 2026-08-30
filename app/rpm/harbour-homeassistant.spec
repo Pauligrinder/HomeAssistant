@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.10
+Version:    0.2.11
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -34,7 +34,7 @@ by IP or hostname, then log in with username/password and optional TOTP
 two-step verification. Receives companion notifications over a WebSocket
 push channel after mobile_app registration, and reports battery, Wi-Fi, and
 location sensors via the mobile_app webhook. Selected lights can be shown
-on the app cover, with paging arrows when they do not all fit.
+on the app cover and as a third-party Events View widget.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -57,8 +57,18 @@ desktop-file-install --delete-original \
 %{_datadir}/%{name}
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
+%{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Sun Aug 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.11-1
+- Add a third-party Events View widget for selected lights, registered via
+  lipstick eventswidgets JSON without overriding system files.
+- Keep cover and Events View favorites as separate lists; existing cover
+  favorites stay on the cover, Events View starts empty.
+- Event cards use the cover tint, rounded corners, and MDI watermarks.
+  Tap toggles a light; long-press on dimmable lights opens brightness.
+- Refresh the widget only while the Events View is visible.
+
 * Sat Aug 29 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.10-1
 - Fix cover favorites freezing the app the same way sensors did: the cover
   poller no longer fetches states from inside the login reply handler or

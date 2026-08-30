@@ -5,8 +5,6 @@ Item {
     id: root
     property var entities: []
     property string statusText: ""
-    signal toggleRequested(string entityId)
-    signal brightnessRequested(string entityId, int pct)
 
     width: parent ? parent.width : Screen.width
     implicitWidth: width
@@ -14,9 +12,20 @@ Item {
     height: implicitHeight
     visible: (entities && entities.length > 0) || statusText.length > 0
 
+    function stateLabel(entity) {
+        if (!entity)
+            return ""
+        if (entity.available === false)
+            return entity.state || "unavailable"
+        if (entity.dimmable === true && entity.on === true)
+            return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
+        return entity.on === true ? "On" : "Off"
+    }
+
     Column {
         id: column
         width: parent.width
+        spacing: Theme.paddingSmall
 
         Label {
             x: Theme.horizontalPageMargin
@@ -40,43 +49,24 @@ Item {
         Repeater {
             model: root.entities || []
             delegate: Column {
-                id: lightColumn
-                width: column.width
-                property bool dimmable: modelData.dimmable === true
-                property bool available: modelData.available !== false
+                x: Theme.horizontalPageMargin
+                width: column.width - 2 * x
 
-                TextSwitch {
+                Label {
                     width: parent.width
+                    truncationMode: TruncationMode.Fade
+                    color: Theme.primaryColor
+                    font.pixelSize: Theme.fontSizeSmall
+                    font.bold: modelData.on === true
                     text: modelData.name || modelData.entityId
-                    description: lightColumn.available
-                                 ? (modelData.on ? "On" : "Off")
-                                 : (modelData.state || "unavailable")
-                    checked: modelData.on === true
-                    automaticCheck: false
-                    enabled: lightColumn.available
-                    onClicked: root.toggleRequested(modelData.entityId)
                 }
 
-                Slider {
-                    id: dimmer
+                Label {
                     width: parent.width
-                    visible: lightColumn.dimmable
-                    enabled: lightColumn.available
-                    minimumValue: 0
-                    maximumValue: 100
-                    stepSize: 1
-                    valueText: Math.round(value) + "%"
-                    label: "Brightness"
-                    Binding {
-                        target: dimmer
-                        property: "value"
-                        value: Number(modelData.brightnessPct) || 0
-                        when: !dimmer.down
-                    }
-                    onDownChanged: {
-                        if (!down)
-                            root.brightnessRequested(modelData.entityId, Math.round(value))
-                    }
+                    truncationMode: TruncationMode.Fade
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    text: root.stateLabel(modelData)
                 }
             }
         }
