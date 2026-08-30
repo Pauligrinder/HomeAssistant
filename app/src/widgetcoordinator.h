@@ -16,6 +16,7 @@
 class QNetworkAccessManager;
 class QNetworkReply;
 class QFileSystemWatcher;
+class MdiIconRenderer;
 
 // Lights (and later other entities) for the Events View widget. Uses the
 // Home Assistant REST API with the same session Helmsman already stores.
@@ -41,10 +42,15 @@ class WidgetCoordinator : public QObject
 "")
     Q_PROPERTY(QVariantList availableEntities READ availableEntities NOTIFY availableEntitiesChanged)
     Q_PROPERTY(QVariantList widgetEntities READ widgetEntities NOTIFY widgetEntitiesChanged)
+    Q_PROPERTY(QVariantList eventsViewWidgetEntities READ eventsViewWidgetEntities NOTIFY eventsViewWidgetEntitiesChanged)
     Q_PROPERTY(QStringList selectedEntityIds READ selectedEntityIds WRITE setSelectedEntityIds NOTIFY selectedEntityIdsChanged)
+    Q_PROPERTY(QStringList eventsViewSelectedEntityIds READ eventsViewSelectedEntityIds WRITE setEventsViewSelectedEntityIds NOTIFY eventsViewSelectedEntityIdsChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(bool active READ active NOTIFY activeChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
+    // Set from QML so widget entities can carry a rendered icon path; the
+    // events view runs in lipstick and cannot use the app image provider.
+    Q_PROPERTY(MdiIconRenderer *iconRenderer READ iconRenderer WRITE setIconRenderer NOTIFY iconRendererChanged)
 
 public:
     explicit WidgetCoordinator(QObject *parent = nullptr);
@@ -52,11 +58,15 @@ public:
 
     QVariantList availableEntities() const;
     QVariantList widgetEntities() const;
+    QVariantList eventsViewWidgetEntities() const;
     QStringList selectedEntityIds() const;
+    QStringList eventsViewSelectedEntityIds() const;
     bool busy() const;
     bool active() const;
     QString lastError() const;
     bool dbusRegistered() const;
+    MdiIconRenderer *iconRenderer() const;
+    void setIconRenderer(MdiIconRenderer *renderer);
 
     void configure(const QString &baseUrl,
                    const QString &accessToken,
@@ -68,6 +78,8 @@ public:
 public slots:
     void setSelectedEntityIds(const QStringList &ids);
     void setEntitySelected(const QString &entityId, bool selected);
+    void setEventsViewSelectedEntityIds(const QStringList &ids);
+    void setEventsViewEntitySelected(const QString &entityId, bool selected);
     void refresh();
     void refreshAvailable();
     void toggleLight(const QString &entityId);
@@ -80,10 +92,13 @@ public slots:
 signals:
     void availableEntitiesChanged();
     void widgetEntitiesChanged();
+    void eventsViewWidgetEntitiesChanged();
     void selectedEntityIdsChanged();
+    void eventsViewSelectedEntityIdsChanged();
     void busyChanged();
     void activeChanged();
     void lastErrorChanged();
+    void iconRendererChanged();
     void accessTokenStale();
     Q_SCRIPTABLE void EntitiesChanged();
 
@@ -123,11 +138,14 @@ private:
     QVariantMap overlayExpectation(QVariantMap map);
     void mergeServiceStates(const QByteArray &data);
     void rebuildWidgetEntities();
+    QVariantList entitiesForSelection(const QStringList &ids) const;
+    QString watermarkIconPath(const QVariantMap &entity) const;
     QVariantMap entityById(const QString &entityId) const;
     void applyOptimistic(const QString &entityId, const QVariantMap &patch);
 
     QNetworkAccessManager *m_nam;
     QFileSystemWatcher *m_watcher;
+    MdiIconRenderer *m_iconRenderer;
     QTimer m_pollTimer;
     QTimer m_startupTimer;
     QString m_baseUrl;
@@ -143,9 +161,13 @@ private:
     QNetworkReply *m_allStatesReply;
     QString m_lastError;
     QStringList m_selectedEntityIds;
+    QStringList m_eventsViewSelectedEntityIds;
     QVariantList m_availableEntities;
     QVariantList m_widgetEntities;
+    QVariantList m_eventsViewWidgetEntities;
     QHash<QString, bool> m_expectOn;
+    // Rendering is not cheap and rebuilds happen on every poll.
+    mutable QHash<QString, QString> m_iconPathCache;
 };
 
 #endif

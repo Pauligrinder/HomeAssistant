@@ -5,7 +5,25 @@ import "../eventsview"
 Page {
     id: page
     property var hassClient
+    property bool eventsViewMode: false
     property string filterText: ""
+
+    // Bound rather than queried through a function so the switches follow
+    // selection changes without waiting for the next state poll.
+    readonly property var selectedIds: {
+        if (!hassClient.widget)
+            return []
+        return eventsViewMode
+                ? hassClient.widget.eventsViewSelectedEntityIds
+                : hassClient.widget.selectedEntityIds
+    }
+
+    function setSelected(entityId, selected) {
+        if (eventsViewMode)
+            hassClient.widget.setEventsViewEntitySelected(entityId, selected)
+        else
+            hassClient.widget.setEntitySelected(entityId, selected)
+    }
 
     readonly property var filteredLights: {
         var all = hassClient.widget ? hassClient.widget.availableEntities : []
@@ -39,7 +57,11 @@ Page {
             id: column
             width: parent.width
 
-            PageHeader { title: "Cover favorites" }
+            PageHeader {
+                title: page.eventsViewMode
+                       ? "Events View favorites"
+                       : "Cover favorites"
+            }
 
             Label {
                 anchors.left: parent.left
@@ -48,25 +70,34 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Choose lights to show on the app cover. If there are more than fit, use the cover arrows to change page. Dimmable lights get a brightness slider here. Other entity types (including graphs) can be added later."
+                text: page.eventsViewMode
+                      ? "Choose lights to show in the Events View. Each light gets its own card there; tap a card to toggle it, or hold a dimmable light to set its brightness."
+                      : "Choose lights to show on the app cover. If there are more than fit, use the cover arrows to change page. Tap a light on the cover to toggle it."
             }
 
             SectionHeader { text: "Preview" }
 
             EventsViewWidget {
                 width: parent.width
-                entities: hassClient.widget ? hassClient.widget.widgetEntities : []
+                entities: !hassClient.widget
+                          ? []
+                          : (page.eventsViewMode
+                             ? hassClient.widget.eventsViewWidgetEntities
+                             : hassClient.widget.widgetEntities)
                 statusText: {
                     if (!hassClient.loggedIn)
                         return "Sign in to Home Assistant first."
+                    if (!hassClient.widget)
+                        return "Widget unavailable."
                     if (hassClient.widget && hassClient.widget.lastError.length > 0)
                         return hassClient.widget.lastError
-                    if (hassClient.widget && hassClient.widget.widgetEntities.length === 0)
+                    var entities = page.eventsViewMode
+                            ? hassClient.widget.eventsViewWidgetEntities
+                            : hassClient.widget.widgetEntities
+                    if (hassClient.widget && entities.length === 0)
                         return "No lights selected yet."
                     return ""
                 }
-                onToggleRequested: hassClient.widget.toggleLight(entityId)
-                onBrightnessRequested: hassClient.widget.setBrightnessPct(entityId, pct)
             }
 
             SectionHeader { text: "Lights" }
@@ -111,9 +142,9 @@ Page {
                     description: modelData.entityId
                                  + (modelData.dimmable ? " · dimmable" : "")
                                  + (modelData.available === false ? " · unavailable" : "")
-                    checked: modelData.selected === true
+                    checked: page.selectedIds.indexOf(modelData.entityId) >= 0
                     automaticCheck: false
-                    onClicked: hassClient.widget.setEntitySelected(modelData.entityId, !checked)
+                    onClicked: page.setSelected(modelData.entityId, !checked)
                 }
             }
 

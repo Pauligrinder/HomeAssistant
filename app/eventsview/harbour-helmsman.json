@@ -1,0 +1,12 @@
+{
+    "widgets": [
+        {
+            "title": "Helmsman",
+            "icon": "/usr/share/icons/hicolor/86x86/apps/harbour-helmsman.png",
+            "order": 3,
+            "path": "/usr/share/harbour-helmsman/eventsview/HelmsmanEventsWidget.qml",
+            "default_enabled": true,
+            "available_path": "/usr/share/harbour-helmsman/eventsview/HelmsmanEventsWidget.qml"
+        }
+    ]
+}
