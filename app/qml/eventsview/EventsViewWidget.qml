@@ -17,9 +17,28 @@ Item {
             return ""
         if (entity.available === false)
             return entity.state || "unavailable"
+        if (entity.kind === "script")
+            return ""
+        if (entity.kind === "climate")
+            return root.climateLabel(entity)
         if (entity.dimmable === true && entity.on === true)
             return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
         return entity.on === true ? "On" : "Off"
+    }
+
+    function climateLabel(entity) {
+        if (!entity || entity.on !== true)
+            return "Off"
+        var mode = entity.hvacMode || entity.state || ""
+        if (mode === "fan_only")
+            return "Fan"
+        if (mode === "heat_cool")
+            return "Heat/Cool"
+        if (mode === "off")
+            return "Off"
+        if (!mode)
+            return "On"
+        return mode.charAt(0).toUpperCase() + mode.slice(1)
     }
 
     Column {
@@ -57,7 +76,7 @@ Item {
                     truncationMode: TruncationMode.Fade
                     color: Theme.primaryColor
                     font.pixelSize: Theme.fontSizeSmall
-                    font.bold: modelData.on === true
+                    font.bold: modelData.kind !== "script" && modelData.on === true
                     text: modelData.name || modelData.entityId
                 }
 
@@ -66,6 +85,7 @@ Item {
                     truncationMode: TruncationMode.Fade
                     color: Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
+                    visible: text.length > 0
                     text: root.stateLabel(modelData)
                 }
             }

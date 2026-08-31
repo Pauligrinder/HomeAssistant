@@ -206,7 +206,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Pick lights to show on the app cover. Tap a light on the cover to toggle it."
+                text: "Pick lights, switches, scripts, and ACs for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it."
             }
 
             Button {
@@ -227,7 +227,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Pick lights to show in the Events View. Each light gets its own card there; tap a card to toggle it, or hold a dimmable light to set its brightness."
+                text: "Pick lights, switches, scripts, and ACs for the Events View. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, fan, and vanes, or tap a script for Run and Cancel."
             }
 
             Button {

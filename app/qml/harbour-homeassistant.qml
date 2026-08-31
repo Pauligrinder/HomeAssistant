@@ -30,6 +30,48 @@ ApplicationWindow
                                { hassClient: hassClientInstance })
     }
 
+    property bool pendingEventsFavorites: false
+
+    function openEventsViewFavorites() {
+        appWindow.activate()
+        if (pageStack.currentPage
+                && pageStack.currentPage.objectName === "SplashPage") {
+            appWindow.pendingEventsFavorites = true
+            return
+        }
+        appWindow.showEventsViewFavorites()
+    }
+
+    function showEventsViewFavorites() {
+        var existing = appWindow.findEventsViewFavoritesPage()
+        if (existing) {
+            if (pageStack.currentPage !== existing)
+                pageStack.pop(existing)
+            return
+        }
+        pageStack.push(Qt.resolvedUrl("pages/EventsViewSettingsPage.qml"),
+                       { hassClient: hassClientInstance,
+                         eventsViewMode: true })
+    }
+
+    function findEventsViewFavoritesPage() {
+        if (!pageStack || typeof pageStack.find !== "function")
+            return null
+        return pageStack.find(function(page) {
+            return page && page.objectName === "EventsViewFavoritesPage"
+        })
+    }
+
+    function flushPendingEventsFavorites() {
+        if (!appWindow.pendingEventsFavorites)
+            return
+        if (pageStack.currentPage
+                && pageStack.currentPage.objectName === "SplashPage")
+            return
+        appWindow.pendingEventsFavorites = false
+        appWindow.showEventsViewFavorites()
+    }
+
     function dataString(data, key) {
         if (!data || data[key] === undefined || data[key] === null)
             return ""
@@ -313,11 +355,13 @@ ApplicationWindow
                     && pageStack.currentPage
                     && pageStack.currentPage.objectName !== "SplashPage")
                 appWindow.goHomeIfLoggedIn()
+            appWindow.flushPendingEventsFavorites()
         }
         onLoginSucceeded: {
             if (pageStack.currentPage
                     && pageStack.currentPage.objectName !== "SplashPage")
                 appWindow.goHomeIfLoggedIn()
+            appWindow.flushPendingEventsFavorites()
         }
         onNotificationReceived: {
             console.log("Helmsman: HA push received")
@@ -327,6 +371,16 @@ ApplicationWindow
             console.log("Helmsman: pushConnected=", hassClientInstance.pushConnected,
                         "registered=", hassClientInstance.mobileAppRegistered)
         }
+    }
+
+    Connections {
+        target: hassClientInstance.widget
+        onOpenFavoritesRequested: appWindow.openEventsViewFavorites()
+    }
+
+    Connections {
+        target: pageStack
+        onCurrentPageChanged: appWindow.flushPendingEventsFavorites()
     }
 
     initialPage: Component {

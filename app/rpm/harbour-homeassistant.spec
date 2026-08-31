@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.13
+Version:    0.2.14
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -33,8 +33,9 @@ Sailfish-native Home Assistant client. Connect to a Home Assistant instance
 by IP or hostname, then log in with username/password and optional TOTP
 two-step verification. Receives companion notifications over a WebSocket
 push channel after mobile_app registration, and reports battery, Wi-Fi, and
-location sensors via the mobile_app webhook. Selected lights can be shown
-on the app cover and as a third-party Events View widget.
+location sensors via the mobile_app webhook. Selected lights, switches,
+scripts, and ACs can be shown on the app cover and as a third-party
+Events View widget.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -60,6 +61,17 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.14-1
+- Tell Events View when Helmsman is not running, and offer Choose
+  favorites when nothing is selected.
+- Add a Settings → Events view description for the Helmsman widget.
+- Cover and Events View favorites can include switches, scripts, and ACs.
+  Scripts have no on/off state: the cover runs them; Events View shows
+  Run and Cancel. ACs toggle on the cover; Events View also offers mode,
+  fan speed, and vane positions.
+- Events View long-press on a light also offers color temperature and
+  common-color swatches when the bulb supports them.
+
 * Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.13-1
 - Fix launch showing a blank white screen: LocationReporter bound
   PositionSource.updateTimeout, which is not in the QtPositioning 5.2

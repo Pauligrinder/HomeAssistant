@@ -47,7 +47,8 @@ CoverBackground {
     readonly property string rightEntityId: rightEntity && rightEntity.entityId ? rightEntity.entityId : ""
     readonly property string leftToggleIcon: coverToggleIcon(leftEntity)
     readonly property string rightToggleIcon: coverToggleIcon(rightEntity)
-    readonly property bool watermarkOn: !!(leftEntity && leftEntity.on === true)
+    readonly property bool watermarkOn: !!(leftEntity && leftEntity.kind !== "script"
+                                           && leftEntity.on === true)
     readonly property string watermarkIconName: (leftEntity && leftEntity.icon) ? String(leftEntity.icon) : ""
     property string favoriteWatermarkPath: ""
 
@@ -56,6 +57,8 @@ CoverBackground {
             return ""
         if (entity.available === false)
             return entity.state || "unavailable"
+        if (entity.kind === "script")
+            return ""
         if (entity.dimmable === true && entity.on)
             return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
         return entity.on ? "On" : "Off"
@@ -70,6 +73,8 @@ CoverBackground {
     function coverToggleIcon(entity) {
         if (!entity || entity.available === false)
             return "image://theme/icon-cover-refresh"
+        if (entity.kind === "script")
+            return "image://theme/icon-cover-play"
         if (entity.on)
             return "image://theme/icon-cover-pause"
         return "image://theme/icon-cover-play"
@@ -79,11 +84,25 @@ CoverBackground {
         if (!entity)
             return ""
         var icon = entity.icon ? String(entity.icon) : ""
+        if (entity.kind === "script")
+            return icon.length ? icon : "mdi:script-text"
+        if (entity.kind === "climate") {
+            if (!icon.length)
+                return entity.on === true ? "mdi:air-conditioner" : "mdi:fan-off"
+            if (entity.on !== true && icon === "mdi:air-conditioner")
+                return "mdi:fan-off"
+            return icon
+        }
+        if (entity.kind === "switch") {
+            if (entity.on === true)
+                return icon.length ? icon : "mdi:toggle-switch"
+            return icon.length ? icon : "mdi:toggle-switch-off"
+        }
         if (entity.on === true)
             return icon.length ? icon : "mdi:lightbulb"
         if (!icon.length)
             return "mdi:lightbulb-outline"
-        if (icon.indexOf("-outline") >= 0)
+        if (icon.indexOf("-outline") >= 0 || icon.indexOf("-off") >= 0)
             return icon
         var outline = icon + "-outline"
         if (mdiIcons && mdiIcons.hasIcon && mdiIcons.hasIcon(outline))
@@ -391,7 +410,7 @@ CoverBackground {
         spacing: Theme.paddingSmall
         z: 1
 
-        // One light: name in the middle, toggle is the left CoverAction.
+        // One favorite: name in the middle, action is the left CoverAction.
         Column {
             visible: cover.pageEntities.length === 1
             width: parent.width
@@ -405,7 +424,8 @@ CoverBackground {
                 elide: Text.ElideRight
                 color: "white"
                 font.pixelSize: Theme.fontSizeMedium
-                font.bold: cover.leftEntity && cover.leftEntity.on === true
+                font.bold: cover.leftEntity && cover.leftEntity.kind !== "script"
+                           && cover.leftEntity.on === true
                 text: cover.favoriteName(cover.leftEntity)
             }
 
@@ -414,11 +434,12 @@ CoverBackground {
                 horizontalAlignment: Text.AlignHCenter
                 color: "#CCFFFFFF"
                 font.pixelSize: Theme.fontSizeSmall
+                visible: cover.favoriteStateLabel(cover.leftEntity).length > 0
                 text: cover.favoriteStateLabel(cover.leftEntity)
             }
         }
 
-        // Two lights: columns sit above the left/right CoverAction buttons.
+        // Two favorites: columns sit above the left/right CoverAction buttons.
         Row {
             visible: cover.pageEntities.length >= 2
             width: parent.width
@@ -438,7 +459,7 @@ CoverBackground {
                         elide: Text.ElideRight
                         color: "white"
                         font.pixelSize: Theme.fontSizeSmall
-                        font.bold: modelData.on === true
+                        font.bold: modelData.kind !== "script" && modelData.on === true
                         text: cover.favoriteName(modelData)
                     }
 
@@ -447,6 +468,7 @@ CoverBackground {
                         horizontalAlignment: Text.AlignHCenter
                         color: "#CCFFFFFF"
                         font.pixelSize: Theme.fontSizeTiny
+                        visible: cover.favoriteStateLabel(modelData).length > 0
                         text: cover.favoriteStateLabel(modelData)
                     }
                 }
