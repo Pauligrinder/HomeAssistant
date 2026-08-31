@@ -18,7 +18,7 @@ class QNetworkReply;
 class QFileSystemWatcher;
 class MdiIconRenderer;
 
-// Lights (and later other entities) for the Events View widget. Uses the
+// Lights, switches, scripts, and climate for the cover and Events View widget. Uses the
 // Home Assistant REST API with the same session Helmsman already stores.
 class WidgetCoordinator : public QObject
 {
@@ -36,6 +36,39 @@ class WidgetCoordinator : public QObject
 "    <method name=\"SetBrightnessPct\">\n"
 "      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
 "      <arg direction=\"in\" type=\"i\" name=\"pct\"/>\n"
+"    </method>\n"
+"    <method name=\"SetColorTempKelvin\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"kelvin\"/>\n"
+"    </method>\n"
+"    <method name=\"SetRgbColor\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"r\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"g\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"b\"/>\n"
+"    </method>\n"
+"    <method name=\"SetHvacMode\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"s\" name=\"mode\"/>\n"
+"    </method>\n"
+"    <method name=\"SetFanLevel\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"level\"/>\n"
+"    </method>\n"
+"    <method name=\"SetVaneVertical\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"level\"/>\n"
+"    </method>\n"
+"    <method name=\"SetVaneHorizontal\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"level\"/>\n"
+"    </method>\n"
+"    <method name=\"OpenFavorites\"/>\n"
+"    <method name=\"RunScript\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"    </method>\n"
+"    <method name=\"CancelScript\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
 "    </method>\n"
 "    <signal name=\"EntitiesChanged\"/>\n"
 "  </interface>\n"
@@ -84,10 +117,27 @@ public slots:
     void refreshAvailable();
     void toggleLight(const QString &entityId);
     void setBrightnessPct(const QString &entityId, int pct);
+    void setColorTempKelvin(const QString &entityId, int kelvin);
+    void setRgbColor(const QString &entityId, int r, int g, int b);
+    void setHvacMode(const QString &entityId, const QString &mode);
+    void setFanLevel(const QString &entityId, int level);
+    void setVaneVertical(const QString &entityId, int level);
+    void setVaneHorizontal(const QString &entityId, int level);
+    void runScript(const QString &entityId);
+    void cancelScript(const QString &entityId);
     Q_SCRIPTABLE QString GetEntitiesJson() const;
     Q_SCRIPTABLE void Refresh();
     Q_SCRIPTABLE void ToggleLight(const QString &entityId);
     Q_SCRIPTABLE void SetBrightnessPct(const QString &entityId, int pct);
+    Q_SCRIPTABLE void SetColorTempKelvin(const QString &entityId, int kelvin);
+    Q_SCRIPTABLE void SetRgbColor(const QString &entityId, int r, int g, int b);
+    Q_SCRIPTABLE void SetHvacMode(const QString &entityId, const QString &mode);
+    Q_SCRIPTABLE void SetFanLevel(const QString &entityId, int level);
+    Q_SCRIPTABLE void SetVaneVertical(const QString &entityId, int level);
+    Q_SCRIPTABLE void SetVaneHorizontal(const QString &entityId, int level);
+    Q_SCRIPTABLE void OpenFavorites();
+    Q_SCRIPTABLE void RunScript(const QString &entityId);
+    Q_SCRIPTABLE void CancelScript(const QString &entityId);
 
 signals:
     void availableEntitiesChanged();
@@ -100,6 +150,7 @@ signals:
     void lastErrorChanged();
     void iconRendererChanged();
     void accessTokenStale();
+    void openFavoritesRequested();
     Q_SCRIPTABLE void EntitiesChanged();
 
 private slots:

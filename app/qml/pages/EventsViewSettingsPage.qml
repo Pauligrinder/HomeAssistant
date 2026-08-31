@@ -4,6 +4,7 @@ import "../eventsview"
 
 Page {
     id: page
+    objectName: eventsViewMode ? "EventsViewFavoritesPage" : "CoverFavoritesPage"
     property var hassClient
     property bool eventsViewMode: false
     property string filterText: ""
@@ -25,7 +26,7 @@ Page {
             hassClient.widget.setEntitySelected(entityId, selected)
     }
 
-    readonly property var filteredLights: {
+    readonly property var filteredEntities: {
         var all = hassClient.widget ? hassClient.widget.availableEntities : []
         var needle = page.filterText.toLowerCase()
         var out = []
@@ -38,6 +39,16 @@ Page {
             var haystack = ((entity.name || "") + " " + (entity.entityId || "")).toLowerCase()
             if (haystack.indexOf(needle) >= 0)
                 out.push(entity)
+        }
+        return out
+    }
+
+    function entitiesOfKind(kind) {
+        var all = page.filteredEntities
+        var out = []
+        for (var i = 0; i < all.length; ++i) {
+            if ((all[i].kind || "light") === kind)
+                out.push(all[i])
         }
         return out
     }
@@ -71,8 +82,8 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.eventsViewMode
-                      ? "Choose lights to show in the Events View. Each light gets its own card there; tap a card to toggle it, or hold a dimmable light to set its brightness."
-                      : "Choose lights to show on the app cover. If there are more than fit, use the cover arrows to change page. Tap a light on the cover to toggle it."
+                      ? "Choose lights, switches, scripts, and ACs for the Events View. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, fan, and vanes, or tap a script for Run and Cancel."
+                      : "Choose lights, switches, scripts, and ACs for the app cover. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it."
             }
 
             SectionHeader { text: "Preview" }
@@ -95,17 +106,15 @@ Page {
                             ? hassClient.widget.eventsViewWidgetEntities
                             : hassClient.widget.widgetEntities
                     if (hassClient.widget && entities.length === 0)
-                        return "No lights selected yet."
+                        return "Nothing selected yet."
                     return ""
                 }
             }
 
-            SectionHeader { text: "Lights" }
-
             SearchField {
                 id: searchField
                 width: parent.width
-                placeholderText: "Filter lights"
+                placeholderText: "Filter"
                 onTextChanged: page.filterText = text
             }
 
@@ -130,21 +139,44 @@ Page {
                 visible: (!hassClient.widget || hassClient.widget.availableEntities.length === 0)
                          && !(hassClient.widget && hassClient.widget.lastError.length > 0)
                 text: hassClient.widget && hassClient.widget.busy
-                      ? "Loading lights…"
-                      : "No light entities found."
+                      ? "Loading…"
+                      : "No lights, switches, scripts, or ACs found."
             }
 
             Repeater {
-                model: page.filteredLights
-                delegate: TextSwitch {
+                model: [
+                    { "title": "Lights", "kind": "light" },
+                    { "title": "Switches", "kind": "switch" },
+                    { "title": "Air conditioners", "kind": "climate" },
+                    { "title": "Scripts", "kind": "script" }
+                ]
+                delegate: Column {
+                    id: kindGroup
                     width: column.width
-                    text: modelData.name
-                    description: modelData.entityId
-                                 + (modelData.dimmable ? " · dimmable" : "")
-                                 + (modelData.available === false ? " · unavailable" : "")
-                    checked: page.selectedIds.indexOf(modelData.entityId) >= 0
-                    automaticCheck: false
-                    onClicked: page.setSelected(modelData.entityId, !checked)
+                    property string kindTitle: modelData.title
+                    property string entityKind: modelData.kind
+                    visible: page.entitiesOfKind(kindGroup.entityKind).length > 0
+
+                    SectionHeader { text: kindGroup.kindTitle }
+
+                    Repeater {
+                        model: page.entitiesOfKind(kindGroup.entityKind)
+                        delegate: TextSwitch {
+                            width: column.width
+                            text: modelData.name
+                            description: {
+                                var bits = [modelData.entityId]
+                                if (modelData.dimmable)
+                                    bits.push("dimmable")
+                                if (modelData.available === false)
+                                    bits.push("unavailable")
+                                return bits.join(" · ")
+                            }
+                            checked: page.selectedIds.indexOf(modelData.entityId) >= 0
+                            automaticCheck: false
+                            onClicked: page.setSelected(modelData.entityId, !checked)
+                        }
+                    }
                 }
             }
 
