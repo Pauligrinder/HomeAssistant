@@ -288,6 +288,7 @@ Page {
                     height: visible ? implicitHeight : 0
                     text: modelData.name
                     checked: modelData.enabled
+                    automaticCheck: false
                     description: {
                         var bits = []
                         if (modelData.disabled)
@@ -300,12 +301,10 @@ Page {
                             bits.push(modelData.lastError)
                         return bits.join(" · ")
                     }
-                    onCheckedChanged: {
-                        if (hassClient.sensors
-                                && modelData.enabled !== checked) {
+                    onClicked: {
+                        if (hassClient.sensors)
                             hassClient.sensors.setSensorEnabled(
-                                        modelData.uniqueId, checked)
-                        }
+                                        modelData.uniqueId, !checked)
                     }
                 }
             }
@@ -317,15 +316,15 @@ Page {
                 text: "Report location"
                 checked: hassClient.sensors
                          ? hassClient.sensors.locationEnabled : true
+                automaticCheck: false
                 description: hassClient.sensors
                              && !hassClient.sensors.locationReporting
                              && hassClient.sensors.locationEnabled
                              ? "Location is disabled in Home Assistant."
                              : "Allow Helmsman to update the Home Assistant device tracker."
-                onCheckedChanged: {
-                    if (hassClient.sensors
-                            && hassClient.sensors.locationEnabled !== checked)
-                        hassClient.sensors.locationEnabled = checked
+                onClicked: {
+                    if (hassClient.sensors)
+                        hassClient.sensors.locationEnabled = !checked
                 }
             }
 
@@ -334,16 +333,22 @@ Page {
                 width: parent.width
                 enabled: locationEnabledSwitch.checked
                 label: "Location update mode"
-                currentIndex: hassClient.sensors
-                              ? hassClient.sensors.locationPreset : 1
+                property bool presetReady: false
+                currentIndex: 1
                 menu: ContextMenu {
                     MenuItem { text: "Battery saver" }
                     MenuItem { text: "Balanced" }
                     MenuItem { text: "Accurate" }
                 }
+                Component.onCompleted: {
+                    currentIndex = hassClient.sensors
+                            ? hassClient.sensors.locationPreset : 1
+                    presetReady = true
+                }
                 onCurrentIndexChanged: {
-                    if (hassClient.sensors
-                            && hassClient.sensors.locationPreset !== currentIndex)
+                    if (!presetReady || !hassClient.sensors)
+                        return
+                    if (hassClient.sensors.locationPreset !== currentIndex)
                         hassClient.sensors.locationPreset = currentIndex
                 }
             }
@@ -373,13 +378,19 @@ Page {
                 minimumValue: 5
                 maximumValue: 60
                 stepSize: 5
-                value: hassClient.sensors
-                       ? hassClient.sensors.locationStaleMinutes : 15
+                property bool staleReady: false
+                value: 15
                 valueText: Math.round(value) + " min"
+                Component.onCompleted: {
+                    if (hassClient.sensors)
+                        value = hassClient.sensors.locationStaleMinutes
+                    staleReady = true
+                }
                 onValueChanged: {
+                    if (!staleReady || !hassClient.sensors)
+                        return
                     var mins = Math.round(value)
-                    if (hassClient.sensors
-                            && hassClient.sensors.locationStaleMinutes !== mins)
+                    if (hassClient.sensors.locationStaleMinutes !== mins)
                         hassClient.sensors.locationStaleMinutes = mins
                 }
             }
@@ -401,11 +412,11 @@ Page {
                 enabled: locationEnabledSwitch.checked
                 text: "Mark home on internal connection"
                 checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
+                automaticCheck: false
                 description: "Report home without using GPS while connected through the internal URL. When disabled, no location is sent on that connection."
-                onCheckedChanged: {
-                    if (hassClient.sensors
-                            && hassClient.sensors.homeOnInternal !== checked)
-                        hassClient.sensors.homeOnInternal = checked
+                onClicked: {
+                    if (hassClient.sensors)
+                        hassClient.sensors.homeOnInternal = !checked
                 }
             }
 
