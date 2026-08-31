@@ -10,6 +10,8 @@ import Nemo.DBus 2.0
 // Geoclue's startUpdates() does synchronous D-Bus on the UI thread. Do not
 // start a self-request until sensors are already running and the dashboard
 // is up, or it wedges the app the same way sensor registration used to.
+// GeoClue D-Bus listeners are Loader-gated the same way: instantiating them
+// at ApplicationWindow construction activated GPS before the first frame.
 Item {
     id: reporter
     property var hassClient
@@ -180,8 +182,6 @@ Item {
                     && reporter.seeking)
                 reporter.stopSeek()
         }
-
-        onUpdateTimeout: reporter.stopSeek()
     }
 
     DBusInterface {
@@ -192,25 +192,37 @@ Item {
         iface: "net.connman.Technology"
     }
 
-    DBusInterface {
-        bus: DBus.SessionBus
-        service: "org.freedesktop.Geoclue.Providers.Hybris"
-        path: "/org/freedesktop/Geoclue/Providers/Hybris"
-        iface: "org.freedesktop.Geoclue.Position"
-        signalsEnabled: true
-        function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
-            reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
-        }
+    // Only subscribe once location reporting is actually on. Creating these
+    // at window construction D-Bus-activated Hybris GPS before first paint.
+    Loader {
+        active: reporter.enabled
+        sourceComponent: geoclueListeners
     }
 
-    DBusInterface {
-        bus: DBus.SessionBus
-        service: "org.freedesktop.Geoclue.Providers.Mlsdb"
-        path: "/org/freedesktop/Geoclue/Providers/Mlsdb"
-        iface: "org.freedesktop.Geoclue.Position"
-        signalsEnabled: true
-        function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
-            reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
+    Component {
+        id: geoclueListeners
+        Item {
+            DBusInterface {
+                bus: DBus.SessionBus
+                service: "org.freedesktop.Geoclue.Providers.Hybris"
+                path: "/org/freedesktop/Geoclue/Providers/Hybris"
+                iface: "org.freedesktop.Geoclue.Position"
+                signalsEnabled: true
+                function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
+                    reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
+                }
+            }
+
+            DBusInterface {
+                bus: DBus.SessionBus
+                service: "org.freedesktop.Geoclue.Providers.Mlsdb"
+                path: "/org/freedesktop/Geoclue/Providers/Mlsdb"
+                iface: "org.freedesktop.Geoclue.Position"
+                signalsEnabled: true
+                function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
+                    reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
+                }
+            }
         }
     }
 

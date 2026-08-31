@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.12
+Version:    0.2.13
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -60,6 +60,13 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.13-1
+- Fix launch showing a blank white screen: LocationReporter bound
+  PositionSource.updateTimeout, which is not in the QtPositioning 5.2
+  import, so the main window failed to load.
+- Instantiate GeoClue D-Bus listeners only after location reporting is
+  enabled, so GPS activation cannot block the first frame.
+
 * Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.12-1
 - Add native switches to disable individual mobile_app sensors from settings.
 - Add location settings: update mode, optional home-on-internal, and a stale
