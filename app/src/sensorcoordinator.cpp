@@ -24,9 +24,37 @@ const int kUpdateDebounceMs = 750;
 // registration, and the first state update together stalled the UI thread on
 // slow external endpoints.
 const int kStartupStepMs = 500;
-const int kMinLocationIntervalMs = 60 * 1000;
-const double kMinLocationMoveMeters = 25.0;
 const double kAccuracyImproveMeters = 15.0;
+
+const int kLocationPresetBatterySaver = 0;
+const int kLocationPresetBalanced = 1;
+const int kLocationPresetAccurate = 2;
+const int kLocationStaleMinutesDefault = 15;
+const int kLocationStaleMinutesMin = 5;
+const int kLocationStaleMinutesMax = 60;
+
+int clampLocationStaleMinutes(int minutes)
+{
+    return qBound(kLocationStaleMinutesMin, minutes, kLocationStaleMinutesMax);
+}
+
+int minimumLocationIntervalMs(int preset)
+{
+    if (preset == kLocationPresetBatterySaver)
+        return 15 * 60 * 1000;
+    if (preset == kLocationPresetAccurate)
+        return 15 * 1000;
+    return 60 * 1000;
+}
+
+double minimumLocationMoveMeters(int preset)
+{
+    if (preset == kLocationPresetBatterySaver)
+        return 250.0;
+    if (preset == kLocationPresetAccurate)
+        return 10.0;
+    return 25.0;
+}
 
 double haversineMeters(double lat1, double lon1, double lat2, double lon2)
 {
@@ -61,7 +89,10 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_nam(new QNetworkAccessManager(this))
     , m_ignoreSslErrors(false)
     , m_active(false)
-    , m_locationReporting(true)
+    , m_locationEnabled(true)
+    , m_locationDisabledInHa(false)
+    , m_locationPreset(kLocationPresetBalanced)
+    , m_locationStaleMinutes(kLocationStaleMinutesDefault)
     , m_homeOnInternal(true)
     , m_usingInternalUrl(false)
     , m_started(false)
@@ -80,6 +111,7 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
         SensorRuntime rt;
         rt.registered = false;
         rt.disabled = def.defaultDisabled;
+        rt.locallyEnabled = true;
         rt.dirty = false;
         m_runtime.insert(def.uniqueId, rt);
     }
@@ -162,7 +194,13 @@ QList<SensorCoordinator::SensorDef> SensorCoordinator::builtInSensors()
 
 QVariantList SensorCoordinator::sensorStatuses() const { return m_statusList; }
 bool SensorCoordinator::active() const { return m_active; }
-bool SensorCoordinator::locationReporting() const { return m_locationReporting; }
+bool SensorCoordinator::locationReporting() const
+{
+    return m_locationEnabled && !m_locationDisabledInHa;
+}
+bool SensorCoordinator::locationEnabled() const { return m_locationEnabled; }
+int SensorCoordinator::locationPreset() const { return m_locationPreset; }
+int SensorCoordinator::locationStaleMinutes() const { return m_locationStaleMinutes; }
 bool SensorCoordinator::homeOnInternal() const { return m_homeOnInternal; }
 QString SensorCoordinator::lastError() const { return m_lastError; }
 QString SensorCoordinator::lastLocationText() const { return m_lastLocationText; }
@@ -176,8 +214,21 @@ void SensorCoordinator::loadPersistedState()
         if (m_runtime.contains(id))
             m_runtime[id].registered = true;
     }
+    const QStringList locallyDisabled =
+            settings.value(QStringLiteral("locallyDisabled")).toStringList();
+    for (const QString &id : locallyDisabled) {
+        if (m_runtime.contains(id))
+            m_runtime[id].locallyEnabled = false;
+    }
     if (settings.contains(QStringLiteral("locationReporting")))
-        m_locationReporting = settings.value(QStringLiteral("locationReporting")).toBool();
+        m_locationEnabled = settings.value(QStringLiteral("locationReporting")).toBool();
+    if (settings.contains(QStringLiteral("locationPreset")))
+        m_locationPreset = qBound(kLocationPresetBatterySaver,
+                                  settings.value(QStringLiteral("locationPreset")).toInt(),
+                                  kLocationPresetAccurate);
+    if (settings.contains(QStringLiteral("locationStaleMinutes")))
+        m_locationStaleMinutes = clampLocationStaleMinutes(
+                settings.value(QStringLiteral("locationStaleMinutes")).toInt());
     if (settings.contains(QStringLiteral("homeOnInternal")))
         m_homeOnInternal = settings.value(QStringLiteral("homeOnInternal")).toBool();
     settings.endGroup();
@@ -188,7 +239,16 @@ void SensorCoordinator::persistState() const
     QSettings settings(AppSettings::filePath(), QSettings::IniFormat);
     settings.beginGroup(QStringLiteral("sensors"));
     settings.setValue(QStringLiteral("registered"), registeredIds());
-    settings.setValue(QStringLiteral("locationReporting"), m_locationReporting);
+    QStringList locallyDisabled;
+    for (auto it = m_runtime.constBegin(); it != m_runtime.constEnd(); ++it) {
+        if (!it.value().locallyEnabled)
+            locallyDisabled.append(it.key());
+    }
+    locallyDisabled.sort();
+    settings.setValue(QStringLiteral("locallyDisabled"), locallyDisabled);
+    settings.setValue(QStringLiteral("locationReporting"), m_locationEnabled);
+    settings.setValue(QStringLiteral("locationPreset"), m_locationPreset);
+    settings.setValue(QStringLiteral("locationStaleMinutes"), m_locationStaleMinutes);
     settings.setValue(QStringLiteral("homeOnInternal"), m_homeOnInternal);
     settings.endGroup();
 }
@@ -225,14 +285,43 @@ void SensorCoordinator::setActive(bool active)
     emit activeChanged();
 }
 
-void SensorCoordinator::setLocationReporting(bool enabled)
+void SensorCoordinator::updateLocationReporting()
 {
-    if (m_locationReporting == enabled)
-        return;
-    m_locationReporting = enabled;
-    persistState();
     emit locationReportingChanged();
     rebuildStatusList();
+}
+
+void SensorCoordinator::setLocationEnabled(bool enabled)
+{
+    if (m_locationEnabled == enabled)
+        return;
+    m_locationEnabled = enabled;
+    persistState();
+    emit locationEnabledChanged();
+    updateLocationReporting();
+    if (locationReporting() && m_started)
+        postLocationUpdate(true);
+}
+
+void SensorCoordinator::setLocationPreset(int preset)
+{
+    preset = qBound(kLocationPresetBatterySaver, preset, kLocationPresetAccurate);
+    if (m_locationPreset == preset)
+        return;
+    m_locationPreset = preset;
+    persistState();
+    emit locationPresetChanged();
+    m_lastLocationSent = QDateTime();
+}
+
+void SensorCoordinator::setLocationStaleMinutes(int minutes)
+{
+    minutes = clampLocationStaleMinutes(minutes);
+    if (m_locationStaleMinutes == minutes)
+        return;
+    m_locationStaleMinutes = minutes;
+    persistState();
+    emit locationStaleMinutesChanged();
 }
 
 void SensorCoordinator::configure(const QString &webhookId,
@@ -469,8 +558,9 @@ void SensorCoordinator::handleGetConfig(const QByteArray &data)
         if (uniqueId == QLatin1String("location")
                 || uniqueId.contains(QStringLiteral("device_tracker"))
                 || uniqueId == m_webhookId) {
-            if (m_locationReporting == disabled) {
-                setLocationReporting(!disabled);
+            if (m_locationDisabledInHa != disabled) {
+                m_locationDisabledInHa = disabled;
+                updateLocationReporting();
                 changed = true;
             }
             continue;
@@ -590,7 +680,23 @@ SensorCoordinator::SensorDef SensorCoordinator::defFor(const QString &uniqueId) 
 bool SensorCoordinator::isSensorEnabled(const QString &uniqueId) const
 {
     const SensorRuntime rt = m_runtime.value(uniqueId);
-    return rt.registered && !rt.disabled;
+    return rt.registered && !rt.disabled && rt.locallyEnabled;
+}
+
+void SensorCoordinator::setSensorEnabled(const QString &uniqueId, bool enabled)
+{
+    if (!m_runtime.contains(uniqueId)
+            || m_runtime[uniqueId].locallyEnabled == enabled)
+        return;
+
+    SensorRuntime &rt = m_runtime[uniqueId];
+    rt.locallyEnabled = enabled;
+    if (enabled) {
+        rt.dirty = true;
+        scheduleSensorUpdate();
+    }
+    persistState();
+    rebuildStatusList();
 }
 
 QString SensorCoordinator::batteryIconFor(int level, bool charging)
@@ -733,7 +839,7 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
 {
     m_haveLocation = true;
 
-    if (!m_started || !m_locationReporting)
+    if (!m_started || !locationReporting() || m_usingInternalUrl)
         return;
     if (!qIsFinite(latitude) || !qIsFinite(longitude))
         return;
@@ -741,9 +847,11 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     const QDateTime now = QDateTime::currentDateTimeUtc();
     const bool firstFix = !m_lastLocationSent.isValid();
     const bool dueByTime = firstFix
-            || m_lastLocationSent.msecsTo(now) >= kMinLocationIntervalMs;
+            || m_lastLocationSent.msecsTo(now)
+            >= minimumLocationIntervalMs(m_locationPreset);
     const bool dueByMove = !firstFix
-            && haversineMeters(m_lastLat, m_lastLon, latitude, longitude) >= kMinLocationMoveMeters;
+            && haversineMeters(m_lastLat, m_lastLon, latitude, longitude)
+            >= minimumLocationMoveMeters(m_locationPreset);
     const bool betterAccuracy = accuracyMeters > 0
             && (m_lastAccuracy <= 0
                 || accuracyMeters + kAccuracyImproveMeters < m_lastAccuracy);
@@ -767,11 +875,14 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
 
 void SensorCoordinator::postLocationUpdate(bool force)
 {
-    if (!m_started || !m_locationReporting || m_webhookId.isEmpty())
+    if (!m_started || !locationReporting() || m_webhookId.isEmpty())
         return;
 
     const bool atHome = m_homeOnInternal && m_usingInternalUrl;
-    const bool haveGps = m_haveLocation && qIsFinite(m_lastLat) && qIsFinite(m_lastLon);
+    // Internal connectivity is sufficient to determine "home"; never include
+    // a stale GPS fix or require the location hardware on that connection.
+    const bool haveGps = !m_usingInternalUrl && m_haveLocation
+            && qIsFinite(m_lastLat) && qIsFinite(m_lastLon);
     if (!atHome && !haveGps)
         return;
 
@@ -823,7 +934,7 @@ void SensorCoordinator::setUsingInternalUrl(bool usingInternal)
     if (m_usingInternalUrl == usingInternal)
         return;
     m_usingInternalUrl = usingInternal;
-    if (m_started && m_locationReporting && m_homeOnInternal)
+    if (m_started && locationReporting() && m_homeOnInternal)
         postLocationUpdate(true);
 }
 
@@ -834,7 +945,7 @@ void SensorCoordinator::setHomeOnInternal(bool enabled)
     m_homeOnInternal = enabled;
     persistState();
     emit homeOnInternalChanged();
-    if (m_started && m_locationReporting)
+    if (m_started && locationReporting())
         postLocationUpdate(true);
 }
 
@@ -879,9 +990,6 @@ void SensorCoordinator::onAppForegrounded()
         return;
     refreshConfig();
     scheduleSensorUpdate();
-    // Allow an immediate location post on resume, including a better GPS fix.
-    m_lastLocationSent = QDateTime();
-    m_lastAccuracy = -1;
 }
 
 void SensorCoordinator::onPeriodicTimeout()
@@ -890,7 +998,8 @@ void SensorCoordinator::onPeriodicTimeout()
         return;
     ensureOsVersionSensor();
     for (auto it = m_runtime.begin(); it != m_runtime.end(); ++it) {
-        if (it.value().registered && !it.value().disabled && it.value().state.isValid())
+        if (it.value().registered && !it.value().disabled
+                && it.value().locallyEnabled && it.value().state.isValid())
             it.value().dirty = true;
     }
     scheduleSensorUpdate();
@@ -922,7 +1031,7 @@ void SensorCoordinator::flushSensorUpdates()
     QJsonArray updates;
     for (const SensorDef &def : m_defs) {
         SensorRuntime &rt = m_runtime[def.uniqueId];
-        if (!rt.registered || rt.disabled || !rt.dirty)
+        if (!rt.registered || rt.disabled || !rt.locallyEnabled || !rt.dirty)
             continue;
         const bool allowNull = (def.uniqueId == QLatin1String("wifi_connection"));
         if (!rt.state.isValid() && !allowNull)
@@ -1011,6 +1120,7 @@ void SensorCoordinator::rebuildStatusList()
                    rt.state.isValid() ? rt.state.toString() : QStringLiteral("—"));
         row.insert(QStringLiteral("registered"), rt.registered);
         row.insert(QStringLiteral("disabled"), rt.disabled);
+        row.insert(QStringLiteral("enabled"), rt.locallyEnabled);
         row.insert(QStringLiteral("lastError"), rt.lastError);
         row.insert(QStringLiteral("lastUpdated"),
                    rt.lastUpdated.isValid()
@@ -1025,7 +1135,8 @@ void SensorCoordinator::rebuildStatusList()
     locationRow.insert(QStringLiteral("state"),
                        m_lastLocationText.isEmpty() ? QStringLiteral("—") : m_lastLocationText);
     locationRow.insert(QStringLiteral("registered"), m_haveLocation);
-    locationRow.insert(QStringLiteral("disabled"), !m_locationReporting);
+    locationRow.insert(QStringLiteral("disabled"), m_locationDisabledInHa);
+    locationRow.insert(QStringLiteral("enabled"), m_locationEnabled);
     locationRow.insert(QStringLiteral("lastError"), QString());
     locationRow.insert(QStringLiteral("lastUpdated"), QString());
     list.append(locationRow);

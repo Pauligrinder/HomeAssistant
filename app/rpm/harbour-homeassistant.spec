@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.11
+Version:    0.2.12
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -60,6 +60,13 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.12-1
+- Add native switches to disable individual mobile_app sensors from settings.
+- Add location settings: update mode, optional home-on-internal, and a stale
+  timeout (default 15 minutes) before Helmsman requests GPS itself.
+- Stop continuous GPS: reuse other apps' GeoClue fixes, and never fetch GPS
+  on an internal connection.
+
 * Sun Aug 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.11-1
 - Add a third-party Events View widget for selected lights, registered via
   lipstick eventswidgets JSON without overriding system files.
