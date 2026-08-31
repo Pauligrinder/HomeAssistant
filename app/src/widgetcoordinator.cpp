@@ -340,7 +340,7 @@ QStringList positionalLevels(const QStringList &modes, bool namedFan)
     const int n = qMin(5, rest.size());
     if (n <= 0)
         return assigned;
-    const int slots[][5] = {
+    const int spread[][5] = {
         { -1, -1, -1, -1, -1 },
         { 2, -1, -1, -1, -1 },
         { 0, 4, -1, -1, -1 },
@@ -349,7 +349,7 @@ QStringList positionalLevels(const QStringList &modes, bool namedFan)
         { 0, 1, 2, 3, 4 }
     };
     for (int i = 0; i < n; ++i)
-        assigned[slots[n][i]] = rest.at(i);
+        assigned[spread[n][i]] = rest.at(i);
     return assigned;
 }
 
