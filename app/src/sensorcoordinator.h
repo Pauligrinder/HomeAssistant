@@ -25,6 +25,9 @@ class SensorCoordinator : public QObject
     Q_PROPERTY(QVariantList sensorStatuses READ sensorStatuses NOTIFY sensorStatusesChanged)
     Q_PROPERTY(bool active READ active NOTIFY activeChanged)
     Q_PROPERTY(bool locationReporting READ locationReporting NOTIFY locationReportingChanged)
+    Q_PROPERTY(bool locationEnabled READ locationEnabled WRITE setLocationEnabled NOTIFY locationEnabledChanged)
+    Q_PROPERTY(int locationPreset READ locationPreset WRITE setLocationPreset NOTIFY locationPresetChanged)
+    Q_PROPERTY(int locationStaleMinutes READ locationStaleMinutes WRITE setLocationStaleMinutes NOTIFY locationStaleMinutesChanged)
     Q_PROPERTY(bool homeOnInternal READ homeOnInternal WRITE setHomeOnInternal NOTIFY homeOnInternalChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QString lastLocationText READ lastLocationText NOTIFY lastLocationTextChanged)
@@ -35,6 +38,9 @@ public:
     QVariantList sensorStatuses() const;
     bool active() const;
     bool locationReporting() const;
+    bool locationEnabled() const;
+    int locationPreset() const;
+    int locationStaleMinutes() const;
     bool homeOnInternal() const;
     QString lastError() const;
     QString lastLocationText() const;
@@ -53,6 +59,10 @@ public slots:
     void updateWifi(const QString &ssid, bool connected);
     void updateLocation(double latitude, double longitude, double accuracyMeters, int batteryPercent);
     void setUsingInternalUrl(bool usingInternal);
+    void setSensorEnabled(const QString &uniqueId, bool enabled);
+    void setLocationEnabled(bool enabled);
+    void setLocationPreset(int preset);
+    void setLocationStaleMinutes(int minutes);
     void setHomeOnInternal(bool enabled);
     void onAppForegrounded();
     void refreshConfig();
@@ -61,6 +71,9 @@ signals:
     void sensorStatusesChanged();
     void activeChanged();
     void locationReportingChanged();
+    void locationEnabledChanged();
+    void locationPresetChanged();
+    void locationStaleMinutesChanged();
     void homeOnInternalChanged();
     void lastErrorChanged();
     void lastLocationTextChanged();
@@ -100,6 +113,7 @@ private:
         QString icon;
         bool registered;
         bool disabled;         // from HA
+        bool locallyEnabled;
         bool dirty;
         QString lastError;
         QDateTime lastUpdated;
@@ -112,7 +126,7 @@ private:
 
     void setLastError(const QString &message);
     void setActive(bool active);
-    void setLocationReporting(bool enabled);
+    void updateLocationReporting();
     void postLocationUpdate(bool force);
     void ensureOsVersionSensor();
     void setSensorState(const QString &id, const QVariant &state,
@@ -150,7 +164,10 @@ private:
     QString m_baseUrl;
     bool m_ignoreSslErrors;
     bool m_active;
-    bool m_locationReporting;
+    bool m_locationEnabled;
+    bool m_locationDisabledInHa;
+    int m_locationPreset;
+    int m_locationStaleMinutes;
     bool m_homeOnInternal;
     bool m_usingInternalUrl;
     bool m_started;

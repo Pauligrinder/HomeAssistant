@@ -33,10 +33,14 @@ app/
    restored on launch.
 5. **Sensors** — After mobile_app registration, Helmsman reports battery level/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
-   location. On the internal URL it can mark the device as `home`. Enable or
-   disable each entity under HA → Settings → Devices → Helmsman. Sensors start
-   a few seconds after the dashboard has loaded so their webhook calls cannot
-   stall the UI, and GPS follows shortly after that.
+   location. Native settings can disable individual sensors and select a
+   battery-saving, balanced, or accurate location mode. GPS is not kept
+   running: Helmsman reuses other apps’ location fixes and only requests its
+   own when the last fix is older than a configurable stale time (default 15
+   minutes). On the internal URL, GPS stays off; Helmsman can optionally
+   report the device as `home` from the connection alone. Sensors start a few
+   seconds after the dashboard has loaded so their webhook calls cannot stall
+   the UI.
 6. **Cover favorites** — Pick lights in settings to show on the app cover.
    Cover actions toggle them (and page when there are more than two).
 7. **Events View widget** — A separate favorites list drives a third-party
@@ -60,7 +64,7 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.11-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.12-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
 devel-su pkcon install-local ~/harbour-helmsman-0.2.11-1.aarch64.rpm
 ```

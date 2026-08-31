@@ -241,19 +241,6 @@ Page {
 
             SectionHeader { text: "Sensors" }
 
-            TextSwitch {
-                id: homeOnInternalSwitch
-                visible: internalField.text.length > 0
-                text: "Mark home on internal connection"
-                checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
-                description: "When connected via the internal URL (home Wi‑Fi), report location as home to Home Assistant."
-                onCheckedChanged: {
-                    if (hassClient.sensors
-                            && hassClient.sensors.homeOnInternal !== checked)
-                        hassClient.sensors.homeOnInternal = checked
-                }
-            }
-
             Label {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -261,9 +248,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Battery, Wi‑Fi, OS version, and location are reported to Home Assistant. "
-                      + "Enable or disable each entity under Settings → Devices → "
-                      + hassClient.deviceName + " in Home Assistant."
+                text: "Choose which device sensors Helmsman reports to Home Assistant."
             }
 
             Label {
@@ -297,45 +282,144 @@ Page {
 
             Repeater {
                 model: hassClient.sensors ? hassClient.sensors.sensorStatuses : []
-                delegate: Item {
+                delegate: TextSwitch {
                     width: column.width
-                    height: sensorColumn.height + Theme.paddingSmall
-
-                    Column {
-                        id: sensorColumn
-                        width: parent.width
-                        spacing: Theme.paddingSmall / 2
-
-                        Label {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.margins: Theme.horizontalPageMargin
-                            color: Theme.primaryColor
-                            font.pixelSize: Theme.fontSizeSmall
-                            text: modelData.name
-                        }
-
-                        Label {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.margins: Theme.horizontalPageMargin
-                            wrapMode: Text.Wrap
-                            color: Theme.secondaryColor
-                            font.pixelSize: Theme.fontSizeExtraSmall
-                            text: {
-                                var bits = []
-                                bits.push(modelData.disabled ? "Disabled in HA" : "Enabled")
-                                if (modelData.state && modelData.state.length)
-                                    bits.push(modelData.state)
-                                if (modelData.lastUpdated && modelData.lastUpdated.length)
-                                    bits.push("updated " + modelData.lastUpdated)
-                                if (modelData.lastError && modelData.lastError.length)
-                                    bits.push(modelData.lastError)
-                                return bits.join(" · ")
-                            }
+                    visible: modelData.uniqueId !== "location"
+                    height: visible ? implicitHeight : 0
+                    text: modelData.name
+                    checked: modelData.enabled
+                    description: {
+                        var bits = []
+                        if (modelData.disabled)
+                            bits.push("Disabled in Home Assistant")
+                        if (modelData.state && modelData.state.length)
+                            bits.push(modelData.state)
+                        if (modelData.lastUpdated && modelData.lastUpdated.length)
+                            bits.push("updated " + modelData.lastUpdated)
+                        if (modelData.lastError && modelData.lastError.length)
+                            bits.push(modelData.lastError)
+                        return bits.join(" · ")
+                    }
+                    onCheckedChanged: {
+                        if (hassClient.sensors
+                                && modelData.enabled !== checked) {
+                            hassClient.sensors.setSensorEnabled(
+                                        modelData.uniqueId, checked)
                         }
                     }
                 }
+            }
+
+            SectionHeader { text: "Location" }
+
+            TextSwitch {
+                id: locationEnabledSwitch
+                text: "Report location"
+                checked: hassClient.sensors
+                         ? hassClient.sensors.locationEnabled : true
+                description: hassClient.sensors
+                             && !hassClient.sensors.locationReporting
+                             && hassClient.sensors.locationEnabled
+                             ? "Location is disabled in Home Assistant."
+                             : "Allow Helmsman to update the Home Assistant device tracker."
+                onCheckedChanged: {
+                    if (hassClient.sensors
+                            && hassClient.sensors.locationEnabled !== checked)
+                        hassClient.sensors.locationEnabled = checked
+                }
+            }
+
+            ComboBox {
+                id: locationPresetBox
+                width: parent.width
+                enabled: locationEnabledSwitch.checked
+                label: "Location update mode"
+                currentIndex: hassClient.sensors
+                              ? hassClient.sensors.locationPreset : 1
+                menu: ContextMenu {
+                    MenuItem { text: "Battery saver" }
+                    MenuItem { text: "Balanced" }
+                    MenuItem { text: "Accurate" }
+                }
+                onCurrentIndexChanged: {
+                    if (hassClient.sensors
+                            && hassClient.sensors.locationPreset !== currentIndex)
+                        hassClient.sensors.locationPreset = currentIndex
+                }
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: locationEnabledSwitch.checked
+                text: {
+                    if (locationPresetBox.currentIndex === 0)
+                        return "Fewer Home Assistant updates for lower battery use."
+                    if (locationPresetBox.currentIndex === 2)
+                        return "More frequent Home Assistant updates when a fix is available."
+                    return "A balance of update speed and battery use. GPS is not kept running."
+                }
+            }
+
+            Slider {
+                id: staleSlider
+                width: parent.width
+                enabled: locationEnabledSwitch.checked
+                label: "Request own location if older than"
+                minimumValue: 5
+                maximumValue: 60
+                stepSize: 5
+                value: hassClient.sensors
+                       ? hassClient.sensors.locationStaleMinutes : 15
+                valueText: Math.round(value) + " min"
+                onValueChanged: {
+                    var mins = Math.round(value)
+                    if (hassClient.sensors
+                            && hassClient.sensors.locationStaleMinutes !== mins)
+                        hassClient.sensors.locationStaleMinutes = mins
+                }
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: locationEnabledSwitch.checked
+                text: "Uses location updates from other apps when they request GPS. Helmsman only turns GPS on itself if the last fix is older than this."
+            }
+
+            TextSwitch {
+                id: homeOnInternalSwitch
+                visible: internalField.text.length > 0
+                enabled: locationEnabledSwitch.checked
+                text: "Mark home on internal connection"
+                checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
+                description: "Report home without using GPS while connected through the internal URL. When disabled, no location is sent on that connection."
+                onCheckedChanged: {
+                    if (hassClient.sensors
+                            && hassClient.sensors.homeOnInternal !== checked)
+                        hassClient.sensors.homeOnInternal = checked
+                }
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryHighlightColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: hassClient.sensors
+                         && hassClient.sensors.lastLocationText.length > 0
+                text: hassClient.sensors
+                      ? ("Last location: " + hassClient.sensors.lastLocationText) : ""
             }
 
             Button {

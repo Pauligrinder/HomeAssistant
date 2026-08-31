@@ -2,28 +2,93 @@ import QtQuick 2.6
 import QtPositioning 5.2
 import Nemo.DBus 2.0
 
-// Foreground location reporter for mobile_app update_location.
-// Uses GeoClue (GPS + Wi‑Fi/cell via mlsdb/beaconDB). Seeks quickly until
-// accuracy is good, then backs off. Prefers tighter GPS after a coarse fix.
+// Location reporter for mobile_app update_location.
+// Does not keep GPS running. Listens for GeoClue PositionChanged from other
+// apps (Hybris GPS / Mlsdb-BeaconDB). Requests our own one-shot fix only when
+// the last fix is older than the configured stale interval.
 //
 // Geoclue's startUpdates() does synchronous D-Bus on the UI thread. Do not
-// start it until sensors are already running and the dashboard is up, or it
-// wedges the app the same way sensor registration used to.
+// start a self-request until sensors are already running and the dashboard
+// is up, or it wedges the app the same way sensor registration used to.
 Item {
     id: reporter
     property var hassClient
     property bool enabled: hassClient && hassClient.sensors
-            ? hassClient.sensors.locationReporting && hassClient.sensors.active
+            ? hassClient.sensors.locationReporting
+              && hassClient.sensors.active
+              && !hassClient.usingInternalUrl
             : false
-    readonly property real goodAccuracyMeters: 50
-    readonly property int seekIntervalMs: 2000
-    readonly property int cruiseIntervalMs: 30000
+    readonly property int staleMinutes: hassClient && hassClient.sensors
+            ? hassClient.sensors.locationStaleMinutes : 15
     readonly property int startDelayMs: 4000
+    readonly property int seekTimeoutMs: 45000
+    readonly property int staleCheckMs: 60000
+    property bool seeking: false
+    property double lastFixAtMs: 0
+    property double lastSeekAtMs: 0
 
-    function applyInterval() {
-        var acc = positionSource.position.horizontalAccuracy
-        var good = acc !== undefined && acc !== null && acc > 0 && acc <= reporter.goodAccuracyMeters
-        positionSource.updateInterval = good ? reporter.cruiseIntervalMs : reporter.seekIntervalMs
+    function staleMs() {
+        return Math.max(5, reporter.staleMinutes) * 60 * 1000
+    }
+
+    function nowMs() {
+        return Date.now()
+    }
+
+    function locationIsStale() {
+        if (reporter.lastFixAtMs <= 0)
+            return true
+        return (reporter.nowMs() - reporter.lastFixAtMs) >= reporter.staleMs()
+    }
+
+    function canSelfSeek() {
+        if (!reporter.enabled || reporter.seeking)
+            return false
+        if (!reporter.locationIsStale())
+            return false
+        if (reporter.lastSeekAtMs <= 0)
+            return true
+        return (reporter.nowMs() - reporter.lastSeekAtMs) >= reporter.staleMs()
+    }
+
+    function accuracyMeters(accuracy) {
+        if (accuracy === undefined || accuracy === null)
+            return 0
+        if (typeof accuracy === "number")
+            return accuracy < 0 ? 0 : accuracy
+        if (accuracy.horizontal !== undefined && accuracy.horizontal !== null)
+            return accuracy.horizontal < 0 ? 0 : accuracy.horizontal
+        if (accuracy.length > 1 && accuracy[1] !== undefined)
+            return accuracy[1] < 0 ? 0 : accuracy[1]
+        return 0
+    }
+
+    function acceptFix(latitude, longitude, accuracy, timestampSec) {
+        if (!reporter.enabled || !hassClient || !hassClient.sensors)
+            return false
+        if (latitude === undefined || longitude === undefined)
+            return false
+        if (!isFinite(latitude) || !isFinite(longitude))
+            return false
+        if (timestampSec && timestampSec > 0) {
+            var ageMs = reporter.nowMs() - (timestampSec * 1000)
+            if (ageMs > reporter.staleMs() * 2)
+                return false
+        }
+        var acc = reporter.accuracyMeters(accuracy)
+        reporter.lastFixAtMs = reporter.nowMs()
+        hassClient.sensors.updateLocation(latitude, longitude, acc, -1)
+        return true
+    }
+
+    function acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy) {
+        // LatitudePresent = 1, LongitudePresent = 2
+        if (fields !== undefined && fields !== null && fields !== 0
+                && (fields & 3) !== 3)
+            return
+        if (reporter.acceptFix(latitude, longitude, accuracy, timestamp)
+                && reporter.seeking)
+            reporter.stopSeek()
     }
 
     function powerGps() {
@@ -36,53 +101,87 @@ Item {
                           function() {})
     }
 
-    function applyActive() {
+    function startSeek() {
+        if (!reporter.canSelfSeek())
+            return
         startDelayTimer.stop()
-        if (!reporter.enabled) {
-            positionSource.active = false
-            return
-        }
-        if (positionSource.active)
-            return
-        startDelayTimer.start()
+        reporter.seeking = true
+        reporter.lastSeekAtMs = reporter.nowMs()
+        seekTimeoutTimer.restart()
+        reporter.powerGps()
+        positionSource.update()
     }
 
-    onEnabledChanged: reporter.applyActive()
+    function stopSeek() {
+        startDelayTimer.stop()
+        seekTimeoutTimer.stop()
+        reporter.seeking = false
+        positionSource.active = false
+    }
+
+    function applyMode() {
+        startDelayTimer.stop()
+        if (!reporter.enabled) {
+            reporter.stopSeek()
+            return
+        }
+        if (reporter.canSelfSeek())
+            startDelayTimer.start()
+    }
+
+    onEnabledChanged: reporter.applyMode()
+    onStaleMinutesChanged: {
+        if (reporter.enabled && reporter.canSelfSeek())
+            reporter.applyMode()
+    }
 
     Timer {
         id: startDelayTimer
         interval: reporter.startDelayMs
         repeat: false
         onTriggered: {
-            if (!reporter.enabled)
-                return
-            reporter.powerGps()
-            positionSource.updateInterval = reporter.seekIntervalMs
-            positionSource.active = true
+            if (reporter.canSelfSeek())
+                reporter.startSeek()
+        }
+    }
+
+    Timer {
+        id: seekTimeoutTimer
+        interval: reporter.seekTimeoutMs
+        repeat: false
+        onTriggered: reporter.stopSeek()
+    }
+
+    Timer {
+        id: staleCheckTimer
+        interval: reporter.staleCheckMs
+        repeat: true
+        running: reporter.enabled
+        onTriggered: {
+            if (reporter.canSelfSeek())
+                reporter.startSeek()
         }
     }
 
     PositionSource {
         id: positionSource
         active: false
-        updateInterval: reporter.seekIntervalMs
         preferredPositioningMethods: PositionSource.AllPositioningMethods
 
         onPositionChanged: {
-            if (!reporter.enabled || !hassClient || !hassClient.sensors)
-                return
             var coord = position.coordinate
             if (!coord || !coord.isValid)
                 return
             var accuracy = position.horizontalAccuracy
-            if (accuracy === undefined || accuracy === null || accuracy < 0)
-                accuracy = 0
-            hassClient.sensors.updateLocation(coord.latitude,
-                                              coord.longitude,
-                                              accuracy,
-                                              -1)
-            reporter.applyInterval()
+            var ts = 0
+            if (position.timestamp)
+                ts = position.timestamp.getTime() / 1000
+            if (reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts)
+                    && reporter.seeking)
+                reporter.stopSeek()
         }
+
+        onUpdateTimeout: reporter.stopSeek()
     }
 
     DBusInterface {
@@ -93,20 +192,40 @@ Item {
         iface: "net.connman.Technology"
     }
 
+    DBusInterface {
+        bus: DBus.SessionBus
+        service: "org.freedesktop.Geoclue.Providers.Hybris"
+        path: "/org/freedesktop/Geoclue/Providers/Hybris"
+        iface: "org.freedesktop.Geoclue.Position"
+        signalsEnabled: true
+        function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
+            reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
+        }
+    }
+
+    DBusInterface {
+        bus: DBus.SessionBus
+        service: "org.freedesktop.Geoclue.Providers.Mlsdb"
+        path: "/org/freedesktop/Geoclue/Providers/Mlsdb"
+        iface: "org.freedesktop.Geoclue.Position"
+        signalsEnabled: true
+        function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
+            reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
+        }
+    }
+
     Connections {
         target: hassClient && hassClient.sensors ? hassClient.sensors : null
-        onLocationReportingChanged: reporter.applyActive()
-        onActiveChanged: reporter.applyActive()
+        onLocationReportingChanged: reporter.applyMode()
+        onActiveChanged: reporter.applyMode()
+        onLocationStaleMinutesChanged: reporter.applyMode()
     }
 
     Connections {
         target: Qt.application
         onStateChanged: {
-            if (Qt.application.state === Qt.ApplicationActive && reporter.enabled
-                    && positionSource.active) {
-                reporter.powerGps()
-                positionSource.updateInterval = reporter.seekIntervalMs
-            }
+            if (Qt.application.state === Qt.ApplicationActive)
+                reporter.applyMode()
         }
     }
 }
