@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.14
+Version:    0.2.15
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,23 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Tue Sep 01 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.15-1
+- Keep reporting home on the internal connection so Home Assistant does
+  not time the device tracker out to away.
+- Add Update location now in settings.
+- Events View AC long-press now sets target temperature, fan Auto, and
+  vane Auto/Swing when the climate entity supports them.
+- When the Helmsman Events View widget is enabled, Home Assistant
+  notifications appear as colored cards there instead of in the system
+  notification list.
+- Add a setting to disable notification tints on the app cover.
+- Events View cards can be reordered by dragging, or dropped on a bin to
+  remove them.
+- Events View can show graphs of sensors that already publish a
+  today/tomorrow series, such as Nordpool electricity prices.
+- Events View can also show any sensor: the current value, with the last
+  24 hours as a watermark graph on the card.
+
 * Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.14-1
 - Tell Events View when Helmsman is not running, and offer Choose
   favorites when nothing is selected.

@@ -57,6 +57,7 @@ class HassClient : public QObject
     Q_PROPERTY(QString dashboardSnapshotPath READ dashboardSnapshotPath CONSTANT)
     Q_PROPERTY(SensorCoordinator *sensors READ sensors CONSTANT)
     Q_PROPERTY(WidgetCoordinator *widget READ widget CONSTANT)
+    Q_PROPERTY(bool coverNotificationsEnabled READ coverNotificationsEnabled WRITE setCoverNotificationsEnabled NOTIFY coverNotificationsEnabledChanged)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -96,6 +97,7 @@ public:
     QString dashboardSnapshotPath() const;
     SensorCoordinator *sensors() const;
     WidgetCoordinator *widget() const;
+    bool coverNotificationsEnabled() const;
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -104,6 +106,7 @@ public:
     void setInternalUrl(const QString &url);
     void setExternalUrl(const QString &url);
     void setHomeWifiSsid(const QString &ssid);
+    void setCoverNotificationsEnabled(bool enabled);
 
 public slots:
     void restoreSession();
@@ -163,6 +166,7 @@ signals:
     void loginSucceeded();
     void otpRequired();
     void loginFailed(const QString &message);
+    void coverNotificationsEnabledChanged();
     void notificationReceived(const QString &title,
                               const QString &message,
                               const QVariantMap &data);
@@ -280,6 +284,7 @@ private:
     bool m_testingConnection;
     bool m_testIgnoreSslErrors;
     bool m_pendingPushAfterRefresh;
+    bool m_coverNotificationsEnabled;
     NetworkState m_networkState;
     NetworkState m_pendingNetworkState;
     int m_pushAuthRetries;

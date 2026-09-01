@@ -131,6 +131,17 @@ Item {
             startDelayTimer.start()
     }
 
+    function refreshNow() {
+        if (!reporter.enabled || reporter.seeking)
+            return
+        startDelayTimer.stop()
+        reporter.seeking = true
+        reporter.lastSeekAtMs = reporter.nowMs()
+        seekTimeoutTimer.restart()
+        reporter.powerGps()
+        positionSource.update()
+    }
+
     onEnabledChanged: reporter.applyMode()
     onStaleMinutesChanged: {
         if (reporter.enabled && reporter.canSelfSeek())
@@ -231,6 +242,7 @@ Item {
         onLocationReportingChanged: reporter.applyMode()
         onActiveChanged: reporter.applyMode()
         onLocationStaleMinutesChanged: reporter.applyMode()
+        onLocationRefreshRequested: reporter.refreshNow()
     }
 
     Connections {

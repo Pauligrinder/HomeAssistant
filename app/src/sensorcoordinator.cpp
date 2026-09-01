@@ -20,6 +20,9 @@ const char kClientName[] = "Helmsman";
 const int kPeriodicMs = 15 * 60 * 1000;
 const int kConfigRefreshMs = 20 * 60 * 1000;
 const int kUpdateDebounceMs = 750;
+// HA device_tracker consider_home defaults to 180s. Keep the internal-home
+// webhook fresher than that so overnight Wi‑Fi stays "home".
+const int kHomeHeartbeatMs = 60 * 1000;
 // Gap between the first webhook calls after start. Issuing config, sensor
 // registration, and the first state update together stalled the UI thread on
 // slow external endpoints.
@@ -130,6 +133,9 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
 
     m_startupTimer.setInterval(kStartupStepMs);
     connect(&m_startupTimer, SIGNAL(timeout()), this, SLOT(onStartupStepTimeout()));
+
+    m_homeHeartbeatTimer.setInterval(kHomeHeartbeatMs);
+    connect(&m_homeHeartbeatTimer, SIGNAL(timeout()), this, SLOT(onHomeHeartbeatTimeout()));
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -289,6 +295,7 @@ void SensorCoordinator::updateLocationReporting()
 {
     emit locationReportingChanged();
     rebuildStatusList();
+    updateHomeHeartbeat();
 }
 
 void SensorCoordinator::setLocationEnabled(bool enabled)
@@ -362,6 +369,7 @@ void SensorCoordinator::start()
     setLastError(QString());
     m_periodicTimer.start();
     m_configTimer.start();
+    updateHomeHeartbeat();
     ensureOsVersionSensor();
     m_startupStep = 0;
     m_startupTimer.start();
@@ -400,6 +408,7 @@ void SensorCoordinator::stop()
     m_configTimer.stop();
     m_updateDebounce.stop();
     m_startupTimer.stop();
+    m_homeHeartbeatTimer.stop();
     m_registerQueue.clear();
     m_registrationInFlight = false;
     setActive(false);
@@ -929,11 +938,44 @@ void SensorCoordinator::postLocationUpdate(bool force)
     rebuildStatusList();
 }
 
+void SensorCoordinator::updateHomeHeartbeat()
+{
+    const bool need = m_started && locationReporting()
+            && m_homeOnInternal && m_usingInternalUrl;
+    if (need) {
+        if (!m_homeHeartbeatTimer.isActive())
+            m_homeHeartbeatTimer.start();
+    } else {
+        m_homeHeartbeatTimer.stop();
+    }
+}
+
+void SensorCoordinator::onHomeHeartbeatTimeout()
+{
+    if (!m_started)
+        return;
+    postLocationUpdate(true);
+}
+
+void SensorCoordinator::refreshLocation()
+{
+    if (!m_started || !locationReporting())
+        return;
+    if (m_homeOnInternal && m_usingInternalUrl) {
+        postLocationUpdate(true);
+        return;
+    }
+    if (m_haveLocation && qIsFinite(m_lastLat) && qIsFinite(m_lastLon))
+        postLocationUpdate(true);
+    emit locationRefreshRequested();
+}
+
 void SensorCoordinator::setUsingInternalUrl(bool usingInternal)
 {
     if (m_usingInternalUrl == usingInternal)
         return;
     m_usingInternalUrl = usingInternal;
+    updateHomeHeartbeat();
     if (m_started && locationReporting() && m_homeOnInternal)
         postLocationUpdate(true);
 }
@@ -945,6 +987,7 @@ void SensorCoordinator::setHomeOnInternal(bool enabled)
     m_homeOnInternal = enabled;
     persistState();
     emit homeOnInternalChanged();
+    updateHomeHeartbeat();
     if (m_started && locationReporting())
         postLocationUpdate(true);
 }
@@ -990,6 +1033,8 @@ void SensorCoordinator::onAppForegrounded()
         return;
     refreshConfig();
     scheduleSensorUpdate();
+    if (locationReporting() && m_homeOnInternal && m_usingInternalUrl)
+        postLocationUpdate(true);
 }
 
 void SensorCoordinator::onPeriodicTimeout()

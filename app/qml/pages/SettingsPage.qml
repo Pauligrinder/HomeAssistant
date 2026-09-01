@@ -197,6 +197,27 @@ Page {
                 }
             }
 
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: hassClient.widget && hassClient.widget.eventsViewWidgetEnabled
+                      ? "The Helmsman Events View widget is on, so Home Assistant alerts show there instead of in the system notification list."
+                      : "If you enable the Helmsman widget in Settings → Events view, alerts show there instead of in the system notification list."
+            }
+
+            TextSwitch {
+                id: coverNotificationSwitch
+                text: "Show notifications on the app cover"
+                automaticCheck: false
+                checked: hassClient.coverNotificationsEnabled
+                description: "Tint the cover with the latest Home Assistant alert. Turn this off to keep cover favorites visible."
+                onClicked: hassClient.coverNotificationsEnabled = !checked
+            }
+
             SectionHeader { text: "Cover favorites" }
 
             Label {
@@ -227,7 +248,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Pick lights, switches, scripts, and ACs for the Events View. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, fan, and vanes, or tap a script for Run and Cancel."
+                text: "Pick lights, switches, scripts, ACs, sensors, and graphs for the Events View. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. Drag a card to reorder it, or drop it on the bin to remove it."
             }
 
             Button {
@@ -413,7 +434,7 @@ Page {
                 text: "Mark home on internal connection"
                 checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
                 automaticCheck: false
-                description: "Report home without using GPS while connected through the internal URL. When disabled, no location is sent on that connection."
+                description: "Report home without using GPS while connected through the internal URL. Helmsman repeats that home update so Home Assistant does not time out to away. When disabled, no location is sent on that connection."
                 onClicked: {
                     if (hassClient.sensors)
                         hassClient.sensors.homeOnInternal = !checked
@@ -431,6 +452,14 @@ Page {
                          && hassClient.sensors.lastLocationText.length > 0
                 text: hassClient.sensors
                       ? ("Last location: " + hassClient.sensors.lastLocationText) : ""
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Update location now"
+                enabled: hassClient.sensors && hassClient.sensors.active
+                         && hassClient.sensors.locationReporting
+                onClicked: hassClient.sensors.refreshLocation()
             }
 
             Button {
