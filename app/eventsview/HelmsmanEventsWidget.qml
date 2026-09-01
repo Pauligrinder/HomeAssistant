@@ -606,6 +606,26 @@ Item {
                     return Math.max(Theme.iconSizeSmall,
                                     Math.floor((cardColumn.width - (n - 1) * gap) / n))
                 }
+                // Vane levels take five cells, so they stay collapsed behind a
+                // Manual chip whenever the AC also offers auto or swing.
+                property bool vaneVerticalHasModes: !!card.entity.vaneVerticalAutoMode
+                                                    || !!card.entity.vaneVerticalSwingMode
+                property bool vaneVerticalIsManual: card.entity.vaneVerticalIsAuto !== true
+                                                    && card.entity.vaneVerticalIsSwing !== true
+                property bool vaneVerticalManualOpen: false
+                property bool showVaneVerticalLevels: root.acHasLevels(card.entity.vaneVerticalLevels)
+                                                      && (!card.vaneVerticalHasModes
+                                                          || card.vaneVerticalIsManual
+                                                          || card.vaneVerticalManualOpen)
+                property bool vaneHorizontalHasModes: !!card.entity.vaneHorizontalAutoMode
+                                                      || !!card.entity.vaneHorizontalSwingMode
+                property bool vaneHorizontalIsManual: card.entity.vaneHorizontalIsAuto !== true
+                                                      && card.entity.vaneHorizontalIsSwing !== true
+                property bool vaneHorizontalManualOpen: false
+                property bool showVaneHorizontalLevels: root.acHasLevels(card.entity.vaneHorizontalLevels)
+                                                        && (!card.vaneHorizontalHasModes
+                                                            || card.vaneHorizontalIsManual
+                                                            || card.vaneHorizontalManualOpen)
                 property var hvacChoices: {
                     var all = [
                         { "id": "cool", "label": "Cool" },
@@ -1036,10 +1056,11 @@ Item {
                         Row {
                             width: parent.width
                             spacing: Theme.paddingSmall
-                            visible: !!card.entity.vaneVerticalAutoMode
-                                     || !!card.entity.vaneVerticalSwingMode
+                            visible: card.vaneVerticalHasModes
+                            property bool manualVisible: root.acHasLevels(card.entity.vaneVerticalLevels)
                             property int chipCount: (card.entity.vaneVerticalAutoMode ? 1 : 0)
                                                     + (card.entity.vaneVerticalSwingMode ? 1 : 0)
+                                                    + (manualVisible ? 1 : 0)
                             property int chipWidth: {
                                 var n = Math.max(chipCount, 2)
                                 return Math.floor((width - (n - 1) * spacing) / n)
@@ -1063,7 +1084,10 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: root.setVaneVertical(card.entity, 0)
+                                    onClicked: {
+                                        card.vaneVerticalManualOpen = false
+                                        root.setVaneVertical(card.entity, 0)
+                                    }
                                 }
                             }
 
@@ -1085,7 +1109,34 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: root.setVaneVertical(card.entity, -1)
+                                    onClicked: {
+                                        card.vaneVerticalManualOpen = false
+                                        root.setVaneVertical(card.entity, -1)
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                visible: parent.manualVisible
+                                width: parent.chipWidth
+                                height: Theme.itemSizeExtraSmall
+                                radius: Theme.paddingSmall
+                                property bool selected: card.vaneVerticalIsManual
+                                color: selected ? "#73FFFFFF" : "#28FFFFFF"
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: parent.selected
+                                    text: "Manual"
+                                }
+
+                                // Reveals the level picker; the AC only changes
+                                // once a level below is tapped.
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: card.vaneVerticalManualOpen = true
                                 }
                             }
                         }
@@ -1093,7 +1144,7 @@ Item {
                         Row {
                             width: parent.width
                             spacing: Theme.paddingSmall
-                            visible: root.acHasLevels(card.entity.vaneVerticalLevels)
+                            visible: card.showVaneVerticalLevels
 
                             Repeater {
                                 model: 5
@@ -1148,10 +1199,11 @@ Item {
                         Row {
                             width: parent.width
                             spacing: Theme.paddingSmall
-                            visible: !!card.entity.vaneHorizontalAutoMode
-                                     || !!card.entity.vaneHorizontalSwingMode
+                            visible: card.vaneHorizontalHasModes
+                            property bool manualVisible: root.acHasLevels(card.entity.vaneHorizontalLevels)
                             property int chipCount: (card.entity.vaneHorizontalAutoMode ? 1 : 0)
                                                     + (card.entity.vaneHorizontalSwingMode ? 1 : 0)
+                                                    + (manualVisible ? 1 : 0)
                             property int chipWidth: {
                                 var n = Math.max(chipCount, 2)
                                 return Math.floor((width - (n - 1) * spacing) / n)
@@ -1175,7 +1227,10 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: root.setVaneHorizontal(card.entity, 0)
+                                    onClicked: {
+                                        card.vaneHorizontalManualOpen = false
+                                        root.setVaneHorizontal(card.entity, 0)
+                                    }
                                 }
                             }
 
@@ -1197,7 +1252,34 @@ Item {
 
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: root.setVaneHorizontal(card.entity, -1)
+                                    onClicked: {
+                                        card.vaneHorizontalManualOpen = false
+                                        root.setVaneHorizontal(card.entity, -1)
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                visible: parent.manualVisible
+                                width: parent.chipWidth
+                                height: Theme.itemSizeExtraSmall
+                                radius: Theme.paddingSmall
+                                property bool selected: card.vaneHorizontalIsManual
+                                color: selected ? "#73FFFFFF" : "#28FFFFFF"
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: parent.selected
+                                    text: "Manual"
+                                }
+
+                                // Reveals the level picker; the AC only changes
+                                // once a level below is tapped.
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: card.vaneHorizontalManualOpen = true
                                 }
                             }
                         }
@@ -1205,7 +1287,7 @@ Item {
                         Row {
                             width: parent.width
                             spacing: Theme.paddingSmall
-                            visible: root.acHasLevels(card.entity.vaneHorizontalLevels)
+                            visible: card.showVaneHorizontalLevels
 
                             Repeater {
                                 model: 5

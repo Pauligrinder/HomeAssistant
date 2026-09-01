@@ -44,13 +44,49 @@ CoverBackground {
     readonly property var leftEntity: pageEntities.length > 0 ? pageEntities[0] : null
     readonly property var rightEntity: pageEntities.length > 1 ? pageEntities[1] : null
     readonly property string leftEntityId: leftEntity && leftEntity.entityId ? leftEntity.entityId : ""
-    readonly property string rightEntityId: rightEntity && rightEntity.entityId ? rightEntity.entityId : ""
     readonly property string leftToggleIcon: coverToggleIcon(leftEntity)
     readonly property string rightToggleIcon: coverToggleIcon(rightEntity)
-    readonly property bool watermarkOn: !!(leftEntity && leftEntity.kind !== "script"
-                                           && leftEntity.on === true)
+    // Sensors have no service to call, so their action slot stays empty. It is
+    // still laid out so a paired toggle or next-page button keeps its half.
+    readonly property bool leftActionEnabled: !!leftEntity && !isSensor(leftEntity)
+    readonly property bool rightActionEnabled: !!rightEntity && !isSensor(rightEntity)
+    readonly property bool watermarkOn: favoriteEmphasized(leftEntity)
     readonly property string watermarkIconName: (leftEntity && leftEntity.icon) ? String(leftEntity.icon) : ""
     property string favoriteWatermarkPath: ""
+
+    function isSensor(entity) {
+        return !!entity && entity.kind === "sensor"
+    }
+
+    // Sensors and lit favorites get the stronger watermark, matching the widget.
+    function favoriteEmphasized(entity) {
+        if (!entity)
+            return false
+        if (isSensor(entity))
+            return true
+        return entity.kind !== "script" && entity.on === true
+    }
+
+    function formatSensorValue(value) {
+        var n = Number(value)
+        if (!isFinite(n))
+            return ""
+        if (Math.abs(n) >= 100)
+            return String(Math.round(n))
+        var shown = n.toFixed(2).replace(/\.?0+$/, "")
+        return shown.length ? shown : "0"
+    }
+
+    function sensorLabel(entity) {
+        var shown = cover.formatSensorValue(entity.graphNow)
+        if (!shown.length && entity.state && entity.state !== "unknown"
+                && entity.state !== "unavailable")
+            shown = entity.state
+        var unit = entity.graphUnit || ""
+        if (!shown.length)
+            return unit
+        return unit ? (shown + " " + unit) : shown
+    }
 
     function favoriteStateLabel(entity) {
         if (!entity)
@@ -59,6 +95,8 @@ CoverBackground {
             return entity.state || "unavailable"
         if (entity.kind === "script")
             return ""
+        if (cover.isSensor(entity))
+            return cover.sensorLabel(entity)
         if (entity.dimmable === true && entity.on)
             return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
         return entity.on ? "On" : "Off"
@@ -71,6 +109,8 @@ CoverBackground {
     }
 
     function coverToggleIcon(entity) {
+        if (cover.isSensor(entity))
+            return ""
         if (!entity || entity.available === false)
             return "image://theme/icon-cover-refresh"
         if (entity.kind === "script")
@@ -86,6 +126,8 @@ CoverBackground {
         var icon = entity.icon ? String(entity.icon) : ""
         if (entity.kind === "script")
             return icon.length ? icon : "mdi:script-text"
+        if (cover.isSensor(entity))
+            return icon.length ? icon : "mdi:chart-line"
         if (entity.kind === "climate") {
             if (!icon.length)
                 return entity.on === true ? "mdi:air-conditioner" : "mdi:fan-off"
@@ -120,7 +162,10 @@ CoverBackground {
         cover.favoriteWatermarkPath = path || ""
     }
 
-    function toggleFavorite(entityId) {
+    function toggleFavorite(entity) {
+        if (!entity || cover.isSensor(entity))
+            return
+        var entityId = entity.entityId
         if (!entityId || !hassClient || !hassClient.widget)
             return
         hassClient.widget.toggleLight(entityId)
@@ -424,8 +469,7 @@ CoverBackground {
                 elide: Text.ElideRight
                 color: "white"
                 font.pixelSize: Theme.fontSizeMedium
-                font.bold: cover.leftEntity && cover.leftEntity.kind !== "script"
-                           && cover.leftEntity.on === true
+                font.bold: cover.favoriteEmphasized(cover.leftEntity)
                 text: cover.favoriteName(cover.leftEntity)
             }
 
@@ -459,7 +503,7 @@ CoverBackground {
                         elide: Text.ElideRight
                         color: "white"
                         font.pixelSize: Theme.fontSizeSmall
-                        font.bold: modelData.kind !== "script" && modelData.on === true
+                        font.bold: cover.favoriteEmphasized(modelData)
                         text: cover.favoriteName(modelData)
                     }
 
@@ -492,26 +536,28 @@ CoverBackground {
     }
 
     CoverActionList {
-        enabled: cover.showingFavorites && cover.pageEntities.length >= 2 && !cover.coverActionOdd
+        enabled: cover.showingFavorites && cover.pageEntities.length >= 2
+                 && (cover.leftActionEnabled || cover.rightActionEnabled) && !cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
-            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
         }
         CoverAction {
             iconSource: cover.rightToggleIcon
-            onTriggered: cover.toggleFavorite(cover.rightEntityId)
+            onTriggered: cover.toggleFavorite(cover.rightEntity)
         }
     }
 
     CoverActionList {
-        enabled: cover.showingFavorites && cover.pageEntities.length >= 2 && cover.coverActionOdd
+        enabled: cover.showingFavorites && cover.pageEntities.length >= 2
+                 && (cover.leftActionEnabled || cover.rightActionEnabled) && cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
-            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
         }
         CoverAction {
             iconSource: cover.rightToggleIcon
-            onTriggered: cover.toggleFavorite(cover.rightEntityId)
+            onTriggered: cover.toggleFavorite(cover.rightEntity)
         }
     }
 
@@ -519,7 +565,7 @@ CoverBackground {
         enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1 && !cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
-            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
         }
         CoverAction {
             iconSource: "image://theme/icon-cover-next"
@@ -531,7 +577,7 @@ CoverBackground {
         enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1 && cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
-            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
         }
         CoverAction {
             iconSource: "image://theme/icon-cover-next"
@@ -540,18 +586,20 @@ CoverBackground {
     }
 
     CoverActionList {
-        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1 && !cover.coverActionOdd
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1
+                 && cover.leftActionEnabled && !cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
-            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
         }
     }
 
     CoverActionList {
-        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1 && cover.coverActionOdd
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1
+                 && cover.leftActionEnabled && cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
-            onTriggered: cover.toggleFavorite(cover.leftEntityId)
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
         }
     }
 }

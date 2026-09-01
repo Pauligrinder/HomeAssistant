@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
-Summary:    Native Home Assistant client
-Version:    0.2.16
+Summary:    Semi-native Home Assistant client
+Version:    0.2.17
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -29,7 +29,7 @@ BuildRequires:  pkgconfig(qt5embedwidget)
 BuildRequires:  desktop-file-utils
 
 %description
-Sailfish-native Home Assistant client. Connect to a Home Assistant instance
+Semi-native Home Assistant client. Connect to a Home Assistant instance
 by IP or hostname, then log in with username/password and optional TOTP
 two-step verification. Receives companion notifications over a WebSocket
 push channel after mobile_app registration, and reports battery, Wi-Fi, and

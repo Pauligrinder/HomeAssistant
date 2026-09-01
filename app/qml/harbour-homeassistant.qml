@@ -153,6 +153,20 @@ ApplicationWindow
         appWindow.coverNotificationIcon = iconPath || ""
     }
 
+    function clearWidgetNotifications() {
+        if (hassClientInstance.widget)
+            hassClientInstance.widget.clearNotifications()
+        var next = ({})
+        var src = appWindow.notificationTags || ({})
+        for (var key in src) {
+            // -1 marks tags that only live on the widget. Real Lipstick ids
+            // stay tracked so HA clear_notification can still close them.
+            if (src.hasOwnProperty(key) && src[key] !== -1)
+                next[key] = src[key]
+        }
+        appWindow.notificationTags = next
+    }
+
     function clearHaNotification(tag) {
         if (!tag || tag.length === 0)
             return
@@ -176,6 +190,49 @@ ApplicationWindow
             appWindow.notificationCount -= 1
         if (appWindow.notificationCount <= 0)
             appWindow.clearCoverNotification()
+    }
+
+    // Icons: prefer HA image/icon_url, else tinted mdi:notification_icon.
+    // Color alone tints a default bell when no other icon is given.
+    function trayIconPath(iconUrl, notificationIcon, color) {
+        if (iconUrl.length > 0)
+            return resolveMediaUrl(iconUrl)
+        if (!mdiIcons.ready)
+            return ""
+        var mdiName = notificationIcon
+        if (!mdiName.length && color.length > 0)
+            mdiName = "mdi:bell"
+        if (!mdiName.length)
+            return ""
+        var iconPath = mdiIcons.renderIconFile(mdiName, color, 128)
+        console.log("Helmsman: mdi icon", mdiName, "color=", color, "path=", iconPath)
+        return iconPath || ""
+    }
+
+    // Leaving summary/body empty makes Lipstick show the preview banner only
+    // and keep nothing in the notification list, so the Events View widget
+    // stays the single place the alert lives on.
+    function publishBannerNotification(summary, body, subtitle, iconPath, urgency) {
+        var n = notificationComponent.createObject(appWindow)
+        if (!n) {
+            console.log("Helmsman: failed to create banner Notification object")
+            return
+        }
+        n.appName = "Helmsman"
+        n.appIcon = "harbour-helmsman"
+        n.previewSummary = summary
+        n.previewBody = body
+        if (subtitle.length > 0)
+            n.subText = subtitle
+        n.urgency = urgency
+        if (iconPath.length > 0)
+            n.icon = iconPath
+        n.clicked.connect(function() { appWindow.activate() })
+        try {
+            n.publish()
+        } catch (e) {
+            console.log("Helmsman: banner publish failed:", e)
+        }
     }
 
     function applyCoverNotification(summary, body, color, iconPath, replacing) {
@@ -230,6 +287,10 @@ ApplicationWindow
                         summary, body, appWindow.normalizeCoverColor(color),
                         coverIconPath, tag)
             appWindow.applyCoverNotification(summary, body, color, coverIconPath, replacing)
+            appWindow.publishBannerNotification(
+                        summary, body, subtitle,
+                        appWindow.trayIconPath(iconUrl, notificationIcon, color),
+                        appWindow.urgencyFromData(data))
             if (tag.length > 0) {
                 var widgetTags = cloneTagMap()
                 widgetTags[tag] = appWindow.notificationTags[tag] || -1
@@ -263,21 +324,9 @@ ApplicationWindow
             n.subText = subtitle
         n.urgency = urgencyFromData(data)
 
-        // Icons: prefer HA image/icon_url, else tinted mdi:notification_icon.
-        // Color alone tints a default bell when no other icon is given.
-        if (iconUrl.length > 0) {
-            n.icon = resolveMediaUrl(iconUrl)
-        } else if (mdiIcons.ready) {
-            var trayMdi = notificationIcon
-            if (!trayMdi.length && color.length > 0)
-                trayMdi = "mdi:bell"
-            if (trayMdi.length > 0) {
-                var iconPath = mdiIcons.renderIconFile(trayMdi, color, 128)
-                console.log("Helmsman: mdi icon", trayMdi, "color=", color, "path=", iconPath)
-                if (iconPath && iconPath.length > 0)
-                    n.icon = iconPath
-            }
-        }
+        var trayPath = appWindow.trayIconPath(iconUrl, notificationIcon, color)
+        if (trayPath.length > 0)
+            n.icon = trayPath
 
         // Prefer hint over .resident — older nemo plugins may lack the property.
         if (dataBool(data, "sticky") || dataBool(data, "persistent"))
@@ -341,6 +390,7 @@ ApplicationWindow
     onApplicationActiveChanged: {
         if (applicationActive) {
             appWindow.clearCoverNotification()
+            appWindow.clearWidgetNotifications()
             appWindow.wakeHomePageIfPresent()
             hassClientInstance.notifyAppForegrounded()
         } else {

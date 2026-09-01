@@ -154,6 +154,7 @@ public slots:
                           const QString &iconPath,
                           const QString &tag);
     void dismissNotification(const QString &idOrTag);
+    void clearNotifications();
     Q_SCRIPTABLE QString GetEntitiesJson() const;
     Q_SCRIPTABLE void Refresh();
     Q_SCRIPTABLE void ToggleLight(const QString &entityId);
