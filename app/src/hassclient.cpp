@@ -206,6 +206,7 @@ HassClient::HassClient(QObject *parent)
     , m_testingConnection(false)
     , m_testIgnoreSslErrors(false)
     , m_pendingPushAfterRefresh(false)
+    , m_coverNotificationsEnabled(true)
     , m_networkState(NetworkUnknown)
     , m_pendingNetworkState(NetworkUnknown)
     , m_pushAuthRetries(0)
@@ -252,6 +253,10 @@ HassClient::HassClient(QObject *parent)
 
     m_authClientId = QString();
     loadSession();
+
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    if (ui.contains(QStringLiteral("coverNotificationsEnabled")))
+        m_coverNotificationsEnabled = ui.value(QStringLiteral("coverNotificationsEnabled")).toBool();
 }
 
 HassClient::~HassClient()
@@ -295,6 +300,7 @@ bool HassClient::mobileAppRegistered() const { return !m_webhookId.isEmpty(); }
 bool HassClient::pushConnected() const { return m_pushChannel && m_pushChannel->connected(); }
 SensorCoordinator *HassClient::sensors() const { return m_sensors; }
 WidgetCoordinator *HassClient::widget() const { return m_widget; }
+bool HassClient::coverNotificationsEnabled() const { return m_coverNotificationsEnabled; }
 
 QString HassClient::dashboardSnapshotPath() const
 {
@@ -384,6 +390,16 @@ void HassClient::setHomeWifiSsid(const QString &ssid)
         return;
     m_homeWifiSsid = ssid;
     emit homeWifiSsidChanged();
+}
+
+void HassClient::setCoverNotificationsEnabled(bool enabled)
+{
+    if (m_coverNotificationsEnabled == enabled)
+        return;
+    m_coverNotificationsEnabled = enabled;
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    ui.setValue(QStringLiteral("coverNotificationsEnabled"), enabled);
+    emit coverNotificationsEnabledChanged();
 }
 
 void HassClient::setUsingInternalUrl(bool usingInternal)

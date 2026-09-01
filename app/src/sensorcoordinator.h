@@ -64,6 +64,7 @@ public slots:
     void setLocationPreset(int preset);
     void setLocationStaleMinutes(int minutes);
     void setHomeOnInternal(bool enabled);
+    void refreshLocation();
     void onAppForegrounded();
     void refreshConfig();
 
@@ -77,6 +78,7 @@ signals:
     void homeOnInternalChanged();
     void lastErrorChanged();
     void lastLocationTextChanged();
+    void locationRefreshRequested();
 
 private slots:
     void onWebhookFinished();
@@ -85,6 +87,7 @@ private slots:
     void onConfigRefreshTimeout();
     void onUpdateDebounceTimeout();
     void onStartupStepTimeout();
+    void onHomeHeartbeatTimeout();
 
 private:
     enum WebhookKind {
@@ -127,6 +130,7 @@ private:
     void setLastError(const QString &message);
     void setActive(bool active);
     void updateLocationReporting();
+    void updateHomeHeartbeat();
     void postLocationUpdate(bool force);
     void ensureOsVersionSensor();
     void setSensorState(const QString &id, const QVariant &state,
@@ -156,6 +160,7 @@ private:
     QTimer m_configTimer;
     QTimer m_updateDebounce;
     QTimer m_startupTimer;
+    QTimer m_homeHeartbeatTimer;
     int m_startupStep;
 
     QString m_webhookId;

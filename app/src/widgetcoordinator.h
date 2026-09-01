@@ -18,8 +18,9 @@ class QNetworkReply;
 class QFileSystemWatcher;
 class MdiIconRenderer;
 
-// Lights, switches, scripts, and climate for the cover and Events View widget. Uses the
-// Home Assistant REST API with the same session Helmsman already stores.
+// Lights, switches, scripts, climate, sensors, and graphable sensors for the
+// cover and Events View widget. Uses the Home Assistant REST API with the same
+// session Helmsman already stores. Sensors and graph sensors are Events View only.
 class WidgetCoordinator : public QObject
 {
     Q_OBJECT
@@ -63,11 +64,28 @@ class WidgetCoordinator : public QObject
 "      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
 "      <arg direction=\"in\" type=\"i\" name=\"level\"/>\n"
 "    </method>\n"
+"    <method name=\"SetTargetTemp\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"d\" name=\"temp\"/>\n"
+"    </method>\n"
 "    <method name=\"OpenFavorites\"/>\n"
 "    <method name=\"RunScript\">\n"
 "      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
 "    </method>\n"
 "    <method name=\"CancelScript\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"    </method>\n"
+"    <method name=\"WidgetPresent\"/>\n"
+"    <method name=\"WidgetGone\"/>\n"
+"    <method name=\"DismissNotification\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"idOrTag\"/>\n"
+"    </method>\n"
+"    <method name=\"OpenApp\"/>\n"
+"    <method name=\"ReorderEventsViewEntity\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
+"      <arg direction=\"in\" type=\"i\" name=\"newIndex\"/>\n"
+"    </method>\n"
+"    <method name=\"RemoveEventsViewEntity\">\n"
 "      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
 "    </method>\n"
 "    <signal name=\"EntitiesChanged\"/>\n"
@@ -84,6 +102,8 @@ class WidgetCoordinator : public QObject
     // Set from QML so widget entities can carry a rendered icon path; the
     // events view runs in lipstick and cannot use the app image provider.
     Q_PROPERTY(MdiIconRenderer *iconRenderer READ iconRenderer WRITE setIconRenderer NOTIFY iconRendererChanged)
+    // True while the Lipstick Events View widget is loaded (it heartbeats over D-Bus).
+    Q_PROPERTY(bool eventsViewWidgetEnabled READ eventsViewWidgetEnabled NOTIFY eventsViewWidgetEnabledChanged)
 
 public:
     explicit WidgetCoordinator(QObject *parent = nullptr);
@@ -98,6 +118,7 @@ public:
     bool active() const;
     QString lastError() const;
     bool dbusRegistered() const;
+    bool eventsViewWidgetEnabled() const;
     MdiIconRenderer *iconRenderer() const;
     void setIconRenderer(MdiIconRenderer *renderer);
 
@@ -113,6 +134,7 @@ public slots:
     void setEntitySelected(const QString &entityId, bool selected);
     void setEventsViewSelectedEntityIds(const QStringList &ids);
     void setEventsViewEntitySelected(const QString &entityId, bool selected);
+    void reorderEventsViewEntity(const QString &entityId, int newIndex);
     void refresh();
     void refreshAvailable();
     void toggleLight(const QString &entityId);
@@ -123,8 +145,15 @@ public slots:
     void setFanLevel(const QString &entityId, int level);
     void setVaneVertical(const QString &entityId, int level);
     void setVaneHorizontal(const QString &entityId, int level);
+    void setTargetTemp(const QString &entityId, double temp);
     void runScript(const QString &entityId);
     void cancelScript(const QString &entityId);
+    void pushNotification(const QString &title,
+                          const QString &body,
+                          const QString &color,
+                          const QString &iconPath,
+                          const QString &tag);
+    void dismissNotification(const QString &idOrTag);
     Q_SCRIPTABLE QString GetEntitiesJson() const;
     Q_SCRIPTABLE void Refresh();
     Q_SCRIPTABLE void ToggleLight(const QString &entityId);
@@ -135,9 +164,16 @@ public slots:
     Q_SCRIPTABLE void SetFanLevel(const QString &entityId, int level);
     Q_SCRIPTABLE void SetVaneVertical(const QString &entityId, int level);
     Q_SCRIPTABLE void SetVaneHorizontal(const QString &entityId, int level);
+    Q_SCRIPTABLE void SetTargetTemp(const QString &entityId, double temp);
     Q_SCRIPTABLE void OpenFavorites();
     Q_SCRIPTABLE void RunScript(const QString &entityId);
     Q_SCRIPTABLE void CancelScript(const QString &entityId);
+    Q_SCRIPTABLE void WidgetPresent();
+    Q_SCRIPTABLE void WidgetGone();
+    Q_SCRIPTABLE void DismissNotification(const QString &idOrTag);
+    Q_SCRIPTABLE void OpenApp();
+    Q_SCRIPTABLE void ReorderEventsViewEntity(const QString &entityId, int newIndex);
+    Q_SCRIPTABLE void RemoveEventsViewEntity(const QString &entityId);
 
 signals:
     void availableEntitiesChanged();
@@ -151,6 +187,8 @@ signals:
     void iconRendererChanged();
     void accessTokenStale();
     void openFavoritesRequested();
+    void activateAppRequested();
+    void eventsViewWidgetEnabledChanged();
     Q_SCRIPTABLE void EntitiesChanged();
 
 private slots:
@@ -159,13 +197,15 @@ private slots:
     void onPollTimeout();
     void onStartupTimeout();
     void onWidgetFileChanged(const QString &path);
+    void onPresenceConfirmTimeout();
 
 private:
     enum RequestKind {
         RequestNone,
         RequestStates,
         RequestOneState,
-        RequestService
+        RequestService,
+        RequestHistory
     };
 
     void setBusy(bool busy);
@@ -193,12 +233,21 @@ private:
     QString watermarkIconPath(const QVariantMap &entity) const;
     QVariantMap entityById(const QString &entityId) const;
     void applyOptimistic(const QString &entityId, const QVariantMap &patch);
+    void setEventsViewWidgetEnabled(bool enabled);
+    void persistWidgetPresence() const;
+    void loadWidgetPresence();
+    QString notificationEntityId(const QString &tag) const;
+    void emitWidgetPayloadChanged();
+    void fetchSensorHistory(bool force);
+    void applyHistory(const QByteArray &data);
+    QStringList historyEntityIds() const;
 
     QNetworkAccessManager *m_nam;
     QFileSystemWatcher *m_watcher;
     MdiIconRenderer *m_iconRenderer;
     QTimer m_pollTimer;
     QTimer m_startupTimer;
+    QTimer m_presenceConfirmTimer;
     QString m_baseUrl;
     QString m_accessToken;
     QDateTime m_accessExpiresAt;
@@ -210,13 +259,19 @@ private:
     bool m_tokenRejected;
     int m_selectedOutstanding;
     QNetworkReply *m_allStatesReply;
+    QNetworkReply *m_historyReply;
     QString m_lastError;
     QStringList m_selectedEntityIds;
     QStringList m_eventsViewSelectedEntityIds;
     QVariantList m_availableEntities;
     QVariantList m_widgetEntities;
     QVariantList m_eventsViewWidgetEntities;
+    QVariantList m_notifications;
+    bool m_eventsViewWidgetEnabled;
     QHash<QString, bool> m_expectOn;
+    QHash<QString, QVariantList> m_historyPoints;
+    QStringList m_historyRequestedIds;
+    QDateTime m_historyFetchedAt;
     // Rendering is not cheap and rebuilds happen on every poll.
     mutable QHash<QString, QString> m_iconPathCache;
 };

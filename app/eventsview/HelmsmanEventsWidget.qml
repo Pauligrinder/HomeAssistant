@@ -25,6 +25,37 @@ Item {
     property bool adjustingSlider: false
     // Script card whose Run/Cancel row is open.
     property string scriptEntityId: ""
+    property string dragEntityId: ""
+    property bool dragIsNotification: false
+    property int dragFromIndex: -1
+    property int dragInsertIndex: -1
+    property int dragCardHeight: 0
+    property real dragY: 0
+    property bool dragOverTrash: false
+    property string dragName: ""
+    property string dragBody: ""
+    property string dragColor: "#03A9F4"
+    readonly property bool dragging: dragEntityId.length > 0
+
+    readonly property var notificationEntities: {
+        var out = []
+        var src = root.entities || []
+        for (var i = 0; i < src.length; ++i) {
+            if (src[i] && src[i].kind === "notification")
+                out.push(src[i])
+        }
+        return out
+    }
+    readonly property var favoriteEntities: {
+        var out = []
+        var src = root.entities || []
+        for (var i = 0; i < src.length; ++i) {
+            if (src[i] && src[i].kind !== "notification")
+                out.push(src[i])
+        }
+        return out
+    }
+    readonly property var visibleEntities: root.notificationEntities.concat(root.favoriteEntities)
 
     readonly property var colorSwatches: [
         { "r": 255, "g": 0, "b": 0 },
@@ -36,10 +67,6 @@ Item {
         { "r": 140, "g": 0, "b": 255 },
         { "r": 255, "g": 0, "b": 160 }
     ]
-
-    readonly property var visibleEntities: expanded
-                                           ? entities
-                                           : entities.slice(0, collapsedCount)
 
     function parseEntities(payload) {
         root.appRunning = true
@@ -70,26 +97,230 @@ Item {
             return entity.state || "unavailable"
         if (entity.kind === "script")
             return ""
+        if (entity.kind === "notification")
+            return entity.state || ""
         if (entity.kind === "climate")
             return root.climateLabel(entity)
+        if (entity.kind === "graph" || entity.kind === "sensor")
+            return root.graphLabel(entity)
         if (entity.dimmable === true && entity.on === true)
             return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
         return entity.on === true ? "On" : "Off"
+    }
+
+    function formatGraphValue(value) {
+        var n = Number(value)
+        if (!isFinite(n))
+            return ""
+        if (Math.abs(n) >= 100)
+            return String(Math.round(n))
+        var shown = n.toFixed(2).replace(/\.?0+$/, "")
+        return shown.length ? shown : "0"
+    }
+
+    function graphLabel(entity) {
+        if (!entity)
+            return ""
+        if (entity.available === false)
+            return entity.state || "unavailable"
+        var shown = root.formatGraphValue(entity.graphNow)
+        if (!shown.length && entity.state && entity.state !== "unknown"
+                && entity.state !== "unavailable")
+            shown = entity.state
+        var unit = entity.graphUnit || ""
+        if (!shown.length)
+            return unit
+        return unit ? (shown + " " + unit) : shown
+    }
+
+    function graphBarRgb(v, minV, maxV) {
+        var t = (maxV > minV) ? ((v - minV) / (maxV - minV)) : 0.5
+        if (t < 0)
+            t = 0
+        if (t > 1)
+            t = 1
+        var r
+        var g
+        var b
+        if (t < 0.5) {
+            var u = t * 2
+            r = Math.round(76 + (255 - 76) * u)
+            g = Math.round(175 + (193 - 175) * u)
+            b = Math.round(80 + (7 - 80) * u)
+        } else {
+            var u = (t - 0.5) * 2
+            r = Math.round(255 + (229 - 255) * u)
+            g = Math.round(193 + (57 - 193) * u)
+            b = Math.round(7 + (53 - 7) * u)
+        }
+        return "rgb(" + r + "," + g + "," + b + ")"
+    }
+
+    function graphValueRange(pts, minHint, maxHint) {
+        var vmin = Number(minHint)
+        var vmax = Number(maxHint)
+        if (!(vmax > vmin) && pts && pts.length) {
+            vmin = Number(pts[0].v)
+            vmax = vmin
+            for (var i = 1; i < pts.length; ++i) {
+                var pv = Number(pts[i].v)
+                if (pv < vmin)
+                    vmin = pv
+                if (pv > vmax)
+                    vmax = pv
+            }
+        }
+        if (!(vmax > vmin)) {
+            vmin -= 1
+            vmax += 1
+        }
+        return { "min": vmin, "max": vmax }
+    }
+
+    function paintBarWatermark(ctx, w, h, pts, minHint, maxHint, nowMs) {
+        if (!pts || pts.length === 0 || w <= 0 || h <= 8)
+            return
+        var pad = 4
+        var plotH = h - pad * 2
+        var t0 = Number(pts[0].t)
+        var tLast = Number(pts[pts.length - 1].t)
+        var interval = pts.length >= 2
+                ? Math.max(1, Number(pts[pts.length - 1].t) - Number(pts[pts.length - 2].t))
+                : 3600000
+        var t1 = tLast + interval
+        var span = Math.max(1, t1 - t0)
+        var range = root.graphValueRange(pts, minHint, maxHint)
+        var vmin = range.min
+        var vmax = range.max
+        var spread = vmax - vmin
+        var tomorrowT = -1
+        for (var j = 0; j < pts.length; ++j) {
+            if (Number(pts[j].d) === 1) {
+                tomorrowT = Number(pts[j].t)
+                break
+            }
+        }
+        for (var k = 0; k < pts.length; ++k) {
+            var p = pts[k]
+            var start = Number(p.t)
+            var nextT = (k + 1 < pts.length) ? Number(pts[k + 1].t) : t1
+            var x = (start - t0) / span * w
+            var bw = Math.max(1, (nextT - start) / span * w - 0.5)
+            var yv = (Number(p.v) - vmin) / spread
+            if (yv < 0)
+                yv = 0
+            if (yv > 1)
+                yv = 1
+            var bh = Math.max(1, yv * plotH)
+            ctx.globalAlpha = 0.42
+            ctx.fillStyle = root.graphBarRgb(Number(p.v), vmin, vmax)
+            ctx.fillRect(x, pad + plotH - bh, bw, bh)
+        }
+        ctx.globalAlpha = 1
+        if (tomorrowT > t0) {
+            var dx = (tomorrowT - t0) / span * w
+            ctx.strokeStyle = "rgba(255,255,255,0.45)"
+            ctx.lineWidth = 1
+            ctx.beginPath()
+            ctx.moveTo(dx, pad)
+            ctx.lineTo(dx, pad + plotH)
+            ctx.stroke()
+        }
+        if (nowMs >= t0 && nowMs <= t1) {
+            var nx = (nowMs - t0) / span * w
+            ctx.strokeStyle = "rgba(255,255,255,0.9)"
+            ctx.lineWidth = 2
+            ctx.beginPath()
+            ctx.moveTo(nx, pad)
+            ctx.lineTo(nx, pad + plotH)
+            ctx.stroke()
+        }
+    }
+
+    function paintLineWatermark(ctx, w, h, pts, minHint, maxHint) {
+        if (!pts || pts.length < 2 || w <= 0 || h <= 8)
+            return
+        var pad = 6
+        var plotH = h - pad * 2
+        var t0 = Number(pts[0].t)
+        var t1 = Number(pts[pts.length - 1].t)
+        var span = Math.max(1, t1 - t0)
+        var range = root.graphValueRange(pts, minHint, maxHint)
+        var vmin = range.min
+        var vmax = range.max
+        var spread = vmax - vmin
+        ctx.beginPath()
+        var x0 = (Number(pts[0].t) - t0) / span * w
+        var yv0 = (Number(pts[0].v) - vmin) / spread
+        if (yv0 < 0)
+            yv0 = 0
+        if (yv0 > 1)
+            yv0 = 1
+        var y0 = pad + plotH - yv0 * plotH
+        ctx.moveTo(x0, pad + plotH)
+        ctx.lineTo(x0, y0)
+        for (var i = 1; i < pts.length; ++i) {
+            var xi = (Number(pts[i].t) - t0) / span * w
+            var yvi = (Number(pts[i].v) - vmin) / spread
+            if (yvi < 0)
+                yvi = 0
+            if (yvi > 1)
+                yvi = 1
+            ctx.lineTo(xi, pad + plotH - yvi * plotH)
+        }
+        var xLast = (Number(pts[pts.length - 1].t) - t0) / span * w
+        ctx.lineTo(xLast, pad + plotH)
+        ctx.closePath()
+        ctx.fillStyle = "rgba(255,255,255,0.22)"
+        ctx.fill()
+        ctx.beginPath()
+        ctx.moveTo(x0, y0)
+        for (var j = 1; j < pts.length; ++j) {
+            var xj = (Number(pts[j].t) - t0) / span * w
+            var yvj = (Number(pts[j].v) - vmin) / spread
+            if (yvj < 0)
+                yvj = 0
+            if (yvj > 1)
+                yvj = 1
+            ctx.lineTo(xj, pad + plotH - yvj * plotH)
+        }
+        ctx.strokeStyle = "rgba(255,255,255,0.85)"
+        ctx.lineWidth = 2
+        ctx.stroke()
+    }
+
+    function formatTemp(entity) {
+        if (!entity)
+            return ""
+        var t = Number(entity.targetTemp)
+        if (!isFinite(t))
+            t = Number(entity.currentTemp)
+        if (!isFinite(t))
+            return ""
+        var step = Number(entity.tempStep) || 0.5
+        var shown = step < 1
+                    ? (Math.round(t / step) * step).toFixed(1).replace(/\.0$/, "")
+                    : String(Math.round(t))
+        return shown + (entity.tempUnit || "°")
     }
 
     function climateLabel(entity) {
         if (!entity || entity.on !== true)
             return "Off"
         var mode = entity.hvacMode || entity.state || ""
+        var label = ""
         if (mode === "fan_only")
-            return "Fan"
-        if (mode === "heat_cool")
-            return "Heat/Cool"
-        if (mode === "off")
+            label = "Fan"
+        else if (mode === "heat_cool")
+            label = "Heat/Cool"
+        else if (mode === "off")
             return "Off"
-        if (!mode)
-            return "On"
-        return mode.charAt(0).toUpperCase() + mode.slice(1)
+        else if (!mode)
+            label = "On"
+        else
+            label = mode.charAt(0).toUpperCase() + mode.slice(1)
+        var temp = entity.supportsTargetTemp === true ? root.formatTemp(entity) : ""
+        return temp ? (label + " · " + temp) : label
     }
 
     function hvacSupported(entity, mode) {
@@ -110,6 +341,16 @@ Item {
             return ""
         var mode = levels[level - 1]
         return mode ? String(mode) : ""
+    }
+
+    function acHasLevels(levels) {
+        if (!levels)
+            return false
+        for (var i = 0; i < levels.length; ++i) {
+            if (levels[i])
+                return true
+        }
+        return false
     }
 
     // Repaint the card straight away; the app confirms with EntitiesChanged.
@@ -134,7 +375,7 @@ Item {
     function toggleLight(entity) {
         if (!entity || entity.available === false)
             return
-        if (entity.kind === "script")
+        if (entity.kind === "script" || entity.kind === "graph" || entity.kind === "sensor")
             return
         if (entity.kind === "climate") {
             var climateOn = !(entity.on === true)
@@ -169,9 +410,20 @@ Item {
         root.scriptEntityId = ""
     }
 
+    function activateNotification(entity) {
+        if (!entity)
+            return
+        widgetIface.call("DismissNotification", [entity.entityId])
+        widgetIface.call("OpenApp", [])
+    }
+
     function activateCard(entity) {
         if (!entity || entity.available === false)
             return
+        if (entity.kind === "notification") {
+            root.activateNotification(entity)
+            return
+        }
         if (entity.kind === "script") {
             root.adjustEntityId = ""
             root.scriptEntityId = root.scriptEntityId === entity.entityId
@@ -179,6 +431,8 @@ Item {
                     : entity.entityId
             return
         }
+        if (entity.kind === "graph" || entity.kind === "sensor")
+            return
         root.scriptEntityId = ""
         root.toggleLight(entity)
     }
@@ -232,28 +486,72 @@ Item {
     function setFanLevel(entity, level) {
         if (!entity || entity.available === false)
             return
-        if (!root.acLevelMode(entity.fanLevels, level))
+        if (level === 0) {
+            if (!entity.fanAutoMode)
+                return
+        } else if (!root.acLevelMode(entity.fanLevels, level)) {
             return
-        root.patchEntity(entity.entityId, { "fanLevel": level, "on": true })
+        }
+        root.patchEntity(entity.entityId,
+                         { "fanLevel": level > 0 ? level : 0,
+                           "fanIsAuto": level === 0,
+                           "on": true })
         widgetIface.call("SetFanLevel", [entity.entityId, level])
     }
 
     function setVaneVertical(entity, level) {
         if (!entity || entity.available === false)
             return
-        if (!root.acLevelMode(entity.vaneVerticalLevels, level))
+        if (level === 0) {
+            if (!entity.vaneVerticalAutoMode)
+                return
+        } else if (level < 0) {
+            if (!entity.vaneVerticalSwingMode)
+                return
+        } else if (!root.acLevelMode(entity.vaneVerticalLevels, level)) {
             return
-        root.patchEntity(entity.entityId, { "vaneVertical": level })
+        }
+        root.patchEntity(entity.entityId,
+                         { "vaneVertical": level > 0 ? level : 0,
+                           "vaneVerticalIsAuto": level === 0,
+                           "vaneVerticalIsSwing": level < 0 })
         widgetIface.call("SetVaneVertical", [entity.entityId, level])
     }
 
     function setVaneHorizontal(entity, level) {
         if (!entity || entity.available === false)
             return
-        if (!root.acLevelMode(entity.vaneHorizontalLevels, level))
+        if (level === 0) {
+            if (!entity.vaneHorizontalAutoMode)
+                return
+        } else if (level < 0) {
+            if (!entity.vaneHorizontalSwingMode)
+                return
+        } else if (!root.acLevelMode(entity.vaneHorizontalLevels, level)) {
             return
-        root.patchEntity(entity.entityId, { "vaneHorizontal": level })
+        }
+        root.patchEntity(entity.entityId,
+                         { "vaneHorizontal": level > 0 ? level : 0,
+                           "vaneHorizontalIsAuto": level === 0,
+                           "vaneHorizontalIsSwing": level < 0 })
         widgetIface.call("SetVaneHorizontal", [entity.entityId, level])
+    }
+
+    function setTargetTemp(entity, temp) {
+        if (!entity || entity.available === false)
+            return
+        if (entity.supportsTargetTemp !== true)
+            return
+        var minT = Number(entity.minTemp)
+        var maxT = Number(entity.maxTemp)
+        temp = Number(temp)
+        if (!isFinite(temp))
+            return
+        if (isFinite(minT) && isFinite(maxT) && maxT > minT)
+            temp = Math.max(minT, Math.min(maxT, temp))
+        root.patchEntity(entity.entityId,
+                         { "targetTemp": temp, "on": true })
+        widgetIface.call("SetTargetTemp", [entity.entityId, temp + 0.0])
     }
 
     function colorSwatchSelected(entity, swatch) {
@@ -270,12 +568,139 @@ Item {
     }
 
     function hasAdjusters(entity) {
-        if (!entity || entity.kind === "script")
+        if (!entity || entity.kind === "script" || entity.kind === "notification"
+                || entity.kind === "graph" || entity.kind === "sensor")
             return false
         return entity.dimmable === true
                 || entity.supportsColor === true
                 || entity.supportsColorTemp === true
                 || entity.kind === "climate"
+    }
+
+    function favoriteIndexOf(entityId) {
+        var favs = root.favoriteEntities
+        for (var i = 0; i < favs.length; ++i) {
+            if (favs[i].entityId === entityId)
+                return i
+        }
+        return -1
+    }
+
+    function beginDrag(entity, cardItem) {
+        if (!entity || !entity.entityId || root.dragging)
+            return
+        root.adjustEntityId = ""
+        root.scriptEntityId = ""
+        root.dragEntityId = entity.entityId
+        root.dragIsNotification = entity.kind === "notification"
+        root.dragFromIndex = root.dragIsNotification ? -1 : root.favoriteIndexOf(entity.entityId)
+        root.dragInsertIndex = root.dragFromIndex
+        root.dragCardHeight = cardItem ? Math.max(cardItem.height, Theme.itemSizeSmall)
+                                       : Theme.itemSizeLarge
+        root.dragName = entity.name || entity.entityId
+        root.dragBody = root.stateLabel(entity)
+        root.dragColor = (entity.kind === "notification" && entity.color)
+                         ? entity.color : "#03A9F4"
+        root.dragOverTrash = false
+    }
+
+    function updateDrag(rootX, rootY) {
+        if (!root.dragging)
+            return
+        root.dragY = Math.max(0, rootY - root.dragCardHeight / 2)
+        var trash = trashBin.mapToItem(root, 0, 0)
+        root.dragOverTrash = trashBin.height > 0
+                && rootY >= trash.y
+                && rootY <= trash.y + trashBin.height
+        if (root.dragIsNotification || root.dragOverTrash)
+            return
+        var pointerY = column.mapFromItem(root, rootX, rootY).y
+        var insert = root.favoriteEntities.length
+        var favIdx = 0
+        for (var i = 0; i < cardRepeater.count; ++i) {
+            var item = cardRepeater.itemAt(i)
+            if (!item || item.isNotification)
+                continue
+            if (item.entity && item.entity.entityId === root.dragEntityId) {
+                favIdx += 1
+                continue
+            }
+            var visualMid = item.y + item.dragShift + item.height / 2
+            if (pointerY < visualMid) {
+                insert = favIdx
+                break
+            }
+            favIdx += 1
+        }
+        root.dragInsertIndex = insert
+    }
+
+    function endDrag() {
+        if (!root.dragging)
+            return
+        var entityId = root.dragEntityId
+        var isNotif = root.dragIsNotification
+        var from = root.dragFromIndex
+        var to = root.dragInsertIndex
+        var overTrash = root.dragOverTrash
+        root.dragEntityId = ""
+        root.dragOverTrash = false
+        root.dragFromIndex = -1
+        root.dragInsertIndex = -1
+        if (overTrash) {
+            if (isNotif)
+                widgetIface.call("DismissNotification", [entityId])
+            else
+                root.removeFavorite(entityId)
+            return
+        }
+        if (isNotif || from < 0)
+            return
+        if (to > from)
+            to -= 1
+        if (to === from || to < 0)
+            return
+        root.moveFavorite(entityId, to)
+    }
+
+    function cancelDrag() {
+        root.dragEntityId = ""
+        root.dragOverTrash = false
+        root.dragFromIndex = -1
+        root.dragInsertIndex = -1
+    }
+
+    function removeFavorite(entityId) {
+        var next = []
+        var src = root.entities || []
+        for (var i = 0; i < src.length; ++i) {
+            if (src[i] && src[i].entityId !== entityId)
+                next.push(src[i])
+        }
+        root.entities = next
+        widgetIface.call("RemoveEventsViewEntity", [entityId])
+    }
+
+    function moveFavorite(entityId, destIndex) {
+        var notifs = root.notificationEntities
+        var favs = []
+        var src = root.favoriteEntities
+        var moving = null
+        for (var i = 0; i < src.length; ++i) {
+            if (src[i].entityId === entityId)
+                moving = src[i]
+            else
+                favs.push(src[i])
+        }
+        if (!moving)
+            return
+        if (destIndex < 0)
+            destIndex = 0
+        if (destIndex > favs.length)
+            destIndex = favs.length
+        favs.splice(destIndex, 0, moving)
+        root.entities = notifs.concat(favs)
+        widgetIface.call("ReorderEventsViewEntity", [entityId, destIndex])
     }
 
     function toggleAdjusters(entity) {
@@ -287,10 +712,16 @@ Item {
                 : entity.entityId
     }
 
+    function pingWidgetPresent() {
+        widgetIface.call("WidgetPresent", [])
+    }
+
     function refresh() {
         // Replacing the model rebuilds the delegates, which would fight a drag.
-        if (!root.active || root.adjustingSlider || root.scriptEntityId.length > 0)
+        if (!root.active || root.adjustingSlider || root.scriptEntityId.length > 0
+                || root.dragging)
             return
+        root.pingWidgetPresent()
         widgetIface.call("Refresh", [])
         widgetIface.call("GetEntitiesJson", [],
                          function(result) { root.parseEntities(result) },
@@ -308,7 +739,12 @@ Item {
     function save() {
     }
 
-    Component.onCompleted: if (active) refresh()
+    Component.onCompleted: {
+        root.pingWidgetPresent()
+        if (active)
+            refresh()
+    }
+    Component.onDestruction: widgetIface.call("WidgetGone", [])
     onActiveChanged: {
         if (active) {
             refresh()
@@ -316,6 +752,14 @@ Item {
             root.adjustEntityId = ""
             root.scriptEntityId = ""
         }
+    }
+
+    Timer {
+        id: presenceTimer
+        interval: 8000
+        repeat: true
+        running: true
+        onTriggered: root.pingWidgetPresent()
     }
 
     Timer {
@@ -356,7 +800,8 @@ Item {
         Label {
             x: Theme.horizontalPageMargin
             width: parent.width - 2 * x
-            visible: root.entities.length === 0
+            visible: root.favoriteEntities.length === 0
+                     && root.notificationEntities.length === 0
             text: {
                 if (!root.appRunning)
                     return "Helmsman must be running to show the widget"
@@ -369,25 +814,8 @@ Item {
             wrapMode: Text.Wrap
         }
 
-        BackgroundItem {
-            id: chooseFavorites
-
-            width: parent.width
-            height: Theme.itemSizeExtraSmall
-            visible: root.appRunning && root.entities.length === 0
-                     && root.errorText.length === 0
-            onClicked: widgetIface.call("OpenFavorites", [])
-
-            Label {
-                x: Theme.horizontalPageMargin
-                anchors.verticalCenter: parent.verticalCenter
-                color: chooseFavorites.highlighted ? Theme.highlightColor : Theme.primaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                text: "Choose favorites"
-            }
-        }
-
         Repeater {
+            id: cardRepeater
             model: root.visibleEntities
 
             delegate: Item {
@@ -397,13 +825,56 @@ Item {
                 property bool available: modelData.available !== false
                 property bool isScript: modelData.kind === "script"
                 property bool isClimate: modelData.kind === "climate"
+                property bool isNotification: modelData.kind === "notification"
+                property bool isGraph: modelData.kind === "graph"
+                property bool isSensor: modelData.kind === "sensor"
+                property int favoriteIndex: {
+                    if (card.isNotification)
+                        return -1
+                    var favs = root.favoriteEntities
+                    var id = modelData.entityId
+                    for (var i = 0; i < favs.length; ++i) {
+                        if (favs[i].entityId === id)
+                            return i
+                    }
+                    return -1
+                }
+                property bool showFavorite: card.isNotification
+                                            || root.expanded
+                                            || root.dragging
+                                            || card.favoriteIndex < root.collapsedCount
+                property real dragShift: {
+                    if (!root.dragging || root.dragIsNotification || card.isNotification)
+                        return 0
+                    if (root.dragOverTrash)
+                        return 0
+                    var from = root.dragFromIndex
+                    var to = root.dragInsertIndex
+                    var idx = card.favoriteIndex
+                    if (idx < 0 || idx === from)
+                        return 0
+                    var h = root.dragCardHeight + Theme.paddingSmall
+                    if (from < to && idx > from && idx < to)
+                        return -h
+                    if (from > to && idx >= to && idx < from)
+                        return h
+                    return 0
+                }
                 property var entity: modelData
                 property bool supportsColor: modelData.supportsColor === true
                 property bool supportsColorTemp: modelData.supportsColorTemp === true
-                property bool hasAdjusters: card.dimmable
-                                            || card.supportsColor
-                                            || card.supportsColorTemp
-                                            || card.isClimate
+                property bool hasAdjusters: !card.isNotification && !card.isGraph && !card.isSensor
+                                            && (card.dimmable
+                                                || card.supportsColor
+                                                || card.supportsColorTemp
+                                                || card.isClimate)
+                property bool hasWatermarkGraph: {
+                    if (card.isGraph && modelData.graphPoints && modelData.graphPoints.length > 1)
+                        return true
+                    if (card.isSensor && modelData.historyPoints && modelData.historyPoints.length > 1)
+                        return true
+                    return false
+                }
                 property bool showAdjusters: card.hasAdjusters
                                              && card.available
                                              && root.adjustEntityId === modelData.entityId
@@ -433,6 +904,13 @@ Item {
                     return Math.max(Theme.iconSizeMedium,
                                     Math.floor((cardColumn.width - (n - 1) * gap) / n))
                 }
+                property int acFanCellCount: (card.entity.fanAutoMode ? 1 : 0) + 5
+                property int acFanCellSize: {
+                    var n = Math.max(1, card.acFanCellCount)
+                    var gap = Theme.paddingSmall
+                    return Math.max(Theme.iconSizeSmall,
+                                    Math.floor((cardColumn.width - (n - 1) * gap) / n))
+                }
                 property var hvacChoices: {
                     var all = [
                         { "id": "cool", "label": "Cool" },
@@ -450,23 +928,90 @@ Item {
 
                 x: Theme.horizontalPageMargin
                 width: column.width - 2 * Theme.horizontalPageMargin
-                height: cardColumn.height + 2 * Theme.paddingMedium
+                visible: card.showFavorite
+                height: card.showFavorite
+                        ? Math.max(cardColumn.height + 2 * Theme.paddingMedium,
+                                   ((card.isGraph || card.isSensor) ? Theme.itemSizeLarge : 0)
+                                   + 2 * Theme.paddingMedium)
+                        : 0
+                clip: true
+                opacity: (root.dragging && root.dragEntityId === modelData.entityId) ? 0.35 : 1
+                z: (root.dragging && root.dragEntityId === modelData.entityId) ? 2 : 0
+                transform: Translate {
+                    y: card.dragShift
+                    Behavior on y { NumberAnimation { duration: 120 } }
+                }
 
                 Rectangle {
                     anchors.fill: parent
                     radius: Theme.paddingMedium
-                    color: "#03A9F4"
+                    color: card.isNotification
+                           ? (modelData.color && String(modelData.color).length > 0
+                              ? modelData.color : "#03A9F4")
+                           : "#03A9F4"
                     opacity: tapArea.pressed
                              ? 0.5
-                             : ((card.isScript ? card.showScriptActions
-                                               : modelData.on === true) ? 0.32 : 0.16)
+                             : (card.isNotification
+                                ? 0.72
+                                : ((card.isGraph || card.isSensor
+                                    || (card.isScript ? card.showScriptActions
+                                                      : modelData.on === true)) ? 0.32 : 0.16))
                 }
 
-                // Watermark like the cover: half off the right edge, clipped
-                // short of the rounded corners.
+                // Graph watermark (history or today/tomorrow series) plus the
+                // MDI icon when there is no series to draw.
                 Item {
                     anchors.fill: parent
                     clip: true
+
+                    Canvas {
+                        id: graphCanvas
+                        anchors.fill: parent
+                        visible: card.hasWatermarkGraph
+                        antialiasing: true
+                        renderStrategy: Canvas.Immediate
+                        property var barPoints: modelData.graphPoints || []
+                        property var linePoints: modelData.historyPoints || []
+                        property real barMin: Number(modelData.graphMin)
+                        property real barMax: Number(modelData.graphMax)
+                        property real lineMin: Number(modelData.historyMin)
+                        property real lineMax: Number(modelData.historyMax)
+                        property real nowMs: Date.now()
+                        property bool useBars: card.isGraph
+
+                        onBarPointsChanged: requestPaint()
+                        onLinePointsChanged: requestPaint()
+                        onBarMinChanged: requestPaint()
+                        onBarMaxChanged: requestPaint()
+                        onLineMinChanged: requestPaint()
+                        onLineMaxChanged: requestPaint()
+                        onWidthChanged: requestPaint()
+                        onHeightChanged: requestPaint()
+                        onVisibleChanged: if (visible) requestPaint()
+
+                        Timer {
+                            interval: 60000
+                            running: graphCanvas.visible && root.active
+                            repeat: true
+                            onTriggered: {
+                                graphCanvas.nowMs = Date.now()
+                                graphCanvas.requestPaint()
+                            }
+                        }
+
+                        onPaint: {
+                            var ctx = getContext("2d")
+                            ctx.reset()
+                            if (graphCanvas.useBars)
+                                root.paintBarWatermark(ctx, graphCanvas.width, graphCanvas.height,
+                                                       graphCanvas.barPoints, graphCanvas.barMin,
+                                                       graphCanvas.barMax, graphCanvas.nowMs)
+                            else
+                                root.paintLineWatermark(ctx, graphCanvas.width, graphCanvas.height,
+                                                        graphCanvas.linePoints, graphCanvas.lineMin,
+                                                        graphCanvas.lineMax)
+                        }
+                    }
 
                     Image {
                         anchors.verticalCenter: parent.verticalCenter
@@ -476,9 +1021,10 @@ Item {
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         asynchronous: true
-                        opacity: (card.isScript ? card.showScriptActions
-                                                : modelData.on === true) ? 0.34 : 0.22
-                        visible: status === Image.Ready
+                        opacity: (card.isGraph || card.isSensor || card.isNotification || card.isScript
+                                  ? card.showScriptActions || card.isNotification || card.isGraph || card.isSensor
+                                  : modelData.on === true) ? 0.34 : 0.22
+                        visible: !card.hasWatermarkGraph && status === Image.Ready
                         source: modelData.iconPath
                                 ? "file://" + modelData.iconPath
                                 : ""
@@ -498,22 +1044,92 @@ Item {
                         id: tapArea
 
                         width: parent.width
-                        height: labels.height
-                        enabled: card.available
-                        onClicked: root.activateCard(modelData)
-                        onPressAndHold: root.toggleAdjusters(modelData)
+                        height: (card.isGraph || card.isSensor)
+                                ? Math.max(labels.height, Theme.itemSizeLarge)
+                                : labels.height
+                        enabled: true
+                        preventStealing: drag.active || (root.dragging
+                                         && root.dragEntityId === modelData.entityId)
+                        drag.target: (card.showAdjusters || card.showScriptActions)
+                                     ? null : dragDummy
+                        drag.axis: Drag.YAxis
+                        drag.threshold: Theme.paddingLarge
 
-                        Column {
-                            id: labels
-                            width: parent.width
+                        Item {
+                            id: dragDummy
+                            width: 1
+                            height: 1
+                            visible: false
+                        }
 
-                            Label {
+                        onClicked: {
+                            if (drag.active || root.dragging)
+                                return
+                            if (card.available)
+                                root.activateCard(modelData)
+                        }
+                        onPressAndHold: {
+                            if (drag.active || root.dragging)
+                                return
+                            root.toggleAdjusters(modelData)
+                        }
+                        onPositionChanged: {
+                            if (!pressed || card.showAdjusters || card.showScriptActions)
+                                return
+                            if (drag.active && !root.dragging)
+                                root.beginDrag(modelData, card)
+                            if (root.dragging && root.dragEntityId === modelData.entityId) {
+                                var p = tapArea.mapToItem(root, mouse.x, mouse.y)
+                                root.updateDrag(p.x, p.y)
+                            }
+                        }
+                        onReleased: {
+                            if (root.dragging && root.dragEntityId === modelData.entityId)
+                                root.endDrag()
+                            dragDummy.x = 0
+                            dragDummy.y = 0
+                        }
+                        onCanceled: {
+                            if (root.dragging && root.dragEntityId === modelData.entityId)
+                                root.cancelDrag()
+                            dragDummy.x = 0
+                            dragDummy.y = 0
+                        }
+
+                            Column {
+                                id: labels
                                 width: parent.width
-                                truncationMode: TruncationMode.Fade
-                                color: Theme.primaryColor
-                                font.pixelSize: Theme.fontSizeSmall
-                                font.bold: !card.isScript && modelData.on === true
-                                text: modelData.name || modelData.entityId
+
+                            Row {
+                                width: parent.width
+                                spacing: Theme.paddingSmall
+
+                                Label {
+                                    width: parent.width - grip.width - parent.spacing
+                                    truncationMode: TruncationMode.Fade
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.bold: !card.isScript && (card.isNotification || card.isGraph || card.isSensor || modelData.on === true)
+                                    text: modelData.name || modelData.entityId
+                                }
+
+                                Column {
+                                    id: grip
+                                    width: Theme.paddingLarge
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 3
+                                    opacity: 0.7
+
+                                    Repeater {
+                                        model: 3
+                                        Rectangle {
+                                            width: grip.width
+                                            height: 2
+                                            radius: 1
+                                            color: Theme.secondaryColor
+                                        }
+                                    }
+                                }
                             }
 
                             Label {
@@ -523,6 +1139,8 @@ Item {
                                 font.pixelSize: Theme.fontSizeExtraSmall
                                 visible: labelText.length > 0
                                 property string labelText: {
+                                    if (card.isNotification)
+                                        return root.stateLabel(modelData)
                                     if (card.isScript) {
                                         if (!card.available)
                                             return root.stateLabel(modelData)
@@ -696,6 +1314,44 @@ Item {
                             }
                         }
 
+                        Slider {
+                            id: climateTemp
+
+                            width: parent.width
+                            visible: card.entity.supportsTargetTemp === true
+                            minimumValue: Number(card.entity.minTemp) || 16
+                            maximumValue: Number(card.entity.maxTemp) || 30
+                            stepSize: Number(card.entity.tempStep) || 0.5
+                            label: "Temperature"
+                            valueText: {
+                                var step = Number(card.entity.tempStep) || 0.5
+                                var shown = step < 1
+                                            ? Number(value).toFixed(1)
+                                            : String(Math.round(value))
+                                return shown + (card.entity.tempUnit || "°")
+                            }
+
+                            Binding {
+                                target: climateTemp
+                                property: "value"
+                                value: {
+                                    var t = Number(card.entity.targetTemp)
+                                    if (!isFinite(t))
+                                        t = Number(card.entity.currentTemp)
+                                    if (!isFinite(t))
+                                        return (climateTemp.minimumValue + climateTemp.maximumValue) / 2
+                                    return t
+                                }
+                                when: !climateTemp.down
+                            }
+
+                            onDownChanged: {
+                                root.adjustingSlider = down
+                                if (!down)
+                                    root.setTargetTemp(card.entity, climateTemp.value)
+                            }
+                        }
+
                         Label {
                             width: parent.width
                             visible: card.entity.supportsFan === true
@@ -709,15 +1365,42 @@ Item {
                             spacing: Theme.paddingSmall
                             visible: card.entity.supportsFan === true
 
+                            Rectangle {
+                                visible: !!card.entity.fanAutoMode
+                                width: card.acFanCellSize
+                                height: width
+                                radius: Theme.paddingSmall
+                                property bool selected: card.entity.fanIsAuto === true
+                                color: selected ? "#73FFFFFF" : "#28FFFFFF"
+
+                                Label {
+                                    anchors.fill: parent
+                                    anchors.margins: Theme.paddingSmall / 2
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                    wrapMode: Text.Wrap
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: parent.selected
+                                    text: "Auto"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.setFanLevel(card.entity, 0)
+                                }
+                            }
+
                             Repeater {
                                 model: 5
                                 delegate: Rectangle {
-                                    width: card.acCellSize
+                                    width: card.acFanCellSize
                                     height: width
                                     radius: Theme.paddingSmall
                                     property int level: index + 1
                                     property bool enabledLevel: root.acLevelMode(card.entity.fanLevels, level).length > 0
-                                    property bool selected: Number(card.entity.fanLevel) === level
+                                    property bool selected: card.entity.fanIsAuto !== true
+                                                            && Number(card.entity.fanLevel) === level
                                     color: selected ? "#73FFFFFF" : "#28FFFFFF"
                                     opacity: enabledLevel ? 1 : 0.35
 
@@ -759,7 +1442,64 @@ Item {
                         Row {
                             width: parent.width
                             spacing: Theme.paddingSmall
-                            visible: card.entity.supportsVaneVertical === true
+                            visible: !!card.entity.vaneVerticalAutoMode
+                                     || !!card.entity.vaneVerticalSwingMode
+                            property int chipCount: (card.entity.vaneVerticalAutoMode ? 1 : 0)
+                                                    + (card.entity.vaneVerticalSwingMode ? 1 : 0)
+                            property int chipWidth: {
+                                var n = Math.max(chipCount, 2)
+                                return Math.floor((width - (n - 1) * spacing) / n)
+                            }
+
+                            Rectangle {
+                                visible: !!card.entity.vaneVerticalAutoMode
+                                width: parent.chipWidth
+                                height: Theme.itemSizeExtraSmall
+                                radius: Theme.paddingSmall
+                                property bool selected: card.entity.vaneVerticalIsAuto === true
+                                color: selected ? "#73FFFFFF" : "#28FFFFFF"
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: parent.selected
+                                    text: "Auto"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.setVaneVertical(card.entity, 0)
+                                }
+                            }
+
+                            Rectangle {
+                                visible: !!card.entity.vaneVerticalSwingMode
+                                width: parent.chipWidth
+                                height: Theme.itemSizeExtraSmall
+                                radius: Theme.paddingSmall
+                                property bool selected: card.entity.vaneVerticalIsSwing === true
+                                color: selected ? "#73FFFFFF" : "#28FFFFFF"
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: parent.selected
+                                    text: "Swing"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.setVaneVertical(card.entity, -1)
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            spacing: Theme.paddingSmall
+                            visible: root.acHasLevels(card.entity.vaneVerticalLevels)
 
                             Repeater {
                                 model: 5
@@ -769,7 +1509,9 @@ Item {
                                     radius: Theme.paddingSmall
                                     property int level: index + 1
                                     property bool enabledLevel: root.acLevelMode(card.entity.vaneVerticalLevels, level).length > 0
-                                    property bool selected: Number(card.entity.vaneVertical) === level
+                                    property bool selected: card.entity.vaneVerticalIsAuto !== true
+                                                            && card.entity.vaneVerticalIsSwing !== true
+                                                            && Number(card.entity.vaneVertical) === level
                                     property real vaneAngle: -50 + (level - 1) * 25
                                     color: selected ? "#73FFFFFF" : "#28FFFFFF"
                                     opacity: enabledLevel ? 1 : 0.35
@@ -812,7 +1554,64 @@ Item {
                         Row {
                             width: parent.width
                             spacing: Theme.paddingSmall
-                            visible: card.entity.supportsVaneHorizontal === true
+                            visible: !!card.entity.vaneHorizontalAutoMode
+                                     || !!card.entity.vaneHorizontalSwingMode
+                            property int chipCount: (card.entity.vaneHorizontalAutoMode ? 1 : 0)
+                                                    + (card.entity.vaneHorizontalSwingMode ? 1 : 0)
+                            property int chipWidth: {
+                                var n = Math.max(chipCount, 2)
+                                return Math.floor((width - (n - 1) * spacing) / n)
+                            }
+
+                            Rectangle {
+                                visible: !!card.entity.vaneHorizontalAutoMode
+                                width: parent.chipWidth
+                                height: Theme.itemSizeExtraSmall
+                                radius: Theme.paddingSmall
+                                property bool selected: card.entity.vaneHorizontalIsAuto === true
+                                color: selected ? "#73FFFFFF" : "#28FFFFFF"
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: parent.selected
+                                    text: "Auto"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.setVaneHorizontal(card.entity, 0)
+                                }
+                            }
+
+                            Rectangle {
+                                visible: !!card.entity.vaneHorizontalSwingMode
+                                width: parent.chipWidth
+                                height: Theme.itemSizeExtraSmall
+                                radius: Theme.paddingSmall
+                                property bool selected: card.entity.vaneHorizontalIsSwing === true
+                                color: selected ? "#73FFFFFF" : "#28FFFFFF"
+
+                                Label {
+                                    anchors.centerIn: parent
+                                    color: Theme.primaryColor
+                                    font.pixelSize: Theme.fontSizeExtraSmall
+                                    font.bold: parent.selected
+                                    text: "Swing"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: root.setVaneHorizontal(card.entity, -1)
+                                }
+                            }
+                        }
+
+                        Row {
+                            width: parent.width
+                            spacing: Theme.paddingSmall
+                            visible: root.acHasLevels(card.entity.vaneHorizontalLevels)
 
                             Repeater {
                                 model: 5
@@ -822,7 +1621,9 @@ Item {
                                     radius: Theme.paddingSmall
                                     property int level: index + 1
                                     property bool enabledLevel: root.acLevelMode(card.entity.vaneHorizontalLevels, level).length > 0
-                                    property bool selected: Number(card.entity.vaneHorizontal) === level
+                                    property bool selected: card.entity.vaneHorizontalIsAuto !== true
+                                                            && card.entity.vaneHorizontalIsSwing !== true
+                                                            && Number(card.entity.vaneHorizontal) === level
                                     property real vaneAngle: -50 + (level - 1) * 25
                                     color: selected ? "#73FFFFFF" : "#28FFFFFF"
                                     opacity: enabledLevel ? 1 : 0.35
@@ -859,11 +1660,29 @@ Item {
         }
 
         BackgroundItem {
+            id: chooseFavorites
+
+            width: parent.width
+            height: Theme.itemSizeExtraSmall
+            visible: root.appRunning && root.favoriteEntities.length === 0
+                     && root.errorText.length === 0
+            onClicked: widgetIface.call("OpenFavorites", [])
+
+            Label {
+                x: Theme.horizontalPageMargin
+                anchors.verticalCenter: parent.verticalCenter
+                color: chooseFavorites.highlighted ? Theme.highlightColor : Theme.primaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: "Choose favorites"
+            }
+        }
+
+        BackgroundItem {
             id: showMore
 
             width: parent.width
             height: Theme.itemSizeExtraSmall
-            visible: root.entities.length > root.collapsedCount
+            visible: !root.dragging && root.favoriteEntities.length > root.collapsedCount
             onClicked: root.expanded = !root.expanded
 
             Label {
@@ -873,7 +1692,92 @@ Item {
                 font.pixelSize: Theme.fontSizeSmall
                 text: root.expanded
                       ? "Show less"
-                      : ("Show more (" + (root.entities.length - root.collapsedCount) + ")")
+                      : ("Show more (" + (root.favoriteEntities.length - root.collapsedCount) + ")")
+            }
+        }
+
+        Item {
+            id: trashBin
+            width: parent.width
+            height: visible ? (root.dragging ? Theme.itemSizeLarge : Theme.itemSizeMedium)
+                            : 0
+            visible: root.appRunning
+                     && (root.favoriteEntities.length > 0
+                         || root.notificationEntities.length > 0)
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - 2 * Theme.horizontalPageMargin,
+                                root.dragging ? Theme.itemSizeLarge * 2.2
+                                              : Theme.itemSizeLarge * 1.6)
+                height: root.dragging ? Theme.itemSizeMedium : Theme.itemSizeSmall
+                radius: height / 2
+                color: root.dragOverTrash ? "#C62828" : "#40FFFFFF"
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: Theme.paddingSmall
+
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "image://theme/icon-m-delete"
+                        sourceSize.width: Theme.iconSizeSmall
+                        sourceSize.height: Theme.iconSizeSmall
+                        opacity: 0.9
+                    }
+
+                    Label {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: root.dragging
+                        color: Theme.primaryColor
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        text: root.dragOverTrash ? "Release to remove" : "Drop here to remove"
+                    }
+                }
+            }
+        }
+    }
+
+    Item {
+        id: dragProxy
+        visible: root.dragging
+        z: 100
+        x: Theme.horizontalPageMargin
+        y: root.dragY
+        width: column.width - 2 * Theme.horizontalPageMargin
+        height: Math.max(root.dragCardHeight, Theme.itemSizeSmall)
+        opacity: root.dragOverTrash ? 0.45 : 0.92
+
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.paddingMedium
+            color: root.dragColor
+            opacity: root.dragIsNotification ? 0.72 : 0.4
+        }
+
+        Column {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.margins: Theme.paddingLarge
+            spacing: Theme.paddingSmall
+
+            Label {
+                width: parent.width
+                truncationMode: TruncationMode.Fade
+                color: Theme.primaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: root.dragName
+            }
+
+            Label {
+                width: parent.width
+                visible: root.dragBody.length > 0
+                truncationMode: TruncationMode.Fade
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: root.dragBody
             }
         }
     }

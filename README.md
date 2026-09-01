@@ -38,7 +38,9 @@ app/
    running: Helmsman reuses other apps’ location fixes and only requests its
    own when the last fix is older than a configurable stale time (default 15
    minutes). On the internal URL, GPS stays off; Helmsman can optionally
-   report the device as `home` from the connection alone. Sensors start a few
+   report the device as `home` from the connection alone, and repeats that
+   report about once a minute so Home Assistant does not time out to away.
+   Settings include **Update location now**. Sensors start a few
    seconds after the dashboard has loaded so their webhook calls cannot stall
    the UI.
 6. **Cover favorites** — Pick lights, switches, scripts, and ACs in settings
@@ -48,11 +50,19 @@ app/
    Events View widget (`/usr/share/lipstick/eventswidgets/`). Cards use the
    cover tint and watermark. Tap toggles a light, switch, or AC; long-press a
    dimmable light to set brightness, color, or temperature; long-press an AC
-   for mode, fan speed, and vanes; tap a script for **Run** and **Cancel**.
-   The widget only refreshes while Events View is visible. If Helmsman is
-   not running the widget says so; if no favorites are selected it offers
-   **Choose favorites**. Settings → Events view shows a short description
-   next to the Helmsman toggle.
+   for mode, temperature, fan speed, and vanes; tap a script for **Run** and **Cancel**.
+   Sensors that already publish a today/tomorrow series (for example Nordpool
+   electricity prices) can be added as graph cards. Other sensors show the
+   current value with the last 24 hours drawn as the card watermark, like the
+   Home Assistant sensor dialog. Home Assistant notifications
+   appear as colored cards at the top of the widget
+   when it is enabled in Settings → Events view; otherwise they go to the
+   system notification list. Cover notification tints can be turned off in
+   Helmsman settings. The widget only refreshes while Events View is visible.
+   If Helmsman is not running the widget says so; if no favorites are selected
+   it offers **Choose favorites**. Drag a card to reorder it, or drop it on the
+   bin to remove it. Settings → Events view shows a short description next to
+   the Helmsman toggle.
 8. **URLs** — Internal and external addresses with Wi‑Fi switching. If you only
    have one address, put it in External URL and leave Internal URL empty.
 
@@ -69,9 +79,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.14-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.15-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.2.14-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.2.15-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`.

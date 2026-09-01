@@ -1,5 +1,6 @@
 #include "widgetcoordinator.h"
 
+#include "appsettings.h"
 #include "mdiiconrenderer.h"
 
 #include <QNetworkAccessManager>
@@ -15,13 +16,17 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QUrl>
+#include <QUrlQuery>
 #include <QHash>
 #include <QDateTime>
 #include <QDebug>
 #include <QDBusConnection>
 #include <QColor>
 #include <QVariant>
+#include <QSettings>
+#include <QtNumeric>
 #include <algorithm>
+#include <limits>
 
 namespace {
 
@@ -29,10 +34,13 @@ const char *kClientName = "Helmsman";
 const char *kDbusService = "org.helmsman.harbour-helmsman";
 const char *kDbusPath = "/widget";
 const int kPollIntervalMs = 8000;
+const int kHistoryIntervalMs = 5 * 60 * 1000;
 // Never fetch states straight from start()/configure(): those run inside the
 // login reply handler and during endpoint switches, where an immediate request
 // to a slow remote host wedged the UI thread.
 const int kStartupDelayMs = 700;
+const int kPresenceConfirmMs = 45 * 1000;
+const int kMaxWidgetNotifications = 8;
 
 QString widgetFilePath()
 {
@@ -203,6 +211,197 @@ bool isFavoriteEntity(const QString &entityId)
     return !entityKind(entityId).isEmpty();
 }
 
+double jsonValueNumber(const QJsonValue &value, bool *ok)
+{
+    if (value.isDouble()) {
+        if (ok)
+            *ok = true;
+        return value.toDouble();
+    }
+    if (value.isString()) {
+        bool parsed = false;
+        const double n = value.toString().toDouble(&parsed);
+        if (ok)
+            *ok = parsed;
+        return n;
+    }
+    if (ok)
+        *ok = false;
+    return 0;
+}
+
+QDateTime parseJsonTime(const QJsonValue &value)
+{
+    if (value.isDouble()) {
+        const double n = value.toDouble();
+        if (n > 1e12)
+            return QDateTime::fromMSecsSinceEpoch(qint64(n), Qt::UTC).toLocalTime();
+        if (n > 1e9)
+            return QDateTime::fromMSecsSinceEpoch(qint64(n * 1000.0), Qt::UTC).toLocalTime();
+    }
+    const QString s = value.toString();
+    if (s.isEmpty())
+        return QDateTime();
+    QDateTime dt = QDateTime::fromString(s, Qt::ISODate);
+    if (!dt.isValid() && s.size() >= 19) {
+        QString normalized = s.left(19);
+        if (normalized.at(10) == QLatin1Char(' '))
+            normalized[10] = QLatin1Char('T');
+        dt = QDateTime::fromString(normalized, QStringLiteral("yyyy-MM-ddTHH:mm:ss"));
+    }
+    if (dt.isValid() && dt.timeSpec() == Qt::OffsetFromUTC)
+        dt = dt.toLocalTime();
+    else if (dt.isValid() && dt.timeSpec() == Qt::UTC)
+        dt = dt.toLocalTime();
+    return dt;
+}
+
+void appendGraphPoint(QVariantList *out, const QDateTime &when, double value, int day)
+{
+    if (!out || !when.isValid() || !qIsFinite(value))
+        return;
+    QVariantMap point;
+    point.insert(QStringLiteral("t"), when.toMSecsSinceEpoch());
+    point.insert(QStringLiteral("v"), value);
+    point.insert(QStringLiteral("d"), day);
+    out->append(point);
+}
+
+void parseObjectSeries(const QJsonArray &array, int day, QVariantList *out)
+{
+    for (const QJsonValue &item : array) {
+        if (!item.isObject())
+            continue;
+        const QJsonObject obj = item.toObject();
+        QJsonValue start = obj.value(QStringLiteral("start"));
+        if (start.isUndefined() || start.isNull())
+            start = obj.value(QStringLiteral("startsAt"));
+        if (start.isUndefined() || start.isNull())
+            start = obj.value(QStringLiteral("start_time"));
+        QJsonValue val = obj.value(QStringLiteral("value"));
+        if (val.isUndefined() || val.isNull())
+            val = obj.value(QStringLiteral("price"));
+        if (val.isUndefined() || val.isNull())
+            val = obj.value(QStringLiteral("total"));
+        bool ok = false;
+        const double v = jsonValueNumber(val, &ok);
+        if (!ok)
+            continue;
+        appendGraphPoint(out, parseJsonTime(start), v, day);
+    }
+}
+
+void parseNumericSeries(const QJsonArray &array, int day, QVariantList *out)
+{
+    const int n = array.size();
+    if (n < 8)
+        return;
+    int stepMin = 60;
+    if (n >= 90)
+        stepMin = 15;
+    else if (n >= 46)
+        stepMin = 30;
+    QDate date = QDate::currentDate();
+    if (day == 1)
+        date = date.addDays(1);
+    const QDateTime start(date, QTime(0, 0), Qt::LocalTime);
+    for (int i = 0; i < n; ++i) {
+        bool ok = false;
+        const double v = jsonValueNumber(array.at(i), &ok);
+        if (!ok)
+            continue;
+        appendGraphPoint(out, start.addSecs(i * stepMin * 60), v, day);
+    }
+}
+
+bool arrayLooksLikeSeries(const QJsonValue &value)
+{
+    if (!value.isArray())
+        return false;
+    const QJsonArray array = value.toArray();
+    if (array.size() < 8)
+        return false;
+    const QJsonValue first = array.first();
+    if (first.isDouble())
+        return true;
+    if (first.isString()) {
+        bool ok = false;
+        first.toString().toDouble(&ok);
+        return ok;
+    }
+    if (!first.isObject())
+        return false;
+    const QJsonObject obj = first.toObject();
+    return obj.contains(QStringLiteral("value"))
+            || obj.contains(QStringLiteral("price"))
+            || obj.contains(QStringLiteral("total"));
+}
+
+void parseSeriesAttr(const QJsonObject &attrs, const QString &key, int day, QVariantList *out)
+{
+    const QJsonValue value = attrs.value(key);
+    if (!value.isArray())
+        return;
+    const QJsonArray array = value.toArray();
+    if (array.isEmpty())
+        return;
+    if (array.first().isObject())
+        parseObjectSeries(array, day, out);
+    else
+        parseNumericSeries(array, day, out);
+}
+
+QVariantList extractGraphPoints(const QJsonObject &attrs)
+{
+    QVariantList out;
+    parseSeriesAttr(attrs, QStringLiteral("raw_today"), 0, &out);
+    if (out.isEmpty())
+        parseSeriesAttr(attrs, QStringLiteral("today"), 0, &out);
+    const int todayCount = out.size();
+    parseSeriesAttr(attrs, QStringLiteral("raw_tomorrow"), 1, &out);
+    if (out.size() == todayCount)
+        parseSeriesAttr(attrs, QStringLiteral("tomorrow"), 1, &out);
+    if (out.isEmpty())
+        parseSeriesAttr(attrs, QStringLiteral("prices"), 0, &out);
+    const int cap = 200;
+    if (out.size() <= cap)
+        return out;
+    QVariantList sampled;
+    const int step = qMax(1, out.size() / cap);
+    for (int i = 0; i < out.size(); i += step)
+        sampled.append(out.at(i));
+    if (sampled.last() != out.last())
+        sampled.append(out.last());
+    return sampled;
+}
+
+bool isGraphSensor(const QJsonObject &state)
+{
+    const QString entityId = state.value(QStringLiteral("entity_id")).toString();
+    if (entityDomain(entityId) != QLatin1String("sensor"))
+        return false;
+    const QJsonObject attrs = state.value(QStringLiteral("attributes")).toObject();
+    return arrayLooksLikeSeries(attrs.value(QStringLiteral("raw_today")))
+            || arrayLooksLikeSeries(attrs.value(QStringLiteral("today")))
+            || arrayLooksLikeSeries(attrs.value(QStringLiteral("raw_tomorrow")))
+            || arrayLooksLikeSeries(attrs.value(QStringLiteral("tomorrow")))
+            || arrayLooksLikeSeries(attrs.value(QStringLiteral("prices")));
+}
+
+QString graphUnit(const QJsonObject &attrs)
+{
+    const QString unitOf = attrs.value(QStringLiteral("unit_of_measurement")).toString().trimmed();
+    if (!unitOf.isEmpty())
+        return unitOf;
+    const QString currency = attrs.value(QStringLiteral("currency")).toString().trimmed();
+    const QString unit = attrs.value(QStringLiteral("unit")).toString().trimmed();
+    if (!currency.isEmpty() && !unit.isEmpty())
+        return currency + QLatin1Char('/') + unit;
+    if (!currency.isEmpty())
+        return currency;
+    return unit;
+}
+
 QString defaultIconFor(const QString &kind, bool on)
 {
     if (kind == QLatin1String("switch"))
@@ -213,6 +412,10 @@ QString defaultIconFor(const QString &kind, bool on)
     if (kind == QLatin1String("climate"))
         return on ? QStringLiteral("mdi:air-conditioner")
                   : QStringLiteral("mdi:fan-off");
+    if (kind == QLatin1String("graph"))
+        return QStringLiteral("mdi:chart-bar");
+    if (kind == QLatin1String("sensor"))
+        return QStringLiteral("mdi:chart-line");
     return on ? QStringLiteral("mdi:lightbulb")
               : QStringLiteral("mdi:lightbulb-outline");
 }
@@ -239,6 +442,30 @@ QString jsonFlexibleString(const QJsonValue &value)
         return value.toString().trimmed();
     if (value.isDouble())
         return QString::number(value.toInt());
+    return QString();
+}
+
+double jsonNumber(const QJsonObject &obj, const QString &key, double fallback)
+{
+    const QJsonValue value = obj.value(key);
+    if (value.isDouble())
+        return value.toDouble();
+    if (value.isString()) {
+        bool ok = false;
+        const double n = value.toString().toDouble(&ok);
+        if (ok)
+            return n;
+    }
+    return fallback;
+}
+
+QString findSpecialMode(const QStringList &modes, const QString &wanted)
+{
+    const QString needle = wanted.toLower();
+    for (const QString &mode : modes) {
+        if (mode.trimmed().toLower() == needle)
+            return mode;
+    }
     return QString();
 }
 
@@ -353,6 +580,8 @@ QStringList positionalLevels(const QStringList &modes, bool namedFan)
     return assigned;
 }
 
+QStringList variantToStringList(const QVariant &value);
+
 int levelOfMode(const QStringList &levels, const QString &mode)
 {
     if (mode.isEmpty())
@@ -369,6 +598,42 @@ QString modeForLevel(const QStringList &levels, int level)
     if (level < 1 || level > levels.size())
         return QString();
     return levels.at(level - 1);
+}
+
+QString climateModeForLevel(const QVariantMap &current,
+                            const QString &levelsKey,
+                            const QString &autoKey,
+                            const QString &swingKey,
+                            int level)
+{
+    if (level == 0)
+        return current.value(autoKey).toString();
+    if (level < 0)
+        return current.value(swingKey).toString();
+    return modeForLevel(variantToStringList(current.value(levelsKey)), level);
+}
+
+bool jsonHasNumber(const QJsonObject &obj, const QString &key)
+{
+    const QJsonValue value = obj.value(key);
+    if (value.isDouble())
+        return true;
+    if (value.isString()) {
+        bool ok = false;
+        value.toString().toDouble(&ok);
+        return ok;
+    }
+    return false;
+}
+
+QString climateTempUnit(const QString &unit)
+{
+    if (unit.contains(QLatin1Char('F'))
+            || unit.contains(QStringLiteral("fahrenheit"), Qt::CaseInsensitive))
+        return QStringLiteral("°F");
+    if (!unit.isEmpty() && unit.contains(QChar(0x00B0)))
+        return unit;
+    return QStringLiteral("°C");
 }
 
 QStringList variantToStringList(const QVariant &value)
@@ -397,6 +662,8 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     , m_tokenRejected(false)
     , m_selectedOutstanding(0)
     , m_allStatesReply(nullptr)
+    , m_historyReply(nullptr)
+    , m_eventsViewWidgetEnabled(false)
 {
     m_pollTimer.setInterval(kPollIntervalMs);
     connect(&m_pollTimer, SIGNAL(timeout()), this, SLOT(onPollTimeout()));
@@ -409,9 +676,15 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     connect(m_watcher, SIGNAL(fileChanged(QString)),
             this, SLOT(onWidgetFileChanged(QString)));
 
+    m_presenceConfirmTimer.setSingleShot(true);
+    m_presenceConfirmTimer.setInterval(kPresenceConfirmMs);
+    connect(&m_presenceConfirmTimer, SIGNAL(timeout()),
+            this, SLOT(onPresenceConfirmTimeout()));
+
     loadSelected();
     watchSelectedFile();
     registerDBus();
+    loadWidgetPresence();
 }
 
 WidgetCoordinator::~WidgetCoordinator()
@@ -466,6 +739,11 @@ QString WidgetCoordinator::lastError() const
 bool WidgetCoordinator::dbusRegistered() const
 {
     return m_dbusRegistered;
+}
+
+bool WidgetCoordinator::eventsViewWidgetEnabled() const
+{
+    return m_eventsViewWidgetEnabled;
 }
 
 MdiIconRenderer *WidgetCoordinator::iconRenderer() const
@@ -583,6 +861,7 @@ void WidgetCoordinator::setEventsViewSelectedEntityIds(const QStringList &ids)
     rebuildWidgetEntities();
     if (m_active)
         getStates();
+    fetchSensorHistory(true);
 }
 
 void WidgetCoordinator::setEventsViewEntitySelected(const QString &entityId, bool selected)
@@ -598,6 +877,21 @@ void WidgetCoordinator::setEventsViewEntitySelected(const QString &entityId, boo
         next.removeAt(index);
     else
         return;
+    setEventsViewSelectedEntityIds(next);
+}
+
+void WidgetCoordinator::reorderEventsViewEntity(const QString &entityId, int newIndex)
+{
+    const QString id = entityId.trimmed();
+    if (id.isEmpty())
+        return;
+    QStringList next = m_eventsViewSelectedEntityIds;
+    const int from = next.indexOf(id);
+    if (from < 0)
+        return;
+    next.removeAt(from);
+    const int dest = qBound(0, newIndex, next.size());
+    next.insert(dest, id);
     setEventsViewSelectedEntityIds(next);
 }
 
@@ -767,13 +1061,17 @@ void WidgetCoordinator::setFanLevel(const QString &entityId, int level)
     if (entityKind(entityId) != QLatin1String("climate"))
         return;
     const QVariantMap current = entityById(entityId);
-    const QString mode = modeForLevel(
-                variantToStringList(current.value(QStringLiteral("fanLevels"))), level);
+    const QString mode = climateModeForLevel(current,
+                                            QStringLiteral("fanLevels"),
+                                            QStringLiteral("fanAutoMode"),
+                                            QString(),
+                                            level);
     if (mode.isEmpty())
         return;
 
     QVariantMap patch;
-    patch.insert(QStringLiteral("fanLevel"), level);
+    patch.insert(QStringLiteral("fanLevel"), level > 0 ? level : 0);
+    patch.insert(QStringLiteral("fanIsAuto"), level == 0);
     patch.insert(QStringLiteral("on"), true);
     m_expectOn.insert(entityId, true);
     applyOptimistic(entityId, patch);
@@ -789,13 +1087,18 @@ void WidgetCoordinator::setVaneVertical(const QString &entityId, int level)
     if (entityKind(entityId) != QLatin1String("climate"))
         return;
     const QVariantMap current = entityById(entityId);
-    const QString mode = modeForLevel(
-                variantToStringList(current.value(QStringLiteral("vaneVerticalLevels"))), level);
+    const QString mode = climateModeForLevel(current,
+                                            QStringLiteral("vaneVerticalLevels"),
+                                            QStringLiteral("vaneVerticalAutoMode"),
+                                            QStringLiteral("vaneVerticalSwingMode"),
+                                            level);
     if (mode.isEmpty())
         return;
 
     QVariantMap patch;
-    patch.insert(QStringLiteral("vaneVertical"), level);
+    patch.insert(QStringLiteral("vaneVertical"), level > 0 ? level : 0);
+    patch.insert(QStringLiteral("vaneVerticalIsAuto"), level == 0);
+    patch.insert(QStringLiteral("vaneVerticalIsSwing"), level < 0);
     applyOptimistic(entityId, patch);
 
     QJsonObject body;
@@ -809,13 +1112,18 @@ void WidgetCoordinator::setVaneHorizontal(const QString &entityId, int level)
     if (entityKind(entityId) != QLatin1String("climate"))
         return;
     const QVariantMap current = entityById(entityId);
-    const QString mode = modeForLevel(
-                variantToStringList(current.value(QStringLiteral("vaneHorizontalLevels"))), level);
+    const QString mode = climateModeForLevel(current,
+                                            QStringLiteral("vaneHorizontalLevels"),
+                                            QStringLiteral("vaneHorizontalAutoMode"),
+                                            QStringLiteral("vaneHorizontalSwingMode"),
+                                            level);
     if (mode.isEmpty())
         return;
 
     QVariantMap patch;
-    patch.insert(QStringLiteral("vaneHorizontal"), level);
+    patch.insert(QStringLiteral("vaneHorizontal"), level > 0 ? level : 0);
+    patch.insert(QStringLiteral("vaneHorizontalIsAuto"), level == 0);
+    patch.insert(QStringLiteral("vaneHorizontalIsSwing"), level < 0);
     applyOptimistic(entityId, patch);
 
     QJsonObject body;
@@ -824,10 +1132,38 @@ void WidgetCoordinator::setVaneHorizontal(const QString &entityId, int level)
     callService(QStringLiteral("climate"), QStringLiteral("set_swing_horizontal_mode"), body);
 }
 
+void WidgetCoordinator::setTargetTemp(const QString &entityId, double temp)
+{
+    if (entityKind(entityId) != QLatin1String("climate"))
+        return;
+    const QVariantMap current = entityById(entityId);
+    if (!current.value(QStringLiteral("supportsTargetTemp")).toBool())
+        return;
+
+    const double minT = current.value(QStringLiteral("minTemp")).toDouble();
+    const double maxT = current.value(QStringLiteral("maxTemp")).toDouble();
+    if (maxT > minT)
+        temp = qBound(minT, temp, maxT);
+
+    QVariantMap patch;
+    patch.insert(QStringLiteral("targetTemp"), temp);
+    patch.insert(QStringLiteral("on"), true);
+    m_expectOn.insert(entityId, true);
+    applyOptimistic(entityId, patch);
+
+    QJsonObject body;
+    body.insert(QStringLiteral("entity_id"), entityId);
+    body.insert(QStringLiteral("temperature"), temp);
+    callService(QStringLiteral("climate"), QStringLiteral("set_temperature"), body);
+}
+
 QString WidgetCoordinator::GetEntitiesJson() const
 {
+    QVariantList combined = m_notifications;
+    for (const QVariant &value : m_eventsViewWidgetEntities)
+        combined.append(value);
     return QString::fromUtf8(QJsonDocument::fromVariant(
-                                 m_eventsViewWidgetEntities).toJson(QJsonDocument::Compact));
+                                 combined).toJson(QJsonDocument::Compact));
 }
 
 void WidgetCoordinator::Refresh()
@@ -875,6 +1211,11 @@ void WidgetCoordinator::SetVaneHorizontal(const QString &entityId, int level)
     setVaneHorizontal(entityId, level);
 }
 
+void WidgetCoordinator::SetTargetTemp(const QString &entityId, double temp)
+{
+    setTargetTemp(entityId, temp);
+}
+
 void WidgetCoordinator::OpenFavorites()
 {
     emit openFavoritesRequested();
@@ -906,6 +1247,149 @@ void WidgetCoordinator::RunScript(const QString &entityId)
 void WidgetCoordinator::CancelScript(const QString &entityId)
 {
     cancelScript(entityId);
+}
+
+void WidgetCoordinator::pushNotification(const QString &title,
+                                         const QString &body,
+                                         const QString &color,
+                                         const QString &iconPath,
+                                         const QString &tag)
+{
+    const QString id = notificationEntityId(tag);
+    QVariantMap map;
+    map.insert(QStringLiteral("entityId"), id);
+    map.insert(QStringLiteral("kind"), QStringLiteral("notification"));
+    map.insert(QStringLiteral("name"), title);
+    map.insert(QStringLiteral("state"), body);
+    map.insert(QStringLiteral("color"), color);
+    QString path = iconPath;
+    if (path.isEmpty() && m_iconRenderer)
+        path = m_iconRenderer->renderIconFile(QStringLiteral("mdi:bell"),
+                                             QStringLiteral("#FFFFFF"), 256);
+    map.insert(QStringLiteral("iconPath"), path);
+    map.insert(QStringLiteral("tag"), tag);
+    map.insert(QStringLiteral("on"), true);
+    map.insert(QStringLiteral("available"), true);
+    map.insert(QStringLiteral("dimmable"), false);
+
+    QVariantList next;
+    next.append(map);
+    for (const QVariant &value : m_notifications) {
+        const QVariantMap existing = value.toMap();
+        if (existing.value(QStringLiteral("entityId")).toString() == id)
+            continue;
+        next.append(value);
+        if (next.size() >= kMaxWidgetNotifications)
+            break;
+    }
+    m_notifications = next;
+    emitWidgetPayloadChanged();
+}
+
+void WidgetCoordinator::dismissNotification(const QString &idOrTag)
+{
+    if (idOrTag.isEmpty() || m_notifications.isEmpty())
+        return;
+    const QString id = notificationEntityId(idOrTag);
+    QVariantList next;
+    bool removed = false;
+    for (const QVariant &value : m_notifications) {
+        const QVariantMap existing = value.toMap();
+        const QString existingId = existing.value(QStringLiteral("entityId")).toString();
+        const QString existingTag = existing.value(QStringLiteral("tag")).toString();
+        if (existingId == id || existingId == idOrTag || existingTag == idOrTag) {
+            removed = true;
+            continue;
+        }
+        next.append(value);
+    }
+    if (!removed)
+        return;
+    m_notifications = next;
+    emitWidgetPayloadChanged();
+}
+
+void WidgetCoordinator::WidgetPresent()
+{
+    m_presenceConfirmTimer.stop();
+    setEventsViewWidgetEnabled(true);
+    fetchSensorHistory(false);
+}
+
+void WidgetCoordinator::WidgetGone()
+{
+    m_presenceConfirmTimer.stop();
+    setEventsViewWidgetEnabled(false);
+}
+
+void WidgetCoordinator::DismissNotification(const QString &idOrTag)
+{
+    dismissNotification(idOrTag);
+}
+
+void WidgetCoordinator::OpenApp()
+{
+    emit activateAppRequested();
+}
+
+void WidgetCoordinator::ReorderEventsViewEntity(const QString &entityId, int newIndex)
+{
+    reorderEventsViewEntity(entityId, newIndex);
+}
+
+void WidgetCoordinator::RemoveEventsViewEntity(const QString &entityId)
+{
+    setEventsViewEntitySelected(entityId, false);
+}
+
+void WidgetCoordinator::onPresenceConfirmTimeout()
+{
+    setEventsViewWidgetEnabled(false);
+}
+
+void WidgetCoordinator::setEventsViewWidgetEnabled(bool enabled)
+{
+    if (m_eventsViewWidgetEnabled == enabled)
+        return;
+    m_eventsViewWidgetEnabled = enabled;
+    persistWidgetPresence();
+    emit eventsViewWidgetEnabledChanged();
+}
+
+void WidgetCoordinator::persistWidgetPresence() const
+{
+    QSettings settings(AppSettings::filePath(), QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("widget"));
+    settings.setValue(QStringLiteral("eventsViewEnabled"), m_eventsViewWidgetEnabled);
+    settings.endGroup();
+}
+
+void WidgetCoordinator::loadWidgetPresence()
+{
+    QSettings settings(AppSettings::filePath(), QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("widget"));
+    const bool enabled = settings.value(QStringLiteral("eventsViewEnabled"), false).toBool();
+    settings.endGroup();
+    if (!enabled)
+        return;
+    m_eventsViewWidgetEnabled = true;
+    emit eventsViewWidgetEnabledChanged();
+    m_presenceConfirmTimer.start();
+}
+
+QString WidgetCoordinator::notificationEntityId(const QString &tag) const
+{
+    if (tag.startsWith(QLatin1String("notification:")))
+        return tag;
+    if (tag.isEmpty())
+        return QStringLiteral("notification:") + QString::number(QDateTime::currentMSecsSinceEpoch());
+    return QStringLiteral("notification:") + tag;
+}
+
+void WidgetCoordinator::emitWidgetPayloadChanged()
+{
+    emit eventsViewWidgetEntitiesChanged();
+    emit EntitiesChanged();
 }
 
 void WidgetCoordinator::setBusy(bool busy)
@@ -1065,6 +1549,7 @@ void WidgetCoordinator::getSelectedStates()
     }
     if (ids.isEmpty()) {
         rebuildWidgetEntities();
+        fetchSensorHistory(false);
         return;
     }
 
@@ -1108,6 +1593,131 @@ void WidgetCoordinator::getEntityState(const QString &entityId)
     ++m_selectedOutstanding;
 }
 
+QStringList WidgetCoordinator::historyEntityIds() const
+{
+    QHash<QString, QString> kindById;
+    for (const QVariant &value : m_availableEntities) {
+        const QVariantMap map = value.toMap();
+        kindById.insert(map.value(QStringLiteral("entityId")).toString(),
+                        map.value(QStringLiteral("kind")).toString());
+    }
+
+    QStringList ids;
+    for (const QString &id : m_eventsViewSelectedEntityIds) {
+        if (entityDomain(id) != QLatin1String("sensor"))
+            continue;
+        if (kindById.value(id) == QLatin1String("graph"))
+            continue;
+        ids.append(id);
+    }
+    return ids;
+}
+
+void WidgetCoordinator::fetchSensorHistory(bool force)
+{
+    if (!m_active || m_baseUrl.isEmpty() || m_accessToken.isEmpty())
+        return;
+    if (!accessTokenUsable())
+        return;
+
+    const QStringList ids = historyEntityIds();
+    if (ids.isEmpty()) {
+        if (!m_historyPoints.isEmpty()) {
+            m_historyPoints.clear();
+            m_historyRequestedIds.clear();
+            m_historyFetchedAt = QDateTime();
+            rebuildWidgetEntities();
+        }
+        return;
+    }
+    if (m_historyReply)
+        return;
+
+    const bool idsChanged = ids != m_historyRequestedIds;
+    if (!force && !idsChanged && m_historyFetchedAt.isValid()
+            && m_historyFetchedAt.msecsTo(QDateTime::currentDateTimeUtc()) < kHistoryIntervalMs)
+        return;
+
+    const QDateTime end = QDateTime::currentDateTimeUtc();
+    const QDateTime start = end.addDays(-1);
+    const QString stamp = start.toUTC().toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss"))
+            + QLatin1Char('Z');
+    QUrl url = apiUrl(QStringLiteral("/api/history/period/") + stamp);
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("filter_entity_id"), ids.join(QLatin1Char(',')));
+    query.addQueryItem(QStringLiteral("end_time"),
+                       end.toUTC().toString(QStringLiteral("yyyy-MM-ddTHH:mm:ss"))
+                       + QLatin1Char('Z'));
+    query.addQueryItem(QStringLiteral("significant_changes_only"), QStringLiteral("0"));
+    query.addQueryItem(QStringLiteral("no_attributes"), QStringLiteral("1"));
+    url.setQuery(query);
+
+    QNetworkRequest request(url);
+    request.setRawHeader("Accept", "application/json");
+    request.setRawHeader("User-Agent", kClientName);
+    request.setRawHeader("Authorization", QByteArray("Bearer ") + m_accessToken.toUtf8());
+    m_historyReply = m_nam->get(request);
+    m_historyReply->setProperty("kind", int(RequestHistory));
+    m_historyReply->setProperty("token", m_accessToken);
+    m_historyRequestedIds = ids;
+    connect(m_historyReply, SIGNAL(finished()), this, SLOT(onReplyFinished()));
+}
+
+void WidgetCoordinator::applyHistory(const QByteArray &data)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isArray())
+        return;
+
+    QHash<QString, QVariantList> next;
+    const QJsonArray outer = doc.array();
+    for (const QJsonValue &groupVal : outer) {
+        if (!groupVal.isArray())
+            continue;
+        const QJsonArray states = groupVal.toArray();
+        QString entityId;
+        QVariantList points;
+        for (const QJsonValue &item : states) {
+            if (!item.isObject())
+                continue;
+            const QJsonObject obj = item.toObject();
+            if (obj.contains(QStringLiteral("entity_id")))
+                entityId = obj.value(QStringLiteral("entity_id")).toString();
+            const QString status = obj.value(QStringLiteral("state")).toString();
+            if (status.isEmpty()
+                    || status == QLatin1String("unavailable")
+                    || status == QLatin1String("unknown"))
+                continue;
+            bool ok = false;
+            const double v = jsonValueNumber(obj.value(QStringLiteral("state")), &ok);
+            if (!ok)
+                continue;
+            QJsonValue when = obj.value(QStringLiteral("last_changed"));
+            if (when.isUndefined() || when.isNull() || when.toString().isEmpty())
+                when = obj.value(QStringLiteral("last_updated"));
+            appendGraphPoint(&points, parseJsonTime(when), v, 0);
+        }
+        if (entityId.isEmpty() || points.size() < 2)
+            continue;
+        const int cap = 120;
+        if (points.size() <= cap) {
+            next.insert(entityId, points);
+        } else {
+            QVariantList sampled;
+            const int step = qMax(1, points.size() / cap);
+            for (int i = 0; i < points.size(); i += step)
+                sampled.append(points.at(i));
+            if (sampled.last() != points.last())
+                sampled.append(points.last());
+            next.insert(entityId, sampled);
+        }
+    }
+
+    m_historyPoints = next;
+    m_historyFetchedAt = QDateTime::currentDateTimeUtc();
+    rebuildWidgetEntities();
+}
+
 void WidgetCoordinator::callService(const QString &domain, const QString &service, const QJsonObject &body)
 {
     if (m_baseUrl.isEmpty() || m_accessToken.isEmpty())
@@ -1145,7 +1755,7 @@ void WidgetCoordinator::applyStates(const QByteArray &data)
             continue;
         const QJsonObject state = value.toObject();
         const QString entityId = state.value(QStringLiteral("entity_id")).toString();
-        if (!isFavoriteEntity(entityId))
+        if (!isFavoriteEntity(entityId) && entityDomain(entityId) != QLatin1String("sensor"))
             continue;
         lights.append(overlayExpectation(entityFromState(state)));
     }
@@ -1162,6 +1772,7 @@ void WidgetCoordinator::applyStates(const QByteArray &data)
     }
     rebuildWidgetEntities();
     setError(QString());
+    fetchSensorHistory(false);
 }
 
 void WidgetCoordinator::applyOneState(const QByteArray &data)
@@ -1174,7 +1785,7 @@ void WidgetCoordinator::applyOneState(const QByteArray &data)
     if (entityId.isEmpty())
         return;
 
-    if (!isFavoriteEntity(entityId))
+    if (!isFavoriteEntity(entityId) && entityDomain(entityId) != QLatin1String("sensor"))
         return;
 
     const QVariantMap map = overlayExpectation(entityFromState(state));
@@ -1195,7 +1806,11 @@ void WidgetCoordinator::applyOneState(const QByteArray &data)
 QVariantMap WidgetCoordinator::entityFromState(const QJsonObject &state) const
 {
     const QString entityId = state.value(QStringLiteral("entity_id")).toString();
-    const QString kind = entityKind(entityId);
+    QString kind = entityKind(entityId);
+    if (kind.isEmpty() && isGraphSensor(state))
+        kind = QStringLiteral("graph");
+    else if (kind.isEmpty() && entityDomain(entityId) == QLatin1String("sensor"))
+        kind = QStringLiteral("sensor");
     const QJsonObject attrs = state.value(QStringLiteral("attributes")).toObject();
     const QString status = state.value(QStringLiteral("state")).toString();
     const bool available = status != QLatin1String("unavailable")
@@ -1257,22 +1872,144 @@ QVariantMap WidgetCoordinator::entityFromState(const QJsonObject &state) const
         const QStringList fanLevels = positionalLevels(fanModes, true);
         const QStringList vaneVerticalLevels = positionalLevels(swingModes, false);
         const QStringList vaneHorizontalLevels = positionalLevels(swingHorizontalModes, false);
+        const QString fanAutoMode = findSpecialMode(fanModes, QStringLiteral("auto"));
+        const QString vaneVerticalAutoMode = findSpecialMode(swingModes, QStringLiteral("auto"));
+        const QString vaneVerticalSwingMode = findSpecialMode(swingModes, QStringLiteral("swing"));
+        const QString vaneHorizontalAutoMode = findSpecialMode(swingHorizontalModes, QStringLiteral("auto"));
+        const QString vaneHorizontalSwingMode = findSpecialMode(swingHorizontalModes, QStringLiteral("swing"));
+        const QString currentFan = jsonFlexibleString(attrs.value(QStringLiteral("fan_mode")));
+        const QString currentVaneV = jsonFlexibleString(attrs.value(QStringLiteral("swing_mode")));
+        const QString currentVaneH = jsonFlexibleString(attrs.value(QStringLiteral("swing_horizontal_mode")));
+        const bool fanIsAuto = !fanAutoMode.isEmpty()
+                && currentFan.compare(fanAutoMode, Qt::CaseInsensitive) == 0;
+        const bool vaneVerticalIsAuto = !vaneVerticalAutoMode.isEmpty()
+                && currentVaneV.compare(vaneVerticalAutoMode, Qt::CaseInsensitive) == 0;
+        const bool vaneVerticalIsSwing = !vaneVerticalSwingMode.isEmpty()
+                && currentVaneV.compare(vaneVerticalSwingMode, Qt::CaseInsensitive) == 0;
+        const bool vaneHorizontalIsAuto = !vaneHorizontalAutoMode.isEmpty()
+                && currentVaneH.compare(vaneHorizontalAutoMode, Qt::CaseInsensitive) == 0;
+        const bool vaneHorizontalIsSwing = !vaneHorizontalSwingMode.isEmpty()
+                && currentVaneH.compare(vaneHorizontalSwingMode, Qt::CaseInsensitive) == 0;
+        const int features = static_cast<int>(jsonNumber(attrs, QStringLiteral("supported_features"), 0));
+        const QString unitRaw = attrs.value(QStringLiteral("temperature_unit")).toString();
+        const QString tempUnit = climateTempUnit(unitRaw);
+        const bool fahrenheit = tempUnit.contains(QLatin1Char('F'));
+        const double minTemp = jsonNumber(attrs, QStringLiteral("min_temp"), fahrenheit ? 60.0 : 16.0);
+        const double maxTemp = jsonNumber(attrs, QStringLiteral("max_temp"), fahrenheit ? 86.0 : 30.0);
+        double tempStep = jsonNumber(attrs, QStringLiteral("target_temp_step"), 0);
+        if (tempStep <= 0)
+            tempStep = fahrenheit ? 1.0 : 0.5;
+        const bool supportsTargetTemp = (features & 1) != 0
+                || jsonHasNumber(attrs, QStringLiteral("temperature"))
+                || (attrs.contains(QStringLiteral("min_temp"))
+                    && attrs.contains(QStringLiteral("max_temp")));
+        double targetTemp = jsonHasNumber(attrs, QStringLiteral("temperature"))
+                ? jsonNumber(attrs, QStringLiteral("temperature"), (minTemp + maxTemp) / 2.0)
+                : (minTemp + maxTemp) / 2.0;
         map.insert(QStringLiteral("hvacMode"), hvacMode);
         map.insert(QStringLiteral("hvacModes"), hvacModes);
         map.insert(QStringLiteral("fanLevels"), fanLevels);
-        map.insert(QStringLiteral("fanLevel"),
-                   levelOfMode(fanLevels, jsonFlexibleString(attrs.value(QStringLiteral("fan_mode")))));
+        map.insert(QStringLiteral("fanLevel"), fanIsAuto ? 0 : levelOfMode(fanLevels, currentFan));
+        map.insert(QStringLiteral("fanAutoMode"), fanAutoMode);
+        map.insert(QStringLiteral("fanIsAuto"), fanIsAuto);
         map.insert(QStringLiteral("vaneVerticalLevels"), vaneVerticalLevels);
         map.insert(QStringLiteral("vaneVertical"),
-                   levelOfMode(vaneVerticalLevels,
-                               jsonFlexibleString(attrs.value(QStringLiteral("swing_mode")))));
+                   (vaneVerticalIsAuto || vaneVerticalIsSwing)
+                   ? 0 : levelOfMode(vaneVerticalLevels, currentVaneV));
+        map.insert(QStringLiteral("vaneVerticalAutoMode"), vaneVerticalAutoMode);
+        map.insert(QStringLiteral("vaneVerticalSwingMode"), vaneVerticalSwingMode);
+        map.insert(QStringLiteral("vaneVerticalIsAuto"), vaneVerticalIsAuto);
+        map.insert(QStringLiteral("vaneVerticalIsSwing"), vaneVerticalIsSwing);
         map.insert(QStringLiteral("vaneHorizontalLevels"), vaneHorizontalLevels);
         map.insert(QStringLiteral("vaneHorizontal"),
-                   levelOfMode(vaneHorizontalLevels,
-                               jsonFlexibleString(attrs.value(QStringLiteral("swing_horizontal_mode")))));
-        map.insert(QStringLiteral("supportsFan"), filledLevelCount(fanLevels) > 0);
-        map.insert(QStringLiteral("supportsVaneVertical"), filledLevelCount(vaneVerticalLevels) > 0);
-        map.insert(QStringLiteral("supportsVaneHorizontal"), filledLevelCount(vaneHorizontalLevels) > 0);
+                   (vaneHorizontalIsAuto || vaneHorizontalIsSwing)
+                   ? 0 : levelOfMode(vaneHorizontalLevels, currentVaneH));
+        map.insert(QStringLiteral("vaneHorizontalAutoMode"), vaneHorizontalAutoMode);
+        map.insert(QStringLiteral("vaneHorizontalSwingMode"), vaneHorizontalSwingMode);
+        map.insert(QStringLiteral("vaneHorizontalIsAuto"), vaneHorizontalIsAuto);
+        map.insert(QStringLiteral("vaneHorizontalIsSwing"), vaneHorizontalIsSwing);
+        map.insert(QStringLiteral("supportsFan"),
+                   filledLevelCount(fanLevels) > 0 || !fanAutoMode.isEmpty());
+        map.insert(QStringLiteral("supportsVaneVertical"),
+                   filledLevelCount(vaneVerticalLevels) > 0
+                   || !vaneVerticalAutoMode.isEmpty()
+                   || !vaneVerticalSwingMode.isEmpty());
+        map.insert(QStringLiteral("supportsVaneHorizontal"),
+                   filledLevelCount(vaneHorizontalLevels) > 0
+                   || !vaneHorizontalAutoMode.isEmpty()
+                   || !vaneHorizontalSwingMode.isEmpty());
+        map.insert(QStringLiteral("supportsTargetTemp"), supportsTargetTemp);
+        map.insert(QStringLiteral("minTemp"), minTemp);
+        map.insert(QStringLiteral("maxTemp"), maxTemp);
+        map.insert(QStringLiteral("tempStep"), tempStep);
+        map.insert(QStringLiteral("tempUnit"), tempUnit);
+        map.insert(QStringLiteral("targetTemp"), targetTemp);
+        if (jsonHasNumber(attrs, QStringLiteral("current_temperature")))
+            map.insert(QStringLiteral("currentTemp"),
+                       jsonNumber(attrs, QStringLiteral("current_temperature"), 0));
+    }
+
+    if (kind == QLatin1String("graph")) {
+        const QVariantList points = extractGraphPoints(attrs);
+        bool hasNow = jsonHasNumber(attrs, QStringLiteral("current_price"));
+        double nowVal = hasNow
+                ? jsonNumber(attrs, QStringLiteral("current_price"), 0)
+                : 0;
+        if (!hasNow) {
+            bool ok = false;
+            nowVal = jsonValueNumber(QJsonValue(status), &ok);
+            hasNow = ok;
+        }
+        if (!hasNow && !points.isEmpty()) {
+            const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+            int best = 0;
+            qint64 bestDelta = std::numeric_limits<qint64>::max();
+            for (int i = 0; i < points.size(); ++i) {
+                const qint64 t = points.at(i).toMap().value(QStringLiteral("t")).toLongLong();
+                const qint64 delta = qAbs(t - nowMs);
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    best = i;
+                }
+            }
+            nowVal = points.at(best).toMap().value(QStringLiteral("v")).toDouble();
+            hasNow = true;
+        }
+        double gmin = 0;
+        double gmax = 0;
+        if (!points.isEmpty()) {
+            bool first = true;
+            for (const QVariant &item : points) {
+                const double v = item.toMap().value(QStringLiteral("v")).toDouble();
+                if (first) {
+                    gmin = gmax = v;
+                    first = false;
+                } else {
+                    gmin = qMin(gmin, v);
+                    gmax = qMax(gmax, v);
+                }
+            }
+        } else if (jsonHasNumber(attrs, QStringLiteral("min"))
+                   && jsonHasNumber(attrs, QStringLiteral("max"))) {
+            gmin = jsonNumber(attrs, QStringLiteral("min"), 0);
+            gmax = jsonNumber(attrs, QStringLiteral("max"), 0);
+        }
+        map.insert(QStringLiteral("graphPoints"), points);
+        if (hasNow)
+            map.insert(QStringLiteral("graphNow"), nowVal);
+        map.insert(QStringLiteral("graphUnit"), graphUnit(attrs));
+        map.insert(QStringLiteral("graphMin"), gmin);
+        map.insert(QStringLiteral("graphMax"), gmax);
+        map.insert(QStringLiteral("on"), false);
+    }
+
+    if (kind == QLatin1String("sensor")) {
+        bool ok = false;
+        const double nowVal = jsonValueNumber(QJsonValue(status), &ok);
+        if (ok)
+            map.insert(QStringLiteral("graphNow"), nowVal);
+        map.insert(QStringLiteral("graphUnit"), graphUnit(attrs));
+        map.insert(QStringLiteral("on"), false);
     }
     QString icon = attrs.value(QStringLiteral("icon")).toString();
     if (icon.isEmpty())
@@ -1287,7 +2024,9 @@ QVariantMap WidgetCoordinator::overlayExpectation(QVariantMap map)
     const QString entityId = map.value(QStringLiteral("entityId")).toString();
     if (entityId.isEmpty() || !m_expectOn.contains(entityId))
         return map;
-    if (map.value(QStringLiteral("kind")).toString() == QLatin1String("script"))
+    if (map.value(QStringLiteral("kind")).toString() == QLatin1String("script")
+            || map.value(QStringLiteral("kind")).toString() == QLatin1String("graph")
+            || map.value(QStringLiteral("kind")).toString() == QLatin1String("sensor"))
         return map;
 
     const bool expected = m_expectOn.value(entityId);
@@ -1334,7 +2073,7 @@ void WidgetCoordinator::mergeServiceStates(const QByteArray &data)
             continue;
         const QJsonObject state = value.toObject();
         const QString entityId = state.value(QStringLiteral("entity_id")).toString();
-        if (!isFavoriteEntity(entityId))
+        if (!isFavoriteEntity(entityId) && entityDomain(entityId) != QLatin1String("sensor"))
             continue;
         const QVariantMap map = overlayExpectation(entityFromState(state));
         if (indexById.contains(entityId)) {
@@ -1352,7 +2091,14 @@ void WidgetCoordinator::mergeServiceStates(const QByteArray &data)
 
 void WidgetCoordinator::rebuildWidgetEntities()
 {
-    const QVariantList nextCover = entitiesForSelection(m_selectedEntityIds);
+    QVariantList nextCover;
+    const QVariantList coverAll = entitiesForSelection(m_selectedEntityIds);
+    for (const QVariant &value : coverAll) {
+        if (value.toMap().value(QStringLiteral("kind")).toString() == QLatin1String("graph")
+                || value.toMap().value(QStringLiteral("kind")).toString() == QLatin1String("sensor"))
+            continue;
+        nextCover.append(value);
+    }
     const QVariantList nextEvents = entitiesForSelection(m_eventsViewSelectedEntityIds);
 
     if (nextCover != m_widgetEntities) {
@@ -1379,17 +2125,49 @@ QVariantList WidgetCoordinator::entitiesForSelection(const QStringList &ids) con
         if (byId.contains(id)) {
             QVariantMap map = byId.value(id);
             map.insert(QStringLiteral("selected"), true);
+            if (m_historyPoints.contains(id)) {
+                QVariantList pts = m_historyPoints.value(id);
+                if (map.contains(QStringLiteral("graphNow")) && !pts.isEmpty()) {
+                    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+                    const qint64 lastT = pts.last().toMap().value(QStringLiteral("t")).toLongLong();
+                    if (nowMs > lastT) {
+                        QVariantMap cur;
+                        cur.insert(QStringLiteral("t"), nowMs);
+                        cur.insert(QStringLiteral("v"), map.value(QStringLiteral("graphNow")));
+                        pts.append(cur);
+                    }
+                }
+                double hmin = 0;
+                double hmax = 0;
+                bool first = true;
+                for (const QVariant &item : pts) {
+                    const double v = item.toMap().value(QStringLiteral("v")).toDouble();
+                    if (first) {
+                        hmin = hmax = v;
+                        first = false;
+                    } else {
+                        hmin = qMin(hmin, v);
+                        hmax = qMax(hmax, v);
+                    }
+                }
+                map.insert(QStringLiteral("historyPoints"), pts);
+                map.insert(QStringLiteral("historyMin"), hmin);
+                map.insert(QStringLiteral("historyMax"), hmax);
+            }
             const QString iconPath = watermarkIconPath(map);
             if (!iconPath.isEmpty())
                 map.insert(QStringLiteral("iconPath"), iconPath);
             next.append(map);
         } else {
-            const QString kind = entityKind(id);
+            QString kind = entityKind(id);
+            if (kind.isEmpty())
+                kind = entityDomain(id) == QLatin1String("sensor")
+                        ? QStringLiteral("sensor")
+                        : QStringLiteral("light");
             QVariantMap map;
             map.insert(QStringLiteral("entityId"), id);
             map.insert(QStringLiteral("name"), id);
-            map.insert(QStringLiteral("kind"),
-                       kind.isEmpty() ? QStringLiteral("light") : kind);
+            map.insert(QStringLiteral("kind"), kind);
             map.insert(QStringLiteral("state"), QStringLiteral("unknown"));
             map.insert(QStringLiteral("on"), false);
             map.insert(QStringLiteral("available"), false);
@@ -1422,6 +2200,9 @@ QString WidgetCoordinator::watermarkIconPath(const QVariantMap &entity) const
     const QString kind = entity.value(QStringLiteral("kind")).toString();
     const bool on = entity.value(QStringLiteral("on")).toBool();
     if (kind == QLatin1String("script")) {
+        if (icon.isEmpty())
+            icon = defaultIconFor(kind, false);
+    } else if (kind == QLatin1String("graph") || kind == QLatin1String("sensor")) {
         if (icon.isEmpty())
             icon = defaultIconFor(kind, false);
     } else if (on) {
@@ -1512,12 +2293,37 @@ void WidgetCoordinator::onReplyFinished()
     const QString netErrorString = reply->errorString();
     if (reply == m_allStatesReply)
         m_allStatesReply = nullptr;
+    if (reply == m_historyReply)
+        m_historyReply = nullptr;
     if (kind == RequestOneState)
         m_selectedOutstanding = qMax(0, m_selectedOutstanding - 1);
     reply->deleteLater();
 
     if (kind == RequestStates || (kind == RequestOneState && m_selectedOutstanding == 0))
         setBusy(false);
+
+    if (kind == RequestHistory) {
+        if (netError != QNetworkReply::NoError && status == 0) {
+            qWarning() << "Helmsman widget: history unreachable" << netErrorString;
+            return;
+        }
+        if (status == 401) {
+            if (reply->property("token").toString() == m_accessToken) {
+                m_tokenRejected = true;
+                setError(QStringLiteral("Home Assistant session expired"));
+                emit accessTokenStale();
+            }
+            return;
+        }
+        if (status < 200 || status >= 300) {
+            qWarning() << "Helmsman widget: history HTTP" << status;
+            return;
+        }
+        applyHistory(data);
+        if (historyEntityIds() != m_historyRequestedIds)
+            fetchSensorHistory(true);
+        return;
+    }
 
     if (netError != QNetworkReply::NoError && status == 0) {
         setError(QStringLiteral("Could not reach Home Assistant (%1)").arg(netErrorString));
@@ -1538,9 +2344,11 @@ void WidgetCoordinator::onReplyFinished()
 
     if (kind == RequestStates)
         applyStates(data);
-    else if (kind == RequestOneState)
+    else if (kind == RequestOneState) {
         applyOneState(data);
-    else if (kind == RequestService)
+        if (m_selectedOutstanding == 0)
+            fetchSensorHistory(false);
+    } else if (kind == RequestService)
         mergeServiceStates(data);
 }
 
@@ -1553,8 +2361,10 @@ void WidgetCoordinator::onSslErrors(QNetworkReply *reply, const QList<QSslError>
 
 void WidgetCoordinator::onPollTimeout()
 {
-    if (m_active)
+    if (m_active) {
         getStates();
+        fetchSensorHistory(false);
+    }
 }
 
 void WidgetCoordinator::onWidgetFileChanged(const QString &path)
@@ -1567,4 +2377,6 @@ void WidgetCoordinator::onWidgetFileChanged(const QString &path)
     if ((previousCover != m_selectedEntityIds
          || previousEvents != m_eventsViewSelectedEntityIds) && m_active)
         getStates();
+    if (previousEvents != m_eventsViewSelectedEntityIds)
+        fetchSensorHistory(true);
 }

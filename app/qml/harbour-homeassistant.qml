@@ -156,22 +156,36 @@ ApplicationWindow
     function clearHaNotification(tag) {
         if (!tag || tag.length === 0)
             return
+        if (hassClientInstance.widget)
+            hassClientInstance.widget.dismissNotification(tag)
         var id = appWindow.notificationTags[tag]
-        if (!id)
-            return
-        var closer = notificationComponent.createObject(appWindow)
-        if (!closer)
-            return
-        closer.replacesId = id
-        closer.close()
-        closer.destroy()
-        var next = cloneTagMap()
-        delete next[tag]
-        appWindow.notificationTags = next
+        if (id && id !== -1) {
+            var closer = notificationComponent.createObject(appWindow)
+            if (closer) {
+                closer.replacesId = id
+                closer.close()
+                closer.destroy()
+            }
+        }
+        if (id) {
+            var next = cloneTagMap()
+            delete next[tag]
+            appWindow.notificationTags = next
+        }
         if (appWindow.notificationCount > 0)
             appWindow.notificationCount -= 1
         if (appWindow.notificationCount <= 0)
             appWindow.clearCoverNotification()
+    }
+
+    function applyCoverNotification(summary, body, color, iconPath, replacing) {
+        if (!hassClientInstance.coverNotificationsEnabled)
+            return
+        if (!replacing)
+            appWindow.notificationCount += 1
+        else if (appWindow.notificationCount < 1)
+            appWindow.notificationCount = 1
+        appWindow.updateCoverNotification(summary, body, color, iconPath)
     }
 
     function showHaNotification(title, message, data) {
@@ -184,15 +198,7 @@ ApplicationWindow
             return
         }
 
-        var n = notificationComponent.createObject(appWindow)
-        if (!n) {
-            console.log("Helmsman: failed to create Notification object")
-            return
-        }
-
         var tag = dataString(data, "tag")
-        // data.group / data.channel are accepted by HA but not mapped here —
-        // encoding them into appName/category previously broke Lipstick publish.
         var subtitle = dataString(data, "subtitle")
         if (!subtitle.length)
             subtitle = dataString(data, "subject")
@@ -202,21 +208,53 @@ ApplicationWindow
         var notificationIcon = dataString(data, "notification_icon")
         var color = dataString(data, "color")
 
-        var replacing = false
-        if (tag.length > 0 && appWindow.notificationTags[tag]) {
-            n.replacesId = appWindow.notificationTags[tag]
-            replacing = true
-        } else {
-            n.replacesId = 0
+        var replacing = tag.length > 0 && !!appWindow.notificationTags[tag]
+        var summary = title && title.length > 0 ? title : "Home Assistant"
+        var body = message || ""
+        var coverIconPath = ""
+
+        if (iconUrl.length > 0) {
+            coverIconPath = resolveMediaUrl(iconUrl)
+        } else if (mdiIcons.ready) {
+            var mdiName = notificationIcon
+            if (!mdiName.length && color.length > 0)
+                mdiName = "mdi:bell"
+            if (mdiName.length > 0)
+                coverIconPath = mdiIcons.renderIconFile(mdiName, "#FFFFFF", 256)
         }
+
+        var widgetEnabled = hassClientInstance.widget
+                && hassClientInstance.widget.eventsViewWidgetEnabled === true
+        if (widgetEnabled) {
+            hassClientInstance.widget.pushNotification(
+                        summary, body, appWindow.normalizeCoverColor(color),
+                        coverIconPath, tag)
+            appWindow.applyCoverNotification(summary, body, color, coverIconPath, replacing)
+            if (tag.length > 0) {
+                var widgetTags = cloneTagMap()
+                widgetTags[tag] = appWindow.notificationTags[tag] || -1
+                appWindow.notificationTags = widgetTags
+            }
+            return
+        }
+
+        var n = notificationComponent.createObject(appWindow)
+        if (!n) {
+            console.log("Helmsman: failed to create Notification object")
+            return
+        }
+
+        // data.group / data.channel are accepted by HA but not mapped here —
+        // encoding them into appName/category previously broke Lipstick publish.
+        if (replacing)
+            n.replacesId = appWindow.notificationTags[tag]
+        else
+            n.replacesId = 0
 
         // Keep a stable appName. Encoding HA group into appName previously
         // broke publish on some Lipstick builds (and skipped the cover update).
         n.appName = "Helmsman"
         n.appIcon = "harbour-helmsman"
-
-        var summary = title && title.length > 0 ? title : "Home Assistant"
-        var body = message || ""
         n.summary = summary
         n.body = body
         n.previewSummary = summary
@@ -225,24 +263,19 @@ ApplicationWindow
             n.subText = subtitle
         n.urgency = urgencyFromData(data)
 
-        var coverIconPath = ""
-
         // Icons: prefer HA image/icon_url, else tinted mdi:notification_icon.
         // Color alone tints a default bell when no other icon is given.
         if (iconUrl.length > 0) {
             n.icon = resolveMediaUrl(iconUrl)
-            coverIconPath = n.icon
         } else if (mdiIcons.ready) {
-            var mdiName = notificationIcon
-            if (!mdiName.length && color.length > 0)
-                mdiName = "mdi:bell"
-            if (mdiName.length > 0) {
-                var iconPath = mdiIcons.renderIconFile(mdiName, color, 128)
-                console.log("Helmsman: mdi icon", mdiName, "color=", color, "path=", iconPath)
+            var trayMdi = notificationIcon
+            if (!trayMdi.length && color.length > 0)
+                trayMdi = "mdi:bell"
+            if (trayMdi.length > 0) {
+                var iconPath = mdiIcons.renderIconFile(trayMdi, color, 128)
+                console.log("Helmsman: mdi icon", trayMdi, "color=", color, "path=", iconPath)
                 if (iconPath && iconPath.length > 0)
                     n.icon = iconPath
-                // White glyph for cover watermark contrast on colored tint.
-                coverIconPath = mdiIcons.renderIconFile(mdiName, "#FFFFFF", 256)
             }
         }
 
@@ -269,11 +302,7 @@ ApplicationWindow
 
         // Cover first: publish() can fail with some HA data fields and must not
         // prevent the cover from reflecting the latest alert.
-        if (!replacing)
-            appWindow.notificationCount += 1
-        else if (appWindow.notificationCount < 1)
-            appWindow.notificationCount = 1
-        appWindow.updateCoverNotification(summary, body, color, coverIconPath)
+        appWindow.applyCoverNotification(summary, body, color, coverIconPath, replacing)
 
         n.clicked.connect(function() { appWindow.activate() })
         try {
@@ -376,6 +405,15 @@ ApplicationWindow
     Connections {
         target: hassClientInstance.widget
         onOpenFavoritesRequested: appWindow.openEventsViewFavorites()
+        onActivateAppRequested: appWindow.activate()
+    }
+
+    Connections {
+        target: hassClientInstance
+        onCoverNotificationsEnabledChanged: {
+            if (!hassClientInstance.coverNotificationsEnabled)
+                appWindow.clearCoverNotification()
+        }
     }
 
     Connections {
