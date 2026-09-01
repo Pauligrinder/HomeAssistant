@@ -1474,6 +1474,14 @@ void WidgetCoordinator::dismissNotification(const QString &idOrTag)
     emitWidgetPayloadChanged();
 }
 
+void WidgetCoordinator::clearNotifications()
+{
+    if (m_notifications.isEmpty())
+        return;
+    m_notifications.clear();
+    emitWidgetPayloadChanged();
+}
+
 void WidgetCoordinator::WidgetPresent()
 {
     m_presenceConfirmTimer.stop();
@@ -2259,8 +2267,9 @@ void WidgetCoordinator::rebuildWidgetEntities()
     QVariantList nextCover;
     const QVariantList coverAll = entitiesForSelection(m_selectedEntityIds);
     for (const QVariant &value : coverAll) {
-        if (value.toMap().value(QStringLiteral("kind")).toString() == QLatin1String("graph")
-                || value.toMap().value(QStringLiteral("kind")).toString() == QLatin1String("sensor"))
+        // Graph series need the card-sized watermark the cover cannot draw;
+        // plain sensors show their current value instead.
+        if (value.toMap().value(QStringLiteral("kind")).toString() == QLatin1String("graph"))
             continue;
         nextCover.append(value);
     }

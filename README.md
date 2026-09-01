@@ -1,6 +1,6 @@
 # Helmsman for Sailfish OS
 
-A native Silica client for [Home Assistant](https://www.home-assistant.io/).
+A semi-native Silica client for [Home Assistant](https://www.home-assistant.io/).
 Built as a Harbour app (Qt 5 / QML + C++) the same way most SFOS apps are,
 and tested against Platform SDK target `SailfishOS-5.2.0.15-aarch64`.
 
@@ -43,14 +43,18 @@ app/
    Settings include **Update location now**. Sensors start a few
    seconds after the dashboard has loaded so their webhook calls cannot stall
    the UI.
-6. **Cover favorites** — Pick lights, switches, scripts, and ACs in settings
-   to show on the app cover. Cover actions toggle lights, switches, and ACs,
-   or run a script (no on/off state). Arrows page when there are more than two.
+6. **Cover favorites** — Pick lights, switches, scripts, ACs, and sensors in
+   settings to show on the app cover. Cover actions toggle lights, switches, and
+   ACs, or run a script (no on/off state). Sensors show their current value and
+   have no action, keeping an empty slot so the paging arrow stays put. Arrows
+   page when there are more than two.
 7. **Events View widget** — A separate favorites list drives a third-party
    Events View widget (`/usr/share/lipstick/eventswidgets/`). Cards use the
    cover tint and watermark. Tap toggles a light, switch, or AC; long-press a
    dimmable light to set brightness, color, or temperature; long-press an AC
    for mode, temperature, fan speed, and vanes; tap a script for **Run** and **Cancel**.
+   Vanes offer **Auto**, **Swing**, and **Manual**, with the five angle cells
+   only shown while Manual is picked so the card stays short.
    Sensors that already publish a today/tomorrow series (for example Nordpool
    electricity prices) can be added as graph cards. Other sensors show the
    current value with the last 24 hours drawn as the card watermark, like the

@@ -5,8 +5,8 @@ Icon=harbour-helmsman
 Exec=harbour-helmsman
 Name=Helmsman
 Name[en]=Helmsman
-Comment=Native Home Assistant client
-Comment[en]=Native Home Assistant client
+Comment=Semi-native Home Assistant client
+Comment[en]=Semi-native Home Assistant client
 
 [X-Sailjail]
 Permissions=Internet;Notifications;Location;

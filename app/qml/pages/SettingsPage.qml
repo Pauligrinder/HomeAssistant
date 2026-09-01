@@ -227,7 +227,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Pick lights, switches, scripts, and ACs for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it."
+                text: "Pick lights, switches, scripts, ACs, and sensors for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button."
             }
 
             Button {
