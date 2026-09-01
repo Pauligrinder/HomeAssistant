@@ -8,6 +8,11 @@ Page {
     property var hassClient
     property bool eventsViewMode: false
     property string filterText: ""
+    readonly property int sensorSearchLimit: 40
+
+    function kindOf(entity) {
+        return (entity && entity.kind) ? entity.kind : "light"
+    }
 
     // Bound rather than queried through a function so the switches follow
     // selection changes without waiting for the next state poll.
@@ -36,7 +41,8 @@ Page {
                 out.push(entity)
                 continue
             }
-            var haystack = ((entity.name || "") + " " + (entity.entityId || "")).toLowerCase()
+            var haystack = ((entity.name || "") + " " + (entity.entityId || "")
+                            + " " + page.kindOf(entity)).toLowerCase()
             if (haystack.indexOf(needle) >= 0)
                 out.push(entity)
         }
@@ -47,7 +53,7 @@ Page {
         var all = page.filteredEntities
         var out = []
         for (var i = 0; i < all.length; ++i) {
-            if ((all[i].kind || "light") === kind)
+            if (page.kindOf(all[i]) === kind)
                 out.push(all[i])
         }
         return out
@@ -64,14 +70,38 @@ Page {
         return false
     }
 
+    readonly property int unfilteredSensorCount: {
+        if (!hassClient.widget)
+            return 0
+        var all = hassClient.widget.availableEntities || []
+        var n = 0
+        for (var i = 0; i < all.length; ++i) {
+            if (page.kindOf(all[i]) === "sensor")
+                n++
+        }
+        return n
+    }
+
+    readonly property bool sensorListGated: {
+        if (!page.eventsViewMode)
+            return false
+        var matches = page.entitiesOfKind("sensor").length
+        if (page.filterText.length === 0)
+            return page.unfilteredSensorCount > page.sensorSearchLimit
+        return matches > page.sensorSearchLimit
+    }
+
     onStatusChanged: {
         if (status === PageStatus.Active && hassClient.widget)
             hassClient.widget.refreshAvailable()
     }
 
     SilicaFlickable {
+        id: flick
         anchors.fill: parent
+        anchors.bottomMargin: trashBin.visible ? trashBin.height : 0
         contentHeight: column.height + Theme.paddingLarge
+        interactive: !preview.dragging
 
         VerticalScrollDecorator {}
 
@@ -85,6 +115,26 @@ Page {
                        : "Cover favorites"
             }
 
+            SearchField {
+                id: searchField
+                width: parent.width
+                placeholderText: "Search name or entity id"
+                onTextChanged: page.filterText = text
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                visible: page.filterText.length > 0
+                text: page.filteredEntities.length === 1
+                      ? "1 match"
+                      : (page.filteredEntities.length + " matches")
+            }
+
             Label {
                 anchors.left: parent.left
                 anchors.right: parent.right
@@ -93,14 +143,18 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.eventsViewMode
-                      ? "Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. Drag a card to reorder it, or drop it on the bin to remove it."
-                      : "Choose lights, switches, scripts, and ACs for the app cover. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it."
+                      ? "Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Use search to filter every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In the preview, drag a favorite to reorder it, or drop it on the bin to remove it."
+                      : "Choose lights, switches, scripts, and ACs for the app cover. Use search to filter the lists. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it."
             }
 
             SectionHeader { text: "Preview" }
 
             EventsViewWidget {
+                id: preview
                 width: parent.width
+                reorderEnabled: page.eventsViewMode
+                trashItem: trashBin
+                coordinateItem: page
                 entities: !hassClient.widget
                           ? []
                           : (page.eventsViewMode
@@ -120,13 +174,14 @@ Page {
                         return "Nothing selected yet."
                     return ""
                 }
-            }
-
-            SearchField {
-                id: searchField
-                width: parent.width
-                placeholderText: "Filter"
-                onTextChanged: page.filterText = text
+                onReorderRequested: {
+                    if (hassClient.widget)
+                        hassClient.widget.reorderEventsViewEntity(entityId, newIndex)
+                }
+                onRemoveRequested: {
+                    if (hassClient.widget)
+                        hassClient.widget.setEventsViewEntitySelected(entityId, false)
+                }
             }
 
             Label {
@@ -151,9 +206,11 @@ Page {
                          && !(hassClient.widget && hassClient.widget.lastError.length > 0)
                 text: hassClient.widget && hassClient.widget.busy
                       ? "Loading…"
-                      : (page.eventsViewMode
-                         ? "No lights, switches, scripts, ACs, sensors, or graphs found."
-                         : "No lights, switches, scripts, or ACs found.")
+                      : (page.filterText.length > 0
+                         ? "No matching entities."
+                         : (page.eventsViewMode
+                            ? "No lights, switches, scripts, ACs, sensors, or graphs found."
+                            : "No lights, switches, scripts, or ACs found."))
             }
 
             Repeater {
@@ -175,12 +232,31 @@ Page {
                     width: column.width
                     property string kindTitle: modelData.title
                     property string entityKind: modelData.kind
-                    visible: page.entitiesOfKind(kindGroup.entityKind).length > 0
+                    visible: (kindGroup.entityKind === "sensor" && page.sensorListGated)
+                             || page.entitiesOfKind(kindGroup.entityKind).length > 0
 
                     SectionHeader { text: kindGroup.kindTitle }
 
+                    Label {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.margins: Theme.horizontalPageMargin
+                        wrapMode: Text.Wrap
+                        color: Theme.secondaryColor
+                        font.pixelSize: Theme.fontSizeSmall
+                        visible: kindGroup.entityKind === "sensor" && page.sensorListGated
+                        text: page.filterText.length > 0
+                              ? ("Too many sensors match ("
+                                 + page.entitiesOfKind("sensor").length
+                                 + "). Type more of the name or entity id.")
+                              : ("Search to find sensors ("
+                                 + page.unfilteredSensorCount + ")")
+                    }
+
                     Repeater {
-                        model: page.entitiesOfKind(kindGroup.entityKind)
+                        model: (kindGroup.entityKind === "sensor" && page.sensorListGated)
+                               ? []
+                               : page.entitiesOfKind(kindGroup.entityKind)
                         delegate: TextSwitch {
                             width: column.width
                             text: modelData.name
@@ -209,6 +285,53 @@ Page {
             }
 
             Item { width: 1; height: Theme.paddingLarge }
+        }
+    }
+
+    Item {
+        id: trashBin
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        visible: page.eventsViewMode
+                 && ((page.selectedIds && page.selectedIds.length > 0) || preview.dragging)
+        height: visible ? (preview.dragging ? Theme.itemSizeLarge : Theme.itemSizeMedium) : 0
+        z: 50
+
+        Rectangle {
+            anchors.fill: parent
+            color: Theme.highlightDimmerColor
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 2 * Theme.horizontalPageMargin,
+                            preview.dragging ? Theme.itemSizeLarge * 2.2
+                                             : Theme.itemSizeLarge * 1.6)
+            height: preview.dragging ? Theme.itemSizeMedium : Theme.itemSizeSmall
+            radius: height / 2
+            color: preview.dragOverTrash ? "#C62828" : "#40FFFFFF"
+
+            Row {
+                anchors.centerIn: parent
+                spacing: Theme.paddingSmall
+
+                Image {
+                    anchors.verticalCenter: parent.verticalCenter
+                    source: "image://theme/icon-m-delete"
+                    sourceSize.width: Theme.iconSizeSmall
+                    sourceSize.height: Theme.iconSizeSmall
+                    opacity: 0.9
+                }
+
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: preview.dragging
+                    color: Theme.primaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    text: preview.dragOverTrash ? "Release to remove" : "Drop here to remove"
+                }
+            }
         }
     }
 }

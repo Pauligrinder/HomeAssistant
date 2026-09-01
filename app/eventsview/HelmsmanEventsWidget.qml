@@ -17,6 +17,7 @@ Item {
     property int collapsedCount: 2
 
     property var entities: []
+    property string lastPayload: ""
     property string errorText: "Helmsman must be running to show the widget"
     property bool appRunning: false
 
@@ -25,17 +26,6 @@ Item {
     property bool adjustingSlider: false
     // Script card whose Run/Cancel row is open.
     property string scriptEntityId: ""
-    property string dragEntityId: ""
-    property bool dragIsNotification: false
-    property int dragFromIndex: -1
-    property int dragInsertIndex: -1
-    property int dragCardHeight: 0
-    property real dragY: 0
-    property bool dragOverTrash: false
-    property string dragName: ""
-    property string dragBody: ""
-    property string dragColor: "#03A9F4"
-    readonly property bool dragging: dragEntityId.length > 0
 
     readonly property var notificationEntities: {
         var out = []
@@ -70,13 +60,17 @@ Item {
 
     function parseEntities(payload) {
         root.appRunning = true
-        if (!payload || payload.length === 0) {
+        var next = payload || ""
+        if (next === root.lastPayload)
+            return
+        root.lastPayload = next
+        if (!next.length) {
             root.entities = []
             root.errorText = ""
             return
         }
         try {
-            var parsed = JSON.parse(payload)
+            var parsed = JSON.parse(next)
             if (parsed instanceof Array) {
                 root.entities = parsed
                 root.errorText = ""
@@ -131,162 +125,6 @@ Item {
         if (!shown.length)
             return unit
         return unit ? (shown + " " + unit) : shown
-    }
-
-    function graphBarRgb(v, minV, maxV) {
-        var t = (maxV > minV) ? ((v - minV) / (maxV - minV)) : 0.5
-        if (t < 0)
-            t = 0
-        if (t > 1)
-            t = 1
-        var r
-        var g
-        var b
-        if (t < 0.5) {
-            var u = t * 2
-            r = Math.round(76 + (255 - 76) * u)
-            g = Math.round(175 + (193 - 175) * u)
-            b = Math.round(80 + (7 - 80) * u)
-        } else {
-            var u = (t - 0.5) * 2
-            r = Math.round(255 + (229 - 255) * u)
-            g = Math.round(193 + (57 - 193) * u)
-            b = Math.round(7 + (53 - 7) * u)
-        }
-        return "rgb(" + r + "," + g + "," + b + ")"
-    }
-
-    function graphValueRange(pts, minHint, maxHint) {
-        var vmin = Number(minHint)
-        var vmax = Number(maxHint)
-        if (!(vmax > vmin) && pts && pts.length) {
-            vmin = Number(pts[0].v)
-            vmax = vmin
-            for (var i = 1; i < pts.length; ++i) {
-                var pv = Number(pts[i].v)
-                if (pv < vmin)
-                    vmin = pv
-                if (pv > vmax)
-                    vmax = pv
-            }
-        }
-        if (!(vmax > vmin)) {
-            vmin -= 1
-            vmax += 1
-        }
-        return { "min": vmin, "max": vmax }
-    }
-
-    function paintBarWatermark(ctx, w, h, pts, minHint, maxHint, nowMs) {
-        if (!pts || pts.length === 0 || w <= 0 || h <= 8)
-            return
-        var pad = 4
-        var plotH = h - pad * 2
-        var t0 = Number(pts[0].t)
-        var tLast = Number(pts[pts.length - 1].t)
-        var interval = pts.length >= 2
-                ? Math.max(1, Number(pts[pts.length - 1].t) - Number(pts[pts.length - 2].t))
-                : 3600000
-        var t1 = tLast + interval
-        var span = Math.max(1, t1 - t0)
-        var range = root.graphValueRange(pts, minHint, maxHint)
-        var vmin = range.min
-        var vmax = range.max
-        var spread = vmax - vmin
-        var tomorrowT = -1
-        for (var j = 0; j < pts.length; ++j) {
-            if (Number(pts[j].d) === 1) {
-                tomorrowT = Number(pts[j].t)
-                break
-            }
-        }
-        for (var k = 0; k < pts.length; ++k) {
-            var p = pts[k]
-            var start = Number(p.t)
-            var nextT = (k + 1 < pts.length) ? Number(pts[k + 1].t) : t1
-            var x = (start - t0) / span * w
-            var bw = Math.max(1, (nextT - start) / span * w - 0.5)
-            var yv = (Number(p.v) - vmin) / spread
-            if (yv < 0)
-                yv = 0
-            if (yv > 1)
-                yv = 1
-            var bh = Math.max(1, yv * plotH)
-            ctx.globalAlpha = 0.42
-            ctx.fillStyle = root.graphBarRgb(Number(p.v), vmin, vmax)
-            ctx.fillRect(x, pad + plotH - bh, bw, bh)
-        }
-        ctx.globalAlpha = 1
-        if (tomorrowT > t0) {
-            var dx = (tomorrowT - t0) / span * w
-            ctx.strokeStyle = "rgba(255,255,255,0.45)"
-            ctx.lineWidth = 1
-            ctx.beginPath()
-            ctx.moveTo(dx, pad)
-            ctx.lineTo(dx, pad + plotH)
-            ctx.stroke()
-        }
-        if (nowMs >= t0 && nowMs <= t1) {
-            var nx = (nowMs - t0) / span * w
-            ctx.strokeStyle = "rgba(255,255,255,0.9)"
-            ctx.lineWidth = 2
-            ctx.beginPath()
-            ctx.moveTo(nx, pad)
-            ctx.lineTo(nx, pad + plotH)
-            ctx.stroke()
-        }
-    }
-
-    function paintLineWatermark(ctx, w, h, pts, minHint, maxHint) {
-        if (!pts || pts.length < 2 || w <= 0 || h <= 8)
-            return
-        var pad = 6
-        var plotH = h - pad * 2
-        var t0 = Number(pts[0].t)
-        var t1 = Number(pts[pts.length - 1].t)
-        var span = Math.max(1, t1 - t0)
-        var range = root.graphValueRange(pts, minHint, maxHint)
-        var vmin = range.min
-        var vmax = range.max
-        var spread = vmax - vmin
-        ctx.beginPath()
-        var x0 = (Number(pts[0].t) - t0) / span * w
-        var yv0 = (Number(pts[0].v) - vmin) / spread
-        if (yv0 < 0)
-            yv0 = 0
-        if (yv0 > 1)
-            yv0 = 1
-        var y0 = pad + plotH - yv0 * plotH
-        ctx.moveTo(x0, pad + plotH)
-        ctx.lineTo(x0, y0)
-        for (var i = 1; i < pts.length; ++i) {
-            var xi = (Number(pts[i].t) - t0) / span * w
-            var yvi = (Number(pts[i].v) - vmin) / spread
-            if (yvi < 0)
-                yvi = 0
-            if (yvi > 1)
-                yvi = 1
-            ctx.lineTo(xi, pad + plotH - yvi * plotH)
-        }
-        var xLast = (Number(pts[pts.length - 1].t) - t0) / span * w
-        ctx.lineTo(xLast, pad + plotH)
-        ctx.closePath()
-        ctx.fillStyle = "rgba(255,255,255,0.22)"
-        ctx.fill()
-        ctx.beginPath()
-        ctx.moveTo(x0, y0)
-        for (var j = 1; j < pts.length; ++j) {
-            var xj = (Number(pts[j].t) - t0) / span * w
-            var yvj = (Number(pts[j].v) - vmin) / spread
-            if (yvj < 0)
-                yvj = 0
-            if (yvj > 1)
-                yvj = 1
-            ctx.lineTo(xj, pad + plotH - yvj * plotH)
-        }
-        ctx.strokeStyle = "rgba(255,255,255,0.85)"
-        ctx.lineWidth = 2
-        ctx.stroke()
     }
 
     function formatTemp(entity) {
@@ -577,132 +415,6 @@ Item {
                 || entity.kind === "climate"
     }
 
-    function favoriteIndexOf(entityId) {
-        var favs = root.favoriteEntities
-        for (var i = 0; i < favs.length; ++i) {
-            if (favs[i].entityId === entityId)
-                return i
-        }
-        return -1
-    }
-
-    function beginDrag(entity, cardItem) {
-        if (!entity || !entity.entityId || root.dragging)
-            return
-        root.adjustEntityId = ""
-        root.scriptEntityId = ""
-        root.dragEntityId = entity.entityId
-        root.dragIsNotification = entity.kind === "notification"
-        root.dragFromIndex = root.dragIsNotification ? -1 : root.favoriteIndexOf(entity.entityId)
-        root.dragInsertIndex = root.dragFromIndex
-        root.dragCardHeight = cardItem ? Math.max(cardItem.height, Theme.itemSizeSmall)
-                                       : Theme.itemSizeLarge
-        root.dragName = entity.name || entity.entityId
-        root.dragBody = root.stateLabel(entity)
-        root.dragColor = (entity.kind === "notification" && entity.color)
-                         ? entity.color : "#03A9F4"
-        root.dragOverTrash = false
-    }
-
-    function updateDrag(rootX, rootY) {
-        if (!root.dragging)
-            return
-        root.dragY = Math.max(0, rootY - root.dragCardHeight / 2)
-        var trash = trashBin.mapToItem(root, 0, 0)
-        root.dragOverTrash = trashBin.height > 0
-                && rootY >= trash.y
-                && rootY <= trash.y + trashBin.height
-        if (root.dragIsNotification || root.dragOverTrash)
-            return
-        var pointerY = column.mapFromItem(root, rootX, rootY).y
-        var insert = root.favoriteEntities.length
-        var favIdx = 0
-        for (var i = 0; i < cardRepeater.count; ++i) {
-            var item = cardRepeater.itemAt(i)
-            if (!item || item.isNotification)
-                continue
-            if (item.entity && item.entity.entityId === root.dragEntityId) {
-                favIdx += 1
-                continue
-            }
-            var visualMid = item.y + item.dragShift + item.height / 2
-            if (pointerY < visualMid) {
-                insert = favIdx
-                break
-            }
-            favIdx += 1
-        }
-        root.dragInsertIndex = insert
-    }
-
-    function endDrag() {
-        if (!root.dragging)
-            return
-        var entityId = root.dragEntityId
-        var isNotif = root.dragIsNotification
-        var from = root.dragFromIndex
-        var to = root.dragInsertIndex
-        var overTrash = root.dragOverTrash
-        root.dragEntityId = ""
-        root.dragOverTrash = false
-        root.dragFromIndex = -1
-        root.dragInsertIndex = -1
-        if (overTrash) {
-            if (isNotif)
-                widgetIface.call("DismissNotification", [entityId])
-            else
-                root.removeFavorite(entityId)
-            return
-        }
-        if (isNotif || from < 0)
-            return
-        if (to > from)
-            to -= 1
-        if (to === from || to < 0)
-            return
-        root.moveFavorite(entityId, to)
-    }
-
-    function cancelDrag() {
-        root.dragEntityId = ""
-        root.dragOverTrash = false
-        root.dragFromIndex = -1
-        root.dragInsertIndex = -1
-    }
-
-    function removeFavorite(entityId) {
-        var next = []
-        var src = root.entities || []
-        for (var i = 0; i < src.length; ++i) {
-            if (src[i] && src[i].entityId !== entityId)
-                next.push(src[i])
-        }
-        root.entities = next
-        widgetIface.call("RemoveEventsViewEntity", [entityId])
-    }
-
-    function moveFavorite(entityId, destIndex) {
-        var notifs = root.notificationEntities
-        var favs = []
-        var src = root.favoriteEntities
-        var moving = null
-        for (var i = 0; i < src.length; ++i) {
-            if (src[i].entityId === entityId)
-                moving = src[i]
-            else
-                favs.push(src[i])
-        }
-        if (!moving)
-            return
-        if (destIndex < 0)
-            destIndex = 0
-        if (destIndex > favs.length)
-            destIndex = favs.length
-        favs.splice(destIndex, 0, moving)
-        root.entities = notifs.concat(favs)
-        widgetIface.call("ReorderEventsViewEntity", [entityId, destIndex])
-    }
-
     function toggleAdjusters(entity) {
         if (!entity || entity.available === false || !root.hasAdjusters(entity))
             return
@@ -716,20 +428,26 @@ Item {
         widgetIface.call("WidgetPresent", [])
     }
 
-    function refresh() {
-        // Replacing the model rebuilds the delegates, which would fight a drag.
-        if (!root.active || root.adjustingSlider || root.scriptEntityId.length > 0
-                || root.dragging)
+    function fetchEntities() {
+        // Replacing the model rebuilds the delegates, which would fight a slider drag.
+        if (!root.active || root.adjustingSlider || root.scriptEntityId.length > 0)
             return
-        root.pingWidgetPresent()
-        widgetIface.call("Refresh", [])
         widgetIface.call("GetEntitiesJson", [],
                          function(result) { root.parseEntities(result) },
                          function() {
                              root.appRunning = false
+                             root.lastPayload = ""
                              root.entities = []
                              root.errorText = "Helmsman must be running to show the widget"
                          })
+    }
+
+    function refresh() {
+        if (!root.active || root.adjustingSlider || root.scriptEntityId.length > 0)
+            return
+        root.pingWidgetPresent()
+        widgetIface.call("Refresh", [])
+        root.fetchEntities()
     }
 
     function reload() {
@@ -764,10 +482,10 @@ Item {
 
     Timer {
         id: refreshTimer
-        interval: 8000
+        interval: 30000
         repeat: true
         running: root.active
-        onTriggered: root.refresh()
+        onTriggered: root.fetchEntities()
     }
 
     DBusInterface {
@@ -778,7 +496,7 @@ Item {
         signalsEnabled: root.active
         // Nemo.DBus maps the D-Bus signal EntitiesChanged to a lowercase-initial handler.
         function entitiesChanged() {
-            root.refresh()
+            root.fetchEntities()
         }
     }
 
@@ -841,25 +559,7 @@ Item {
                 }
                 property bool showFavorite: card.isNotification
                                             || root.expanded
-                                            || root.dragging
                                             || card.favoriteIndex < root.collapsedCount
-                property real dragShift: {
-                    if (!root.dragging || root.dragIsNotification || card.isNotification)
-                        return 0
-                    if (root.dragOverTrash)
-                        return 0
-                    var from = root.dragFromIndex
-                    var to = root.dragInsertIndex
-                    var idx = card.favoriteIndex
-                    if (idx < 0 || idx === from)
-                        return 0
-                    var h = root.dragCardHeight + Theme.paddingSmall
-                    if (from < to && idx > from && idx < to)
-                        return -h
-                    if (from > to && idx >= to && idx < from)
-                        return h
-                    return 0
-                }
                 property var entity: modelData
                 property bool supportsColor: modelData.supportsColor === true
                 property bool supportsColorTemp: modelData.supportsColorTemp === true
@@ -868,13 +568,8 @@ Item {
                                                 || card.supportsColor
                                                 || card.supportsColorTemp
                                                 || card.isClimate)
-                property bool hasWatermarkGraph: {
-                    if (card.isGraph && modelData.graphPoints && modelData.graphPoints.length > 1)
-                        return true
-                    if (card.isSensor && modelData.historyPoints && modelData.historyPoints.length > 1)
-                        return true
-                    return false
-                }
+                property bool hasWatermarkGraph: !!(modelData.graphPath
+                                                    && String(modelData.graphPath).length > 0)
                 property bool showAdjusters: card.hasAdjusters
                                              && card.available
                                              && root.adjustEntityId === modelData.entityId
@@ -935,12 +630,6 @@ Item {
                                    + 2 * Theme.paddingMedium)
                         : 0
                 clip: true
-                opacity: (root.dragging && root.dragEntityId === modelData.entityId) ? 0.35 : 1
-                z: (root.dragging && root.dragEntityId === modelData.entityId) ? 2 : 0
-                transform: Translate {
-                    y: card.dragShift
-                    Behavior on y { NumberAnimation { duration: 120 } }
-                }
 
                 Rectangle {
                     anchors.fill: parent
@@ -964,53 +653,16 @@ Item {
                     anchors.fill: parent
                     clip: true
 
-                    Canvas {
-                        id: graphCanvas
+                    Image {
                         anchors.fill: parent
                         visible: card.hasWatermarkGraph
-                        antialiasing: true
-                        renderStrategy: Canvas.Immediate
-                        property var barPoints: modelData.graphPoints || []
-                        property var linePoints: modelData.historyPoints || []
-                        property real barMin: Number(modelData.graphMin)
-                        property real barMax: Number(modelData.graphMax)
-                        property real lineMin: Number(modelData.historyMin)
-                        property real lineMax: Number(modelData.historyMax)
-                        property real nowMs: Date.now()
-                        property bool useBars: card.isGraph
-
-                        onBarPointsChanged: requestPaint()
-                        onLinePointsChanged: requestPaint()
-                        onBarMinChanged: requestPaint()
-                        onBarMaxChanged: requestPaint()
-                        onLineMinChanged: requestPaint()
-                        onLineMaxChanged: requestPaint()
-                        onWidthChanged: requestPaint()
-                        onHeightChanged: requestPaint()
-                        onVisibleChanged: if (visible) requestPaint()
-
-                        Timer {
-                            interval: 60000
-                            running: graphCanvas.visible && root.active
-                            repeat: true
-                            onTriggered: {
-                                graphCanvas.nowMs = Date.now()
-                                graphCanvas.requestPaint()
-                            }
-                        }
-
-                        onPaint: {
-                            var ctx = getContext("2d")
-                            ctx.reset()
-                            if (graphCanvas.useBars)
-                                root.paintBarWatermark(ctx, graphCanvas.width, graphCanvas.height,
-                                                       graphCanvas.barPoints, graphCanvas.barMin,
-                                                       graphCanvas.barMax, graphCanvas.nowMs)
-                            else
-                                root.paintLineWatermark(ctx, graphCanvas.width, graphCanvas.height,
-                                                        graphCanvas.linePoints, graphCanvas.lineMin,
-                                                        graphCanvas.lineMax)
-                        }
+                        fillMode: Image.Stretch
+                        asynchronous: true
+                        cache: true
+                        smooth: true
+                        source: modelData.graphPath
+                                ? "file://" + modelData.graphPath
+                                : ""
                     }
 
                     Image {
@@ -1048,52 +700,13 @@ Item {
                                 ? Math.max(labels.height, Theme.itemSizeLarge)
                                 : labels.height
                         enabled: true
-                        preventStealing: drag.active || (root.dragging
-                                         && root.dragEntityId === modelData.entityId)
-                        drag.target: (card.showAdjusters || card.showScriptActions)
-                                     ? null : dragDummy
-                        drag.axis: Drag.YAxis
-                        drag.threshold: Theme.paddingLarge
-
-                        Item {
-                            id: dragDummy
-                            width: 1
-                            height: 1
-                            visible: false
-                        }
 
                         onClicked: {
-                            if (drag.active || root.dragging)
-                                return
                             if (card.available)
                                 root.activateCard(modelData)
                         }
                         onPressAndHold: {
-                            if (drag.active || root.dragging)
-                                return
                             root.toggleAdjusters(modelData)
-                        }
-                        onPositionChanged: {
-                            if (!pressed || card.showAdjusters || card.showScriptActions)
-                                return
-                            if (drag.active && !root.dragging)
-                                root.beginDrag(modelData, card)
-                            if (root.dragging && root.dragEntityId === modelData.entityId) {
-                                var p = tapArea.mapToItem(root, mouse.x, mouse.y)
-                                root.updateDrag(p.x, p.y)
-                            }
-                        }
-                        onReleased: {
-                            if (root.dragging && root.dragEntityId === modelData.entityId)
-                                root.endDrag()
-                            dragDummy.x = 0
-                            dragDummy.y = 0
-                        }
-                        onCanceled: {
-                            if (root.dragging && root.dragEntityId === modelData.entityId)
-                                root.cancelDrag()
-                            dragDummy.x = 0
-                            dragDummy.y = 0
                         }
 
                             Column {
@@ -1102,33 +715,14 @@ Item {
 
                             Row {
                                 width: parent.width
-                                spacing: Theme.paddingSmall
 
                                 Label {
-                                    width: parent.width - grip.width - parent.spacing
+                                    width: parent.width
                                     truncationMode: TruncationMode.Fade
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeSmall
                                     font.bold: !card.isScript && (card.isNotification || card.isGraph || card.isSensor || modelData.on === true)
                                     text: modelData.name || modelData.entityId
-                                }
-
-                                Column {
-                                    id: grip
-                                    width: Theme.paddingLarge
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    spacing: 3
-                                    opacity: 0.7
-
-                                    Repeater {
-                                        model: 3
-                                        Rectangle {
-                                            width: grip.width
-                                            height: 2
-                                            radius: 1
-                                            color: Theme.secondaryColor
-                                        }
-                                    }
                                 }
                             }
 
@@ -1682,7 +1276,7 @@ Item {
 
             width: parent.width
             height: Theme.itemSizeExtraSmall
-            visible: !root.dragging && root.favoriteEntities.length > root.collapsedCount
+            visible: root.favoriteEntities.length > root.collapsedCount
             onClicked: root.expanded = !root.expanded
 
             Label {
@@ -1693,91 +1287,6 @@ Item {
                 text: root.expanded
                       ? "Show less"
                       : ("Show more (" + (root.favoriteEntities.length - root.collapsedCount) + ")")
-            }
-        }
-
-        Item {
-            id: trashBin
-            width: parent.width
-            height: visible ? (root.dragging ? Theme.itemSizeLarge : Theme.itemSizeMedium)
-                            : 0
-            visible: root.appRunning
-                     && (root.favoriteEntities.length > 0
-                         || root.notificationEntities.length > 0)
-
-            Rectangle {
-                anchors.centerIn: parent
-                width: Math.min(parent.width - 2 * Theme.horizontalPageMargin,
-                                root.dragging ? Theme.itemSizeLarge * 2.2
-                                              : Theme.itemSizeLarge * 1.6)
-                height: root.dragging ? Theme.itemSizeMedium : Theme.itemSizeSmall
-                radius: height / 2
-                color: root.dragOverTrash ? "#C62828" : "#40FFFFFF"
-
-                Row {
-                    anchors.centerIn: parent
-                    spacing: Theme.paddingSmall
-
-                    Image {
-                        anchors.verticalCenter: parent.verticalCenter
-                        source: "image://theme/icon-m-delete"
-                        sourceSize.width: Theme.iconSizeSmall
-                        sourceSize.height: Theme.iconSizeSmall
-                        opacity: 0.9
-                    }
-
-                    Label {
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: root.dragging
-                        color: Theme.primaryColor
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        text: root.dragOverTrash ? "Release to remove" : "Drop here to remove"
-                    }
-                }
-            }
-        }
-    }
-
-    Item {
-        id: dragProxy
-        visible: root.dragging
-        z: 100
-        x: Theme.horizontalPageMargin
-        y: root.dragY
-        width: column.width - 2 * Theme.horizontalPageMargin
-        height: Math.max(root.dragCardHeight, Theme.itemSizeSmall)
-        opacity: root.dragOverTrash ? 0.45 : 0.92
-
-        Rectangle {
-            anchors.fill: parent
-            radius: Theme.paddingMedium
-            color: root.dragColor
-            opacity: root.dragIsNotification ? 0.72 : 0.4
-        }
-
-        Column {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.margins: Theme.paddingLarge
-            spacing: Theme.paddingSmall
-
-            Label {
-                width: parent.width
-                truncationMode: TruncationMode.Fade
-                color: Theme.primaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                font.bold: true
-                text: root.dragName
-            }
-
-            Label {
-                width: parent.width
-                visible: root.dragBody.length > 0
-                truncationMode: TruncationMode.Fade
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeExtraSmall
-                text: root.dragBody
             }
         }
     }

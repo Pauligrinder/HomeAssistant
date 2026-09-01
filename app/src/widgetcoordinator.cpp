@@ -25,6 +25,11 @@
 #include <QVariant>
 #include <QSettings>
 #include <QtNumeric>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPen>
+#include <QImage>
+#include <QCryptographicHash>
 #include <algorithm>
 #include <limits>
 
@@ -363,7 +368,7 @@ QVariantList extractGraphPoints(const QJsonObject &attrs)
         parseSeriesAttr(attrs, QStringLiteral("tomorrow"), 1, &out);
     if (out.isEmpty())
         parseSeriesAttr(attrs, QStringLiteral("prices"), 0, &out);
-    const int cap = 200;
+    const int cap = 64;
     if (out.size() <= cap)
         return out;
     QVariantList sampled;
@@ -400,6 +405,166 @@ QString graphUnit(const QJsonObject &attrs)
     if (!currency.isEmpty())
         return currency;
     return unit;
+}
+
+QColor graphBarColor(double v, double minV, double maxV)
+{
+    double t = (maxV > minV) ? ((v - minV) / (maxV - minV)) : 0.5;
+    t = qBound(0.0, t, 1.0);
+    int r;
+    int g;
+    int b;
+    if (t < 0.5) {
+        const double u = t * 2.0;
+        r = qRound(76 + (255 - 76) * u);
+        g = qRound(175 + (193 - 175) * u);
+        b = qRound(80 + (7 - 80) * u);
+    } else {
+        const double u = (t - 0.5) * 2.0;
+        r = qRound(255 + (229 - 255) * u);
+        g = qRound(193 + (57 - 193) * u);
+        b = qRound(7 + (53 - 7) * u);
+    }
+    return QColor(r, g, b, 120);
+}
+
+void graphValueRange(const QVariantList &pts, double *minV, double *maxV)
+{
+    *minV = 0;
+    *maxV = 0;
+    bool first = true;
+    for (const QVariant &item : pts) {
+        const double v = item.toMap().value(QStringLiteral("v")).toDouble();
+        if (first) {
+            *minV = *maxV = v;
+            first = false;
+        } else {
+            *minV = qMin(*minV, v);
+            *maxV = qMax(*maxV, v);
+        }
+    }
+    if (!(*maxV > *minV)) {
+        *minV -= 1;
+        *maxV += 1;
+    }
+}
+
+QImage renderGraphWatermark(const QVariantList &pts, bool bars, qint64 nowMs)
+{
+    const int w = 512;
+    const int h = 128;
+    QImage img(w, h, QImage::Format_ARGB32_Premultiplied);
+    img.fill(Qt::transparent);
+    if (pts.size() < 2)
+        return img;
+
+    double vmin = 0;
+    double vmax = 0;
+    graphValueRange(pts, &vmin, &vmax);
+    const qint64 t0 = pts.first().toMap().value(QStringLiteral("t")).toLongLong();
+    const qint64 tLast = pts.last().toMap().value(QStringLiteral("t")).toLongLong();
+    qint64 interval = 3600000;
+    if (pts.size() >= 2) {
+        interval = qMax(qint64(1),
+                        tLast - pts.at(pts.size() - 2).toMap().value(QStringLiteral("t")).toLongLong());
+    }
+    const qint64 t1 = bars ? (tLast + interval) : tLast;
+    const qint64 span = qMax(qint64(1), t1 - t0);
+    const int pad = 4;
+    const int plotH = h - pad * 2;
+    const double spread = vmax - vmin;
+
+    QPainter painter(&img);
+    if (bars) {
+        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.setPen(Qt::NoPen);
+        qint64 tomorrowT = -1;
+        for (const QVariant &item : pts) {
+            if (item.toMap().value(QStringLiteral("d")).toInt() == 1) {
+                tomorrowT = item.toMap().value(QStringLiteral("t")).toLongLong();
+                break;
+            }
+        }
+        for (int k = 0; k < pts.size(); ++k) {
+            const QVariantMap p = pts.at(k).toMap();
+            const qint64 start = p.value(QStringLiteral("t")).toLongLong();
+            const qint64 nextT = (k + 1 < pts.size())
+                    ? pts.at(k + 1).toMap().value(QStringLiteral("t")).toLongLong()
+                    : t1;
+            const double x = double(start - t0) / double(span) * w;
+            const double bw = qMax(1.0, double(nextT - start) / double(span) * w - 0.5);
+            double yv = (p.value(QStringLiteral("v")).toDouble() - vmin) / spread;
+            yv = qBound(0.0, yv, 1.0);
+            const double bh = qMax(1.0, yv * plotH);
+            painter.setBrush(graphBarColor(p.value(QStringLiteral("v")).toDouble(), vmin, vmax));
+            painter.drawRect(QRectF(x, pad + plotH - bh, bw, bh));
+        }
+        if (tomorrowT > t0) {
+            const double dx = double(tomorrowT - t0) / double(span) * w;
+            painter.setPen(QPen(QColor(255, 255, 255, 120), 1));
+            painter.drawLine(QPointF(dx, pad), QPointF(dx, pad + plotH));
+        }
+        if (nowMs >= t0 && nowMs <= t1) {
+            const double nx = double(nowMs - t0) / double(span) * w;
+            painter.setPen(QPen(QColor(255, 255, 255, 210), 2));
+            painter.drawLine(QPointF(nx, pad), QPointF(nx, pad + plotH));
+        }
+    } else {
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        QPainterPath line;
+        QPainterPath fill;
+        for (int i = 0; i < pts.size(); ++i) {
+            const QVariantMap p = pts.at(i).toMap();
+            const double x = double(p.value(QStringLiteral("t")).toLongLong() - t0)
+                    / double(span) * w;
+            double yv = (p.value(QStringLiteral("v")).toDouble() - vmin) / spread;
+            yv = qBound(0.0, yv, 1.0);
+            const QPointF pt(x, pad + plotH - yv * plotH);
+            if (i == 0) {
+                line.moveTo(pt);
+                fill.moveTo(QPointF(x, pad + plotH));
+                fill.lineTo(pt);
+            } else {
+                line.lineTo(pt);
+                fill.lineTo(pt);
+            }
+            if (i == pts.size() - 1)
+                fill.lineTo(QPointF(x, pad + plotH));
+        }
+        fill.closeSubpath();
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(255, 255, 255, 55));
+        painter.drawPath(fill);
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor(255, 255, 255, 210), 2));
+        painter.drawPath(line);
+    }
+    return img;
+}
+
+QString graphCacheKey(const QVariantList &pts, bool bars, qint64 nowBucket)
+{
+    QByteArray raw;
+    raw += bars ? 'b' : 'l';
+    raw += '|';
+    raw += QByteArray::number(nowBucket);
+    raw += '|';
+    raw += QByteArray::number(pts.size());
+    const int step = qMax(1, pts.size() / 16);
+    for (int i = 0; i < pts.size(); i += step) {
+        const QVariantMap p = pts.at(i).toMap();
+        raw += QByteArray::number(p.value(QStringLiteral("t")).toLongLong());
+        raw += ':';
+        raw += QByteArray::number(p.value(QStringLiteral("v")).toDouble(), 'g', 4);
+        raw += ';';
+    }
+    if (!pts.isEmpty()) {
+        const QVariantMap last = pts.last().toMap();
+        raw += QByteArray::number(last.value(QStringLiteral("t")).toLongLong());
+        raw += ':';
+        raw += QByteArray::number(last.value(QStringLiteral("v")).toDouble(), 'g', 4);
+    }
+    return QString::fromLatin1(QCryptographicHash::hash(raw, QCryptographicHash::Sha1).toHex());
 }
 
 QString defaultIconFor(const QString &kind, bool on)
@@ -1699,7 +1864,7 @@ void WidgetCoordinator::applyHistory(const QByteArray &data)
         }
         if (entityId.isEmpty() || points.size() < 2)
             continue;
-        const int cap = 120;
+        const int cap = 48;
         if (points.size() <= cap) {
             next.insert(entityId, points);
         } else {
@@ -1994,13 +2159,13 @@ QVariantMap WidgetCoordinator::entityFromState(const QJsonObject &state) const
             gmin = jsonNumber(attrs, QStringLiteral("min"), 0);
             gmax = jsonNumber(attrs, QStringLiteral("max"), 0);
         }
-        map.insert(QStringLiteral("graphPoints"), points);
         if (hasNow)
             map.insert(QStringLiteral("graphNow"), nowVal);
         map.insert(QStringLiteral("graphUnit"), graphUnit(attrs));
         map.insert(QStringLiteral("graphMin"), gmin);
         map.insert(QStringLiteral("graphMax"), gmax);
         map.insert(QStringLiteral("on"), false);
+        m_graphSeries.insert(entityId, points);
     }
 
     if (kind == QLatin1String("sensor")) {
@@ -2125,35 +2290,18 @@ QVariantList WidgetCoordinator::entitiesForSelection(const QStringList &ids) con
         if (byId.contains(id)) {
             QVariantMap map = byId.value(id);
             map.insert(QStringLiteral("selected"), true);
-            if (m_historyPoints.contains(id)) {
-                QVariantList pts = m_historyPoints.value(id);
-                if (map.contains(QStringLiteral("graphNow")) && !pts.isEmpty()) {
-                    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-                    const qint64 lastT = pts.last().toMap().value(QStringLiteral("t")).toLongLong();
-                    if (nowMs > lastT) {
-                        QVariantMap cur;
-                        cur.insert(QStringLiteral("t"), nowMs);
-                        cur.insert(QStringLiteral("v"), map.value(QStringLiteral("graphNow")));
-                        pts.append(cur);
-                    }
-                }
-                double hmin = 0;
-                double hmax = 0;
-                bool first = true;
-                for (const QVariant &item : pts) {
-                    const double v = item.toMap().value(QStringLiteral("v")).toDouble();
-                    if (first) {
-                        hmin = hmax = v;
-                        first = false;
-                    } else {
-                        hmin = qMin(hmin, v);
-                        hmax = qMax(hmax, v);
-                    }
-                }
-                map.insert(QStringLiteral("historyPoints"), pts);
-                map.insert(QStringLiteral("historyMin"), hmin);
-                map.insert(QStringLiteral("historyMax"), hmax);
+            if (m_graphSeries.contains(id))
+                map.insert(QStringLiteral("graphPoints"), m_graphSeries.value(id));
+            if (m_historyPoints.contains(id))
+                map.insert(QStringLiteral("historyPoints"), m_historyPoints.value(id));
+            const QString kind = map.value(QStringLiteral("kind")).toString();
+            if (kind == QLatin1String("graph") || kind == QLatin1String("sensor")) {
+                const QString graphPath = graphWatermarkPath(map);
+                if (!graphPath.isEmpty())
+                    map.insert(QStringLiteral("graphPath"), graphPath);
             }
+            map.remove(QStringLiteral("graphPoints"));
+            map.remove(QStringLiteral("historyPoints"));
             const QString iconPath = watermarkIconPath(map);
             if (!iconPath.isEmpty())
                 map.insert(QStringLiteral("iconPath"), iconPath);
@@ -2229,6 +2377,50 @@ QString WidgetCoordinator::watermarkIconPath(const QVariantMap &entity) const
 
     const QString path = m_iconRenderer->renderIconFile(icon, QStringLiteral("#FFFFFF"), 256);
     m_iconPathCache.insert(icon, path);
+    return path;
+}
+
+QString WidgetCoordinator::graphWatermarkPath(const QVariantMap &entity) const
+{
+    const QString kind = entity.value(QStringLiteral("kind")).toString();
+    const bool bars = kind == QLatin1String("graph");
+    QVariantList pts = bars
+            ? entity.value(QStringLiteral("graphPoints")).toList()
+            : entity.value(QStringLiteral("historyPoints")).toList();
+    if (pts.size() < 2)
+        return QString();
+
+    qint64 nowMs = 0;
+    qint64 nowBucket = 0;
+    if (bars) {
+        nowMs = QDateTime::currentMSecsSinceEpoch();
+        qint64 interval = 3600000;
+        if (pts.size() >= 2) {
+            interval = qMax(qint64(1),
+                            pts.last().toMap().value(QStringLiteral("t")).toLongLong()
+                            - pts.at(pts.size() - 2).toMap().value(QStringLiteral("t")).toLongLong());
+        }
+        nowBucket = nowMs / interval;
+        nowMs = nowBucket * interval;
+    }
+    const QString key = graphCacheKey(pts, bars, nowBucket);
+    auto cached = m_graphPathCache.constFind(key);
+    if (cached != m_graphPathCache.constEnd() && QFile::exists(cached.value()))
+        return cached.value();
+
+    const QImage image = renderGraphWatermark(pts, bars, nowMs);
+    if (image.isNull())
+        return QString();
+
+    const QString cacheRoot = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+            + QStringLiteral("/helmsman-graphs");
+    QDir().mkpath(cacheRoot);
+    const QString path = cacheRoot + QLatin1Char('/') + key + QStringLiteral(".png");
+    if (!QFile::exists(path) && !image.save(path, "PNG")) {
+        qWarning() << "Helmsman widget: failed to save graph" << path;
+        return QString();
+    }
+    m_graphPathCache.insert(key, path);
     return path;
 }
 

@@ -60,8 +60,12 @@ app/
    system notification list. Cover notification tints can be turned off in
    Helmsman settings. The widget only refreshes while Events View is visible.
    If Helmsman is not running the widget says so; if no favorites are selected
-   it offers **Choose favorites**. Drag a card to reorder it, or drop it on the
-   bin to remove it. Settings → Events view shows a short description next to
+   it offers **Choose favorites**. Drag a preview card on the Events View
+   favorites settings page to reorder it, or drop it on the bin to remove it.
+   Search on the cover and Events View favorites pages filters every entity
+   list. Sensor graphs are drawn in the app and shown as a cached image in
+   Events View so the widget does not redraw them every refresh.
+   Settings → Events view shows a short description next to
    the Helmsman toggle.
 8. **URLs** — Internal and external addresses with Wi‑Fi switching. If you only
    have one address, put it in External URL and leave Internal URL empty.
@@ -79,9 +83,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.15-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.16-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.2.15-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.2.16-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`.

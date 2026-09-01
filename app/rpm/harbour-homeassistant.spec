@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Native Home Assistant client
-Version:    0.2.15
+Version:    0.2.16
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,15 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Wed Sep 02 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.16-1
+- Move Events View reorder and remove (drag onto the bin) from the
+  widget into Events View favorites settings.
+- Draw Events View graph and sensor history watermarks in the app and
+  show them as cached images, so the widget no longer freezes or flashes
+  while painting Canvas graphs.
+- Add search on cover and Events View favorites that filters every
+  entity list, and keep long sensor lists collapsed until you type.
+
 * Tue Sep 01 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.15-1
 - Keep reporting home on the internal connection so Home Assistant does
   not time the device tracker out to away.

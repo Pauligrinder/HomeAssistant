@@ -231,6 +231,7 @@ private:
     void rebuildWidgetEntities();
     QVariantList entitiesForSelection(const QStringList &ids) const;
     QString watermarkIconPath(const QVariantMap &entity) const;
+    QString graphWatermarkPath(const QVariantMap &entity) const;
     QVariantMap entityById(const QString &entityId) const;
     void applyOptimistic(const QString &entityId, const QVariantMap &patch);
     void setEventsViewWidgetEnabled(bool enabled);
@@ -270,10 +271,12 @@ private:
     bool m_eventsViewWidgetEnabled;
     QHash<QString, bool> m_expectOn;
     QHash<QString, QVariantList> m_historyPoints;
+    mutable QHash<QString, QVariantList> m_graphSeries;
     QStringList m_historyRequestedIds;
     QDateTime m_historyFetchedAt;
     // Rendering is not cheap and rebuilds happen on every poll.
     mutable QHash<QString, QString> m_iconPathCache;
+    mutable QHash<QString, QString> m_graphPathCache;
 };
 
 #endif
