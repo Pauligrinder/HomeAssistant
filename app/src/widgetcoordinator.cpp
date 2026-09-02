@@ -28,6 +28,8 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
+#include <QFont>
+#include <QFontMetrics>
 #include <QImage>
 #include <QCryptographicHash>
 #include <algorithm>
@@ -272,8 +274,43 @@ void appendGraphPoint(QVariantList *out, const QDateTime &when, double value, in
     out->append(point);
 }
 
-void parseObjectSeries(const QJsonArray &array, int day, QVariantList *out)
+QJsonValue coerceJsonContainer(const QJsonValue &value)
 {
+    if (value.isArray() || value.isObject())
+        return value;
+    if (!value.isString())
+        return value;
+    QString s = value.toString().trimmed();
+    if (s.isEmpty())
+        return value;
+    auto parse = [](const QByteArray &raw) -> QJsonValue {
+        QJsonParseError err;
+        const QJsonDocument doc = QJsonDocument::fromJson(raw, &err);
+        if (err.error != QJsonParseError::NoError)
+            return QJsonValue();
+        if (doc.isArray())
+            return QJsonValue(doc.array());
+        if (doc.isObject())
+            return QJsonValue(doc.object());
+        return QJsonValue();
+    };
+    QJsonValue parsed = parse(s.toUtf8());
+    if (parsed.isArray() || parsed.isObject())
+        return parsed;
+    // Template sensors sometimes stringify Python lists/dicts with single quotes.
+    if (s.contains(QLatin1Char('\'')) && !s.contains(QLatin1Char('"'))) {
+        QString jsonish = s;
+        jsonish.replace(QLatin1Char('\''), QLatin1Char('"'));
+        parsed = parse(jsonish.toUtf8());
+        if (parsed.isArray() || parsed.isObject())
+            return parsed;
+    }
+    return value;
+}
+
+void parseObjectSeries(const QJsonArray &array, int dayHint, QVariantList *out)
+{
+    const QDate today = QDate::currentDate();
     for (const QJsonValue &item : array) {
         if (!item.isObject())
             continue;
@@ -283,6 +320,8 @@ void parseObjectSeries(const QJsonArray &array, int day, QVariantList *out)
             start = obj.value(QStringLiteral("startsAt"));
         if (start.isUndefined() || start.isNull())
             start = obj.value(QStringLiteral("start_time"));
+        if (start.isUndefined() || start.isNull())
+            start = obj.value(QStringLiteral("end"));
         QJsonValue val = obj.value(QStringLiteral("value"));
         if (val.isUndefined() || val.isNull())
             val = obj.value(QStringLiteral("price"));
@@ -292,14 +331,22 @@ void parseObjectSeries(const QJsonArray &array, int day, QVariantList *out)
         const double v = jsonValueNumber(val, &ok);
         if (!ok)
             continue;
-        appendGraphPoint(out, parseJsonTime(start), v, day);
+        const QDateTime when = parseJsonTime(start);
+        int day = dayHint >= 0 ? dayHint : 0;
+        if (when.isValid()) {
+            if (when.date() > today)
+                day = 1;
+            else
+                day = 0;
+        }
+        appendGraphPoint(out, when, v, day);
     }
 }
 
 void parseNumericSeries(const QJsonArray &array, int day, QVariantList *out)
 {
     const int n = array.size();
-    if (n < 8)
+    if (n < 4)
         return;
     int stepMin = 60;
     if (n >= 90)
@@ -319,12 +366,13 @@ void parseNumericSeries(const QJsonArray &array, int day, QVariantList *out)
     }
 }
 
-bool arrayLooksLikeSeries(const QJsonValue &value)
+bool arrayLooksLikeSeries(const QJsonValue &raw)
 {
+    const QJsonValue value = coerceJsonContainer(raw);
     if (!value.isArray())
         return false;
     const QJsonArray array = value.toArray();
-    if (array.size() < 8)
+    if (array.size() < 4)
         return false;
     const QJsonValue first = array.first();
     if (first.isDouble())
@@ -342,9 +390,26 @@ bool arrayLooksLikeSeries(const QJsonValue &value)
             || obj.contains(QStringLiteral("total"));
 }
 
-void parseSeriesAttr(const QJsonObject &attrs, const QString &key, int day, QVariantList *out)
+bool datedSeriesMapLooksLike(const QJsonValue &raw)
 {
-    const QJsonValue value = attrs.value(key);
+    const QJsonValue value = coerceJsonContainer(raw);
+    if (!value.isObject())
+        return false;
+    const QJsonObject obj = value.toObject();
+    int n = 0;
+    for (auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
+        if (arrayLooksLikeSeries(it.value()))
+            return true;
+        const QJsonValue series = coerceJsonContainer(it.value());
+        if (series.isArray())
+            n += series.toArray().size();
+    }
+    return n >= 4;
+}
+
+void parseSeriesArray(const QJsonValue &raw, int day, QVariantList *out)
+{
+    const QJsonValue value = coerceJsonContainer(raw);
     if (!value.isArray())
         return;
     const QJsonArray array = value.toArray();
@@ -353,7 +418,36 @@ void parseSeriesAttr(const QJsonObject &attrs, const QString &key, int day, QVar
     if (array.first().isObject())
         parseObjectSeries(array, day, out);
     else
-        parseNumericSeries(array, day, out);
+        parseNumericSeries(array, day < 0 ? 0 : day, out);
+}
+
+void parseSeriesAttr(const QJsonObject &attrs, const QString &key, int day, QVariantList *out)
+{
+    parseSeriesArray(attrs.value(key), day, out);
+}
+
+void parseDatedSeriesMap(const QJsonValue &raw, QVariantList *out)
+{
+    const QJsonValue value = coerceJsonContainer(raw);
+    if (!value.isObject())
+        return;
+    const QJsonObject obj = value.toObject();
+    const QDate today = QDate::currentDate();
+    QStringList keys = obj.keys();
+    std::sort(keys.begin(), keys.end());
+    for (const QString &key : keys) {
+        QDate d = QDate::fromString(key, Qt::ISODate);
+        int day = -1;
+        if (d.isValid()) {
+            if (d == today)
+                day = 0;
+            else if (d == today.addDays(1))
+                day = 1;
+            else
+                continue;
+        }
+        parseSeriesArray(obj.value(key), day, out);
+    }
 }
 
 QVariantList extractGraphPoints(const QJsonObject &attrs)
@@ -367,8 +461,16 @@ QVariantList extractGraphPoints(const QJsonObject &attrs)
     if (out.size() == todayCount)
         parseSeriesAttr(attrs, QStringLiteral("tomorrow"), 1, &out);
     if (out.isEmpty())
-        parseSeriesAttr(attrs, QStringLiteral("prices"), 0, &out);
-    const int cap = 64;
+        parseSeriesAttr(attrs, QStringLiteral("prices"), -1, &out);
+    if (out.isEmpty())
+        parseSeriesAttr(attrs, QStringLiteral("data"), -1, &out);
+    if (out.isEmpty())
+        parseDatedSeriesMap(attrs.value(QStringLiteral("prices_by_date")), &out);
+    std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap().value(QStringLiteral("t")).toLongLong()
+                < b.toMap().value(QStringLiteral("t")).toLongLong();
+    });
+    const int cap = 96;
     if (out.size() <= cap)
         return out;
     QVariantList sampled;
@@ -390,7 +492,9 @@ bool isGraphSensor(const QJsonObject &state)
             || arrayLooksLikeSeries(attrs.value(QStringLiteral("today")))
             || arrayLooksLikeSeries(attrs.value(QStringLiteral("raw_tomorrow")))
             || arrayLooksLikeSeries(attrs.value(QStringLiteral("tomorrow")))
-            || arrayLooksLikeSeries(attrs.value(QStringLiteral("prices")));
+            || arrayLooksLikeSeries(attrs.value(QStringLiteral("prices")))
+            || arrayLooksLikeSeries(attrs.value(QStringLiteral("data")))
+            || datedSeriesMapLooksLike(attrs.value(QStringLiteral("prices_by_date")));
 }
 
 QString graphUnit(const QJsonObject &attrs)
@@ -449,10 +553,57 @@ void graphValueRange(const QVariantList &pts, double *minV, double *maxV)
     }
 }
 
+QString formatGraphNumber(double v)
+{
+    if (!qIsFinite(v))
+        return QString();
+    if (qAbs(v) >= 100)
+        return QString::number(qRound(v));
+    QString s = QString::number(v, 'f', 2);
+    while (s.contains(QLatin1Char('.')) && s.endsWith(QLatin1Char('0')))
+        s.chop(1);
+    if (s.endsWith(QLatin1Char('.')))
+        s.chop(1);
+    return s.isEmpty() ? QStringLiteral("0") : s;
+}
+
+void drawExtremumLabel(QPainter *painter, const QPointF &pt, const QString &text,
+                       int imgW, int imgH, bool isMax)
+{
+    if (text.isEmpty())
+        return;
+    painter->setRenderHint(QPainter::Antialiasing, true);
+    painter->setPen(QPen(QColor(0, 0, 0, 160), 1));
+    painter->setBrush(QColor(255, 255, 255, 235));
+    painter->drawEllipse(pt, 3.4, 3.4);
+
+    QFont font = painter->font();
+    font.setPixelSize(13);
+    font.setBold(true);
+    painter->setFont(font);
+    const QFontMetrics fm(font);
+    const int tw = fm.width(text);
+    const int th = fm.ascent();
+    double lx = pt.x() + 7;
+    if (lx + tw > imgW - 3)
+        lx = pt.x() - 7 - tw;
+    if (lx < 2)
+        lx = 2;
+    double ly = isMax ? (pt.y() - 5) : (pt.y() + th + 4);
+    if (ly - th < 1)
+        ly = pt.y() + th + 5;
+    if (ly > imgH - 2)
+        ly = pt.y() - 5;
+    painter->setPen(QColor(0, 0, 0, 150));
+    painter->drawText(QPointF(lx + 1, ly + 1), text);
+    painter->setPen(QColor(255, 255, 255, 245));
+    painter->drawText(QPointF(lx, ly), text);
+}
+
 QImage renderGraphWatermark(const QVariantList &pts, bool bars, qint64 nowMs)
 {
     const int w = 512;
-    const int h = 128;
+    const int h = 148;
     QImage img(w, h, QImage::Format_ARGB32_Premultiplied);
     img.fill(Qt::transparent);
     if (pts.size() < 2)
@@ -470,9 +621,35 @@ QImage renderGraphWatermark(const QVariantList &pts, bool bars, qint64 nowMs)
     }
     const qint64 t1 = bars ? (tLast + interval) : tLast;
     const qint64 span = qMax(qint64(1), t1 - t0);
-    const int pad = 4;
-    const int plotH = h - pad * 2;
+    const int padTop = 18;
+    const int padBottom = 6;
+    const int plotH = h - padTop - padBottom;
     const double spread = vmax - vmin;
+
+    int minI = 0;
+    int maxI = 0;
+    for (int i = 1; i < pts.size(); ++i) {
+        const double v = pts.at(i).toMap().value(QStringLiteral("v")).toDouble();
+        if (v < pts.at(minI).toMap().value(QStringLiteral("v")).toDouble())
+            minI = i;
+        if (v > pts.at(maxI).toMap().value(QStringLiteral("v")).toDouble())
+            maxI = i;
+    }
+
+    auto pointPos = [&](int i) -> QPointF {
+        const QVariantMap p = pts.at(i).toMap();
+        const qint64 start = p.value(QStringLiteral("t")).toLongLong();
+        double yv = (p.value(QStringLiteral("v")).toDouble() - vmin) / spread;
+        yv = qBound(0.0, yv, 1.0);
+        double x = double(start - t0) / double(span) * w;
+        if (bars) {
+            const qint64 nextT = (i + 1 < pts.size())
+                    ? pts.at(i + 1).toMap().value(QStringLiteral("t")).toLongLong()
+                    : t1;
+            x += qMax(1.0, double(nextT - start) / double(span) * w) * 0.5;
+        }
+        return QPointF(x, padTop + plotH - yv * plotH);
+    };
 
     QPainter painter(&img);
     if (bars) {
@@ -497,39 +674,34 @@ QImage renderGraphWatermark(const QVariantList &pts, bool bars, qint64 nowMs)
             yv = qBound(0.0, yv, 1.0);
             const double bh = qMax(1.0, yv * plotH);
             painter.setBrush(graphBarColor(p.value(QStringLiteral("v")).toDouble(), vmin, vmax));
-            painter.drawRect(QRectF(x, pad + plotH - bh, bw, bh));
+            painter.drawRect(QRectF(x, padTop + plotH - bh, bw, bh));
         }
         if (tomorrowT > t0) {
             const double dx = double(tomorrowT - t0) / double(span) * w;
             painter.setPen(QPen(QColor(255, 255, 255, 120), 1));
-            painter.drawLine(QPointF(dx, pad), QPointF(dx, pad + plotH));
+            painter.drawLine(QPointF(dx, padTop), QPointF(dx, padTop + plotH));
         }
         if (nowMs >= t0 && nowMs <= t1) {
             const double nx = double(nowMs - t0) / double(span) * w;
             painter.setPen(QPen(QColor(255, 255, 255, 210), 2));
-            painter.drawLine(QPointF(nx, pad), QPointF(nx, pad + plotH));
+            painter.drawLine(QPointF(nx, padTop), QPointF(nx, padTop + plotH));
         }
     } else {
         painter.setRenderHint(QPainter::Antialiasing, true);
         QPainterPath line;
         QPainterPath fill;
         for (int i = 0; i < pts.size(); ++i) {
-            const QVariantMap p = pts.at(i).toMap();
-            const double x = double(p.value(QStringLiteral("t")).toLongLong() - t0)
-                    / double(span) * w;
-            double yv = (p.value(QStringLiteral("v")).toDouble() - vmin) / spread;
-            yv = qBound(0.0, yv, 1.0);
-            const QPointF pt(x, pad + plotH - yv * plotH);
+            const QPointF pt = pointPos(i);
             if (i == 0) {
                 line.moveTo(pt);
-                fill.moveTo(QPointF(x, pad + plotH));
+                fill.moveTo(QPointF(pt.x(), padTop + plotH));
                 fill.lineTo(pt);
             } else {
                 line.lineTo(pt);
                 fill.lineTo(pt);
             }
             if (i == pts.size() - 1)
-                fill.lineTo(QPointF(x, pad + plotH));
+                fill.lineTo(QPointF(pt.x(), padTop + plotH));
         }
         fill.closeSubpath();
         painter.setPen(Qt::NoPen);
@@ -539,6 +711,15 @@ QImage renderGraphWatermark(const QVariantList &pts, bool bars, qint64 nowMs)
         painter.setPen(QPen(QColor(255, 255, 255, 210), 2));
         painter.drawPath(line);
     }
+
+    drawExtremumLabel(&painter, pointPos(maxI), formatGraphNumber(
+                          pts.at(maxI).toMap().value(QStringLiteral("v")).toDouble()),
+                      w, h, true);
+    if (minI != maxI) {
+        drawExtremumLabel(&painter, pointPos(minI), formatGraphNumber(
+                              pts.at(minI).toMap().value(QStringLiteral("v")).toDouble()),
+                          w, h, false);
+    }
     return img;
 }
 
@@ -546,7 +727,7 @@ QString graphCacheKey(const QVariantList &pts, bool bars, qint64 nowBucket)
 {
     QByteArray raw;
     raw += bars ? 'b' : 'l';
-    raw += '|';
+    raw += "|x1|";
     raw += QByteArray::number(nowBucket);
     raw += '|';
     raw += QByteArray::number(pts.size());
@@ -2131,7 +2312,7 @@ QVariantMap WidgetCoordinator::entityFromState(const QJsonObject &state) const
         if (!hasNow) {
             bool ok = false;
             nowVal = jsonValueNumber(QJsonValue(status), &ok);
-            hasNow = ok;
+            hasNow = ok && qAbs(nowVal) < 1.0e9;
         }
         if (!hasNow && !points.isEmpty()) {
             const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();

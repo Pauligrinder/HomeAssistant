@@ -56,7 +56,9 @@ app/
    Vanes offer **Auto**, **Swing**, and **Manual**, with the five angle cells
    only shown while Manual is picked so the card stays short.
    Sensors that already publish a today/tomorrow series (for example Nordpool
-   electricity prices) can be added as graph cards. Other sensors show the
+   electricity prices in `raw_today`/`today`, `data`, or `prices_by_date`)
+   can be added as graph cards, with min/max values marked on the watermark.
+   Other sensors show the
    current value with the last 24 hours drawn as the card watermark, like the
    Home Assistant sensor dialog. Home Assistant notifications
    appear as colored cards at the top of the widget
@@ -87,9 +89,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.16-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.18-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.2.16-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.2.18-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`.
