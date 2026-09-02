@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.2.17
+Version:    0.2.18
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,12 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Wed Sep 02 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.18-1
+- Recognize Nordpool-style series on data and prices_by_date attributes,
+  not only raw_today/today/prices, and ignore timestamp sensor states
+  when showing the current graph value.
+- Draw min and max values on Events View graph and history watermarks.
+
 * Wed Sep 02 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.16-1
 - Move Events View reorder and remove (drag onto the bin) from the
   widget into Events View favorites settings.
