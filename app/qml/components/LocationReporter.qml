@@ -4,7 +4,7 @@ import Nemo.DBus 2.0
 
 // Location reporter for mobile_app update_location.
 // Does not keep GPS running. Listens for GeoClue PositionChanged from other
-// apps (Hybris GPS / Mlsdb-BeaconDB). Requests our own one-shot fix only when
+// apps (Hybris GPS / Mlsdb-BeaconDB). Runs a bounded acquisition burst when
 // the last fix is older than the configured stale interval.
 //
 // Geoclue's startUpdates() does synchronous D-Bus on the UI thread. Do not
@@ -24,6 +24,7 @@ Item {
             ? hassClient.sensors.locationStaleMinutes : 15
     readonly property int startDelayMs: 4000
     readonly property int seekTimeoutMs: 45000
+    readonly property int seekUpdateMs: 5000
     readonly property int staleCheckMs: 60000
     property bool seeking: false
     property double lastFixAtMs: 0
@@ -78,7 +79,12 @@ Item {
                 return false
         }
         var acc = reporter.accuracyMeters(accuracy)
-        reporter.lastFixAtMs = reporter.nowMs()
+        // A PositionSource burst can first return a cached fix. Preserve its
+        // actual age so it cannot postpone the next acquisition as if it had
+        // just been measured.
+        var fixAtMs = timestampSec && timestampSec > 0
+                ? timestampSec * 1000 : reporter.nowMs()
+        reporter.lastFixAtMs = Math.min(reporter.nowMs(), fixAtMs)
         hassClient.sensors.updateLocation(latitude, longitude, acc, -1)
         return true
     }
@@ -88,9 +94,7 @@ Item {
         if (fields !== undefined && fields !== null && fields !== 0
                 && (fields & 3) !== 3)
             return
-        if (reporter.acceptFix(latitude, longitude, accuracy, timestamp)
-                && reporter.seeking)
-            reporter.stopSeek()
+        reporter.acceptFix(latitude, longitude, accuracy, timestamp)
     }
 
     function powerGps() {
@@ -111,7 +115,8 @@ Item {
         reporter.lastSeekAtMs = reporter.nowMs()
         seekTimeoutTimer.restart()
         reporter.powerGps()
-        positionSource.update()
+        positionSource.updateInterval = reporter.seekUpdateMs
+        positionSource.active = true
     }
 
     function stopSeek() {
@@ -139,7 +144,8 @@ Item {
         reporter.lastSeekAtMs = reporter.nowMs()
         seekTimeoutTimer.restart()
         reporter.powerGps()
-        positionSource.update()
+        positionSource.updateInterval = reporter.seekUpdateMs
+        positionSource.active = true
     }
 
     onEnabledChanged: reporter.applyMode()
@@ -189,9 +195,7 @@ Item {
             var ts = 0
             if (position.timestamp)
                 ts = position.timestamp.getTime() / 1000
-            if (reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts)
-                    && reporter.seeking)
-                reporter.stopSeek()
+            reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts)
         }
     }
 
