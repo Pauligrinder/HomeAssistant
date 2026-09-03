@@ -14,6 +14,12 @@ namespace {
 // its IP ban threshold, so refuse to use a token this close to expiry.
 const qint64 kMinTokenLifetimeMs = 120 * 1000;
 
+// Application ping so HA (and any NAT in between) can tell a half-open socket
+// from a live push channel. Without this, notify.mobile_app_* reports
+// "Client is not connected" while the local socket still looks connected.
+const int kPingIntervalMs = 120 * 1000;
+const int kPongTimeoutMs = 15000;
+
 } // namespace
 
 HassPushChannel::HassPushChannel(QObject *parent)
@@ -25,10 +31,17 @@ HassPushChannel::HassPushChannel(QObject *parent)
     , m_authenticated(false)
     , m_nextId(1)
     , m_pushSubscriptionId(0)
+    , m_pendingPingId(0)
     , m_reconnectAttempt(0)
 {
     m_reconnectTimer.setSingleShot(true);
     connect(&m_reconnectTimer, SIGNAL(timeout()), this, SLOT(openSocket()));
+
+    m_pingTimer.setInterval(kPingIntervalMs);
+    connect(&m_pingTimer, SIGNAL(timeout()), this, SLOT(sendPing()));
+    m_pongTimer.setSingleShot(true);
+    m_pongTimer.setInterval(kPongTimeoutMs);
+    connect(&m_pongTimer, SIGNAL(timeout()), this, SLOT(onPongTimeout()));
 
     connect(m_socket, SIGNAL(connected()), this, SLOT(onConnected()));
     connect(m_socket, SIGNAL(disconnected()), this, SLOT(onDisconnected()));
@@ -44,6 +57,7 @@ HassPushChannel::~HassPushChannel()
 {
     m_wantRunning = false;
     m_reconnectTimer.stop();
+    stopKeepalive();
     m_socket->abort();
 }
 
@@ -73,6 +87,7 @@ void HassPushChannel::configure(const QString &baseUrl,
 
     if (endpointChanged && m_wantRunning) {
         m_reconnectTimer.stop();
+        stopKeepalive();
         m_reconnectAttempt = 0;
         if (m_socket->state() != QAbstractSocket::UnconnectedState)
             m_socket->abort();
@@ -94,6 +109,7 @@ void HassPushChannel::stop()
 {
     m_wantRunning = false;
     m_reconnectTimer.stop();
+    stopKeepalive();
     m_authenticated = false;
     m_pushSubscriptionId = 0;
     if (m_socket->state() != QAbstractSocket::UnconnectedState)
@@ -131,6 +147,7 @@ void HassPushChannel::openSocket()
     }
 
     m_reconnectTimer.stop();
+    stopKeepalive();
     m_authenticated = false;
     m_pushSubscriptionId = 0;
     const QUrl url = websocketUrl();
@@ -180,6 +197,7 @@ void HassPushChannel::onConnected()
 void HassPushChannel::onDisconnected()
 {
     qWarning() << "Helmsman push: disconnected";
+    stopKeepalive();
     m_authenticated = false;
     m_pushSubscriptionId = 0;
     setConnected(false);
@@ -217,6 +235,45 @@ void HassPushChannel::scheduleReconnect()
 
     qWarning() << "Helmsman push: reconnect in" << delayMs << "ms";
     m_reconnectTimer.start(delayMs);
+}
+
+void HassPushChannel::startKeepalive()
+{
+    m_pendingPingId = 0;
+    m_pongTimer.stop();
+    m_pingTimer.start();
+    sendPing();
+}
+
+void HassPushChannel::stopKeepalive()
+{
+    m_pingTimer.stop();
+    m_pongTimer.stop();
+    m_pendingPingId = 0;
+}
+
+void HassPushChannel::sendPing()
+{
+    if (!m_authenticated || m_socket->state() != QAbstractSocket::ConnectedState)
+        return;
+    if (m_pongTimer.isActive())
+        return;
+
+    m_pendingPingId = nextMessageId();
+    QJsonObject msg;
+    msg.insert(QStringLiteral("id"), m_pendingPingId);
+    msg.insert(QStringLiteral("type"), QStringLiteral("ping"));
+    sendJson(msg);
+    m_pongTimer.start();
+}
+
+void HassPushChannel::onPongTimeout()
+{
+    qWarning() << "Helmsman push: ping timeout; reconnecting";
+    m_pendingPingId = 0;
+    stopKeepalive();
+    if (m_socket->state() != QAbstractSocket::UnconnectedState)
+        m_socket->abort();
 }
 
 void HassPushChannel::subscribePushChannel()
@@ -273,6 +330,7 @@ void HassPushChannel::onTextMessageReceived(const QString &message)
     if (type == QLatin1String("auth_ok")) {
         m_authenticated = true;
         setConnected(true);
+        startKeepalive();
         subscribePushChannel();
         return;
     }
@@ -285,9 +343,27 @@ void HassPushChannel::onTextMessageReceived(const QString &message)
         // failed websocket auths (visible as "authentication failure" notifies).
         m_wantRunning = false;
         m_reconnectTimer.stop();
+        stopKeepalive();
         m_socket->close();
         setConnected(false);
         emit authenticationFailed(message);
+        return;
+    }
+
+    if (type == QLatin1String("pong")) {
+        const int id = obj.value(QStringLiteral("id")).toInt();
+        if (m_pendingPingId != 0 && id == m_pendingPingId) {
+            m_pendingPingId = 0;
+            m_pongTimer.stop();
+        }
+        return;
+    }
+
+    if (type == QLatin1String("ping")) {
+        QJsonObject pong;
+        pong.insert(QStringLiteral("id"), obj.value(QStringLiteral("id")));
+        pong.insert(QStringLiteral("type"), QStringLiteral("pong"));
+        sendJson(pong);
         return;
     }
 

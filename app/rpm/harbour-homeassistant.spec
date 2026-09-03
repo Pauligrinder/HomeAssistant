@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.2.18
+Version:    0.2.19
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,11 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Thu Sep 03 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.19-1
+- Ping the Home Assistant notification websocket every two minutes and
+  reconnect if pong is missing, so a half-open socket no longer reports
+  Client is not connected.
+
 * Wed Sep 02 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.18-1
 - Recognize Nordpool-style series on data and prices_by_date attributes,
   not only raw_today/today/prices, and ignore timestamp sensor states
