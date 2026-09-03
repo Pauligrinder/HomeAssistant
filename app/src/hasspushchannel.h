@@ -49,12 +49,16 @@ private slots:
     void onError(QAbstractSocket::SocketError error);
     void onSslErrors(const QList<QSslError> &errors);
     void openSocket();
+    void sendPing();
+    void onPongTimeout();
 
 private:
     void setConnected(bool connected);
     void sendJson(const QJsonObject &obj);
     void subscribePushChannel();
     void confirmNotification(const QString &confirmId);
+    void startKeepalive();
+    void stopKeepalive();
     void scheduleReconnect();
     bool accessTokenFresh() const;
     QUrl websocketUrl() const;
@@ -62,6 +66,8 @@ private:
 
     QWebSocket *m_socket;
     QTimer m_reconnectTimer;
+    QTimer m_pingTimer;
+    QTimer m_pongTimer;
     QString m_baseUrl;
     QString m_accessToken;
     QDateTime m_accessExpiresAt;
@@ -72,6 +78,7 @@ private:
     bool m_authenticated;
     int m_nextId;
     int m_pushSubscriptionId;
+    int m_pendingPingId;
     int m_reconnectAttempt;
 };
 
