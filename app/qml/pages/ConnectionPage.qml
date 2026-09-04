@@ -35,13 +35,6 @@ Page {
             if (!hassClient.loggedIn)
                 pageStack.push(Qt.resolvedUrl("LoginPage.qml"), { hassClient: hassClient })
         }
-        onRestoreFinished: {
-            if (loggedIn)
-                pageStack.replaceAbove(null, Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
-        }
-        onLoginSucceeded: {
-            pageStack.replaceAbove(null, Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
-        }
     }
 
     SilicaFlickable {

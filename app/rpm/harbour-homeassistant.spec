@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.2.20
+Version:    0.2.21
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,12 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.21-1
+- Optional native Lovelace dashboard renderer (Settings → Dashboard), off
+  by default. The Home Assistant web UI remains the home screen until it
+  is turned on. Custom cards, energy, and the map still open in the web
+  view.
+
 * Thu Sep 03 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.20-1
 - Keep each stale location acquisition active for up to 45 seconds so a
   cached or coarse first result can be replaced by a current GPS fix.

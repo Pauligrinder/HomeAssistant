@@ -14,11 +14,14 @@
 
 #include "sensorcoordinator.h"
 #include "widgetcoordinator.h"
+#include "lovelacecoordinator.h"
 
 class QNetworkAccessManager;
 class QNetworkReply;
 class QNetworkRequest;
 class HassPushChannel;
+class HassWebsocket;
+class LovelaceCoordinator;
 
 class HassClient : public QObject
 {
@@ -57,7 +60,9 @@ class HassClient : public QObject
     Q_PROPERTY(QString dashboardSnapshotPath READ dashboardSnapshotPath CONSTANT)
     Q_PROPERTY(SensorCoordinator *sensors READ sensors CONSTANT)
     Q_PROPERTY(WidgetCoordinator *widget READ widget CONSTANT)
+    Q_PROPERTY(LovelaceCoordinator *lovelace READ lovelace CONSTANT)
     Q_PROPERTY(bool coverNotificationsEnabled READ coverNotificationsEnabled WRITE setCoverNotificationsEnabled NOTIFY coverNotificationsEnabledChanged)
+    Q_PROPERTY(bool nativeDashboardEnabled READ nativeDashboardEnabled WRITE setNativeDashboardEnabled NOTIFY nativeDashboardEnabledChanged)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -97,7 +102,9 @@ public:
     QString dashboardSnapshotPath() const;
     SensorCoordinator *sensors() const;
     WidgetCoordinator *widget() const;
+    LovelaceCoordinator *lovelace() const;
     bool coverNotificationsEnabled() const;
+    bool nativeDashboardEnabled() const;
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -107,6 +114,7 @@ public:
     void setExternalUrl(const QString &url);
     void setHomeWifiSsid(const QString &ssid);
     void setCoverNotificationsEnabled(bool enabled);
+    void setNativeDashboardEnabled(bool enabled);
 
 public slots:
     void restoreSession();
@@ -167,6 +175,7 @@ signals:
     void otpRequired();
     void loginFailed(const QString &message);
     void coverNotificationsEnabledChanged();
+    void nativeDashboardEnabledChanged();
     void notificationReceived(const QString &title,
                               const QString &message,
                               const QVariantMap &data);
@@ -186,6 +195,8 @@ private slots:
     void onSensorStartTimeout();
     void onWidgetStartTimeout();
     void configureWidget();
+    void configureRealtime();
+    void syncLovelaceRunning();
     void syncWidgetRunning();
 
 private:
@@ -263,7 +274,9 @@ private:
     bool accessTokenStillFresh(int minSecondsLeft = 120) const;
 
     QNetworkAccessManager *m_nam;
+    HassWebsocket *m_websocket;
     HassPushChannel *m_pushChannel;
+    LovelaceCoordinator *m_lovelace;
     SensorCoordinator *m_sensors;
     WidgetCoordinator *m_widget;
     RequestKind m_pendingKind;
@@ -285,6 +298,7 @@ private:
     bool m_testIgnoreSslErrors;
     bool m_pendingPushAfterRefresh;
     bool m_coverNotificationsEnabled;
+    bool m_nativeDashboardEnabled;
     NetworkState m_networkState;
     NetworkState m_pendingNetworkState;
     int m_pushAuthRetries;

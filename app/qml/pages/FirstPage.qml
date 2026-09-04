@@ -6,6 +6,7 @@ Page {
     id: page
     objectName: "SplashPage"
     property var hassClient
+    property var mdiIcons
     property bool decided: false
     property bool showEscape: false
     property bool restoreCancelled: false
@@ -17,8 +18,14 @@ Page {
             return
         page.decided = true
         if (loggedIn) {
-            pageStack.replaceAbove(null, Qt.resolvedUrl("HomePage.qml"),
-                                   { hassClient: hassClient })
+            if (hassClient.nativeDashboardEnabled) {
+                pageStack.replaceAbove(null, Qt.resolvedUrl("NativeHomePage.qml"),
+                                       { hassClient: hassClient, mdiIcons: mdiIcons })
+            } else {
+                pageStack.replaceAbove(null, Qt.resolvedUrl("HassWebViewPage.qml"),
+                                       { hassClient: hassClient, mdiIcons: mdiIcons,
+                                         isHome: true })
+            }
         } else {
             pageStack.replaceAbove(null, Qt.resolvedUrl("ConnectionPage.qml"),
                                    { hassClient: hassClient })

@@ -14,9 +14,6 @@ Page {
         onOtpRequired: {
             pageStack.push(Qt.resolvedUrl("OtpPage.qml"), { hassClient: hassClient })
         }
-        onLoginSucceeded: {
-            pageStack.replaceAbove(null, Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
-        }
     }
 
     SilicaFlickable {

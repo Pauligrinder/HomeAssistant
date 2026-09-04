@@ -10,13 +10,6 @@ Page {
         hassClient.submitOtp(codeField.text)
     }
 
-    Connections {
-        target: hassClient
-        onLoginSucceeded: {
-            pageStack.replaceAbove(null, Qt.resolvedUrl("HomePage.qml"), { hassClient: hassClient })
-        }
-    }
-
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: column.height + Theme.paddingLarge

@@ -5,8 +5,10 @@ import "../components"
 
 WebViewPage {
     id: page
-    objectName: "HomePage"
+    objectName: page.isHome ? "HomePage" : "HassWebViewPage"
     property var hassClient
+    property string startPath: "/lovelace"
+    property bool isHome: false
     property bool tokensInjected: false
     property bool bridgeInstalled: false
     property bool dashboardReady: false
@@ -33,7 +35,7 @@ WebViewPage {
             ? page.haDarkText
             : page.haLightText
     property string startUrl: (hassClient && hassClient.baseUrl.length > 0)
-                              ? page.instancePath("/lovelace")
+                              ? page.instancePath(page.startPath || "/lovelace")
                               : ""
     property string dashboardUrl: page.startUrl
     property int authHops: 0
@@ -46,7 +48,7 @@ WebViewPage {
             return "Loading dashboard…"
         return "Loading dashboard…"
     }
-    backNavigation: false
+    backNavigation: !page.isHome
 
     function jsString(value) {
         return JSON.stringify(value ? String(value) : "")
@@ -266,7 +268,9 @@ WebViewPage {
         page.pollBridge()
         // Sensor startup waits for this: its webhook calls must not compete
         // with the dashboard for the UI thread.
-        if (hassClient)
+        // Overflow WebView is not the native home screen; sensors already
+        // start from the native dashboard.
+        if (hassClient && page.isHome)
             hassClient.notifyDashboardReady()
         // Navigate only after the dashboard is on screen. Doing this during
         // the ready-check hangs Gecko on external/reverse-proxy origins.
