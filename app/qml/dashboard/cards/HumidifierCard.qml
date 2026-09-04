@@ -7,18 +7,18 @@ CardChrome {
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property double humidity: {
-        var h = dashboard ? dashboard.attribute(entityId, "humidity") : 0
+        var h = (dashboard && rev >= 0) ? dashboard.attribute(entityId, "humidity") : 0
         return h ? Number(h) : 0
     }
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId) : entityId
+        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
         color: Theme.highlightColor
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         font.pixelSize: Theme.fontSizeLarge
     }
     Row {

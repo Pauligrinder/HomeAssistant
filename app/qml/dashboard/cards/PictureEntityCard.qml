@@ -47,13 +47,13 @@ CardChrome {
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId) : entityId
+        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
         truncationMode: TruncationMode.Fade
     }
     Label {
         width: parent.width
         visible: !card || card.show_state !== false
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
     }

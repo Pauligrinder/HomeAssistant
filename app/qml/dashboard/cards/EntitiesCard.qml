@@ -35,8 +35,12 @@ CardChrome {
                 return ""
             }
             property string rowType: (typeof modelData === "object" && modelData.type) ? modelData.type : "entity"
+            property bool toggleable: (rowType === "entity" && row.entityId.length > 0
+                                       && dashboard && root.rev >= 0)
+                                      ? dashboard.isToggleable(row.entityId) : false
 
-            visible: rowType !== "conditional" || (dashboard && dashboard.isVisible(entry.conditions))
+            visible: rowType !== "conditional"
+                     || (dashboard && root.rev >= 0 && dashboard.isVisible(entry.conditions))
 
             onClicked: {
                 if (rowType === "weblink" && dashboard) {
@@ -85,11 +89,12 @@ CardChrome {
                     name: {
                         if (entry.icon)
                             return entry.icon
-                        if (!dashboard || !row.entityId.length)
+                        if (!dashboard || !row.entityId.length || root.rev < 0)
                             return "mdi:link"
                         return dashboard.entityIcon(row.entityId)
                     }
-                    iconColor: (dashboard && row.entityId.length && dashboard.isOn(row.entityId))
+                    iconColor: (dashboard && row.entityId.length && root.rev >= 0
+                                && dashboard.isOn(row.entityId))
                                ? Theme.highlightColor : Theme.primaryColor
                     width: Theme.iconSizeSmall
                 }
@@ -97,12 +102,13 @@ CardChrome {
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - Theme.iconSizeSmall * 2 - Theme.paddingLarge
+                           - (row.toggleable ? toggle.width : 0)
                     text: {
                         if (entry.name)
                             return entry.name
                         if (rowType === "weblink")
                             return entry.url || "Link"
-                        if (dashboard && row.entityId.length)
+                        if (dashboard && row.entityId.length && root.rev >= 0)
                             return dashboard.friendlyName(row.entityId)
                         return row.entityId
                     }
@@ -113,11 +119,23 @@ CardChrome {
 
                 Label {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: row.entityId.length > 0
-                    text: dashboard && row.entityId.length ? dashboard.formatState(row.entityId) : ""
+                    visible: row.entityId.length > 0 && !row.toggleable
+                    text: (dashboard && row.entityId.length && root.rev >= 0)
+                          ? dashboard.formatState(row.entityId) : ""
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
                     truncationMode: TruncationMode.Fade
+                }
+
+                Switch {
+                    id: toggle
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: row.toggleable
+                    automaticCheck: false
+                    // root.rev is read so the switch follows entity updates.
+                    checked: (row.toggleable && root.rev >= 0)
+                             ? dashboard.isOn(row.entityId) : false
+                    onClicked: dashboard.toggle(row.entityId)
                 }
             }
         }

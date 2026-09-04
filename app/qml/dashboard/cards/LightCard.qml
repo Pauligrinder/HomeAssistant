@@ -6,9 +6,9 @@ CardChrome {
     id: root
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
-    readonly property bool on: dashboard && entityId.length ? dashboard.isOn(entityId) : false
+    readonly property bool on: (dashboard && entityId.length && rev >= 0) ? dashboard.isOn(entityId) : false
     readonly property int brightness: {
-        var b = dashboard ? Number(dashboard.attribute(entityId, "brightness")) : 0
+        var b = (dashboard && rev >= 0) ? Number(dashboard.attribute(entityId, "brightness")) : 0
         if (!b) return 0
         return Math.round(b * 100 / 255)
     }
@@ -18,13 +18,13 @@ CardChrome {
         spacing: Theme.paddingMedium
         MdiIcon {
             mdiIcons: root.mdiIcons
-            name: dashboard ? dashboard.entityIcon(entityId) : "mdi:lightbulb"
+            name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId) : "mdi:lightbulb"
             iconColor: root.on ? Theme.highlightColor : Theme.primaryColor
         }
         Label {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - Theme.iconSizeMedium - Theme.paddingMedium
-            text: dashboard ? dashboard.friendlyName(entityId) : entityId
+            text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
             truncationMode: TruncationMode.Fade
         }
     }

@@ -10,12 +10,12 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId) : "Alarm"
+        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : "Alarm"
         color: Theme.highlightColor
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         font.pixelSize: Theme.fontSizeMedium
     }
     Flow {

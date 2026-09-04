@@ -46,8 +46,9 @@ CardChrome {
                     MdiIcon {
                         anchors.horizontalCenter: parent.horizontalCenter
                         mdiIcons: root.mdiIcons
-                        name: dashboard ? dashboard.entityIcon(entityId, modelData.icon || "") : ""
-                        iconColor: (dashboard && dashboard.isOn(entityId)) ? Theme.highlightColor : Theme.primaryColor
+                        name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId, modelData.icon || "") : ""
+                        iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
+                                   ? Theme.highlightColor : Theme.primaryColor
                     }
                     Label {
                         width: parent.width
@@ -56,14 +57,14 @@ CardChrome {
                         font.pixelSize: Theme.fontSizeTiny
                         color: Theme.secondaryColor
                         text: (modelData && modelData.name) ? modelData.name
-                              : (dashboard ? dashboard.friendlyName(entityId) : entityId)
+                              : ((dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId)
                     }
                     Label {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.primaryColor
-                        text: dashboard ? dashboard.formatState(entityId) : ""
+                        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
                     }
                 }
             }

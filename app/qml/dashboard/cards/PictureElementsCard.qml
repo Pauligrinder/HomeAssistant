@@ -6,6 +6,7 @@ CardChrome {
     id: root
     tapEnabled: false
     property string imageUrl: ""
+    readonly property int rev: dashboard ? dashboard.statesRevision : 0
 
     function mediaPath() {
         if (card && card.image)
@@ -58,7 +59,8 @@ CardChrome {
                         top = parseFloat(String(el.style.top))
                     return stage.height * top / 100 - height / 2
                 }
-                visible: !el.conditions || (dashboard && dashboard.isVisible(el.conditions))
+                visible: !el.conditions
+                         || (dashboard && root.rev >= 0 && dashboard.isVisible(el.conditions))
 
                 MouseArea {
                     anchors.fill: parent
@@ -76,15 +78,18 @@ CardChrome {
                     anchors.centerIn: parent
                     visible: el.type === "state-icon" || el.type === "icon" || el.type === "state-badge"
                     mdiIcons: root.mdiIcons
-                    name: el.icon ? el.icon : (dashboard ? dashboard.entityIcon(entityId) : "")
-                    iconColor: (dashboard && dashboard.isOn(entityId)) ? Theme.highlightColor : "white"
+                    name: el.icon ? el.icon
+                          : ((dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId) : "")
+                    iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
+                               ? Theme.highlightColor : "white"
                 }
                 Label {
                     anchors.centerIn: parent
                     visible: el.type === "state-label" || el.type === "state-badge"
                     color: "white"
                     font.pixelSize: Theme.fontSizeTiny
-                    text: dashboard && entityId.length ? dashboard.formatState(entityId) : (el.title || "")
+                    text: (dashboard && entityId.length && root.rev >= 0)
+                          ? dashboard.formatState(entityId) : (el.title || "")
                 }
             }
         }

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.2.22
+Version:    0.2.23
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,12 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.23-1
+- Fix the native dashboard: switching dashboards and view tabs now works,
+  cards receive their config before they load so images and content appear,
+  and entity state changes reach the UI live instead of freezing at the
+  first value. Entities-card rows for toggleable entities show a switch.
+
 * Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.22-1
 - Load native Lovelace dashboards that have no saved config (auto-gen
   Overview) instead of showing "No config found." Selecting a listed

@@ -7,7 +7,7 @@ CardChrome {
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property double value: {
-        var s = dashboard ? dashboard.entityState(entityId) : "0"
+        var s = (dashboard && root.rev >= 0) ? dashboard.entityState(entityId) : "0"
         return Number(s)
     }
     readonly property double minValue: card && card.min !== undefined ? Number(card.min) : 0
@@ -15,7 +15,7 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId) : entityId
+        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
     }
@@ -43,7 +43,7 @@ CardChrome {
     Label {
         width: parent.width
         horizontalAlignment: Text.AlignHCenter
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         font.pixelSize: Theme.fontSizeMedium
     }
 }

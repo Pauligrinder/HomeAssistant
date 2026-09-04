@@ -15,7 +15,7 @@ CardChrome {
             anchors.horizontalCenter: parent.horizontalCenter
             mdiIcons: root.mdiIcons
             name: (card && card.icon) ? card.icon
-                  : (dashboard ? dashboard.entityIcon(root.entityId) : "mdi:gesture-tap-button")
+                  : ((dashboard && root.rev >= 0) ? dashboard.entityIcon(root.entityId) : "mdi:gesture-tap-button")
             iconColor: Theme.highlightColor
             width: Theme.iconSizeLarge
             height: width
@@ -26,7 +26,7 @@ CardChrome {
             wrapMode: Text.Wrap
             text: (card && card.name) ? card.name
                   : (card && card.show_name === false ? ""
-                     : (dashboard ? dashboard.friendlyName(root.entityId, "Button") : "Button"))
+                     : ((dashboard && root.rev >= 0) ? dashboard.friendlyName(root.entityId, "Button") : "Button"))
             color: Theme.primaryColor
             font.pixelSize: Theme.fontSizeSmall
         }
