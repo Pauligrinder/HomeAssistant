@@ -1,0 +1,72 @@
+import QtQuick 2.6
+import Sailfish.Silica 1.0
+import ".."
+
+CardChrome {
+    id: root
+    readonly property string entityId: card && card.entity ? String(card.entity) : ""
+    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property string artUrl: ""
+
+    Connections {
+        target: dashboard
+        onMediaCached: {
+            if (path === root.artPath())
+                root.artUrl = fileUrl
+        }
+        onStatesRevisionChanged: root.prefetchArt()
+    }
+
+    function artPath() {
+        var pic = dashboard ? dashboard.attribute(entityId, "entity_picture") : ""
+        return pic ? String(pic) : ""
+    }
+
+    function prefetchArt() {
+        var p = root.artPath()
+        if (dashboard && p.length)
+            dashboard.prefetchMedia(p)
+    }
+
+    Component.onCompleted: root.prefetchArt()
+
+    Image {
+        width: parent.width
+        height: width * 0.56
+        fillMode: Image.PreserveAspectCrop
+        source: root.artUrl
+        visible: root.artUrl.length > 0
+    }
+    Label {
+        width: parent.width
+        text: {
+            var title = dashboard ? dashboard.attribute(entityId, "media_title") : ""
+            if (title)
+                return String(title)
+            return dashboard ? dashboard.friendlyName(entityId) : entityId
+        }
+        truncationMode: TruncationMode.Fade
+        color: Theme.primaryColor
+    }
+    Label {
+        width: parent.width
+        text: dashboard ? dashboard.formatState(entityId) : ""
+        color: Theme.secondaryColor
+        font.pixelSize: Theme.fontSizeExtraSmall
+    }
+    Row {
+        spacing: Theme.paddingMedium
+        Button {
+            text: "Prev"
+            onClicked: dashboard.callService("media_player", "media_previous_track", {}, entityId)
+        }
+        Button {
+            text: (dashboard && dashboard.entityState(entityId) === "playing") ? "Pause" : "Play"
+            onClicked: dashboard.callService("media_player", "media_play_pause", {}, entityId)
+        }
+        Button {
+            text: "Next"
+            onClicked: dashboard.callService("media_player", "media_next_track", {}, entityId)
+        }
+    }
+}

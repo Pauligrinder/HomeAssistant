@@ -19,6 +19,25 @@ ApplicationWindow
 
     readonly property string defaultCoverColor: "#03A9F4"
 
+    function homePageUrl() {
+        return hassClientInstance.nativeDashboardEnabled
+                ? Qt.resolvedUrl("pages/NativeHomePage.qml")
+                : Qt.resolvedUrl("pages/HassWebViewPage.qml")
+    }
+
+    function homePageProperties() {
+        var props = { hassClient: hassClientInstance, mdiIcons: mdiIcons }
+        if (!hassClientInstance.nativeDashboardEnabled)
+            props.isHome = true
+        return props
+    }
+
+    function replaceHomePage() {
+        if (!hassClientInstance.loggedIn)
+            return
+        pageStack.replaceAbove(null, appWindow.homePageUrl(), appWindow.homePageProperties())
+    }
+
     function goHomeIfLoggedIn() {
         if (!hassClientInstance.loggedIn)
             return
@@ -26,8 +45,7 @@ ApplicationWindow
                 && (pageStack.currentPage.objectName === "HomePage"
                     || pageStack.currentPage.objectName === "SplashPage"))
             return
-        pageStack.replaceAbove(null, Qt.resolvedUrl("pages/HomePage.qml"),
-                               { hassClient: hassClientInstance })
+        appWindow.replaceHomePage()
     }
 
     property bool pendingEventsFavorites: false
@@ -464,6 +482,12 @@ ApplicationWindow
             if (!hassClientInstance.coverNotificationsEnabled)
                 appWindow.clearCoverNotification()
         }
+        onNativeDashboardEnabledChanged: {
+            if (hassClientInstance.loggedIn
+                    && pageStack.currentPage
+                    && pageStack.currentPage.objectName !== "SplashPage")
+                appWindow.replaceHomePage()
+        }
     }
 
     Connections {
@@ -474,6 +498,7 @@ ApplicationWindow
     initialPage: Component {
         FirstPage {
             hassClient: hassClientInstance
+            mdiIcons: mdiIcons
         }
     }
     cover: CoverDir.CoverPage {

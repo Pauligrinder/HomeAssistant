@@ -5,7 +5,8 @@ Built as a Harbour app (Qt 5 / QML + C++) the same way most SFOS apps are,
 and tested against Platform SDK target `SailfishOS-5.2.0.15-aarch64`.
 
 This first cut covers connecting to an instance and signing in, including
-TOTP two-step verification, dashboards (webview-wrapped), notifications, and
+TOTP two-step verification, dashboards (webview-wrapped by default, with an
+optional native Silica renderer), notifications, and
 mobile_app sensors (battery, Wi‑Fi, location).
 
 ## Layout
@@ -14,9 +15,12 @@ mobile_app sensors (battery, Wi‑Fi, location).
 app/
   harbour-homeassistant.pro
   src/hassclient.{h,cpp}           HA HTTP auth + session
+  src/hasswebsocket.{h,cpp}        shared HA websocket
+  src/lovelacecoordinator.{h,cpp}  native Lovelace config + states
   src/sensorcoordinator.{h,cpp}    mobile_app sensor webhooks
   src/widgetcoordinator.{h,cpp}    cover + Events View favorites
   qml/pages/                       Connection, login, OTP, home, settings
+  qml/dashboard/                   Native Lovelace layouts and cards
   qml/components/                  WifiChecker, BatteryMonitor, LocationReporter
   eventsview/                      Lipstick Events View widget + JSON
   rpm/harbour-homeassistant.spec
@@ -31,7 +35,11 @@ app/
    (or other MFA) code, then exchanges the auth code for tokens.
 4. **Session** — Refresh token is stored in the sandboxed app settings and
    restored on launch.
-5. **Sensors** — After mobile_app registration, Helmsman reports battery level/
+5. **Dashboards** — The Home Assistant frontend in a WebView is the default
+   home screen. Settings → Dashboard can enable an experimental native Silica
+   renderer of Lovelace JSON. Custom cards, energy, and the map still open
+   in the web view. The native renderer is off by default.
+6. **Sensors** — After mobile_app registration, Helmsman reports battery level/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
    location. Native settings can disable individual sensors and select a
    battery-saving, balanced, or accurate location mode. GPS is not kept
@@ -43,12 +51,12 @@ app/
    Settings include **Update location now**. Sensors start a few
    seconds after the dashboard has loaded so their webhook calls cannot stall
    the UI.
-6. **Cover favorites** — Pick lights, switches, scripts, ACs, and sensors in
+7. **Cover favorites** — Pick lights, switches, scripts, ACs, and sensors in
    settings to show on the app cover. Cover actions toggle lights, switches, and
    ACs, or run a script (no on/off state). Sensors show their current value and
    have no action, keeping an empty slot so the paging arrow stays put. Arrows
    page when there are more than two.
-7. **Events View widget** — A separate favorites list drives a third-party
+8. **Events View widget** — A separate favorites list drives a third-party
    Events View widget (`/usr/share/lipstick/eventswidgets/`). Cards use the
    cover tint and watermark. Tap toggles a light, switch, or AC; long-press a
    dimmable light to set brightness, color, or temperature; long-press an AC
@@ -73,7 +81,7 @@ app/
    Events View so the widget does not redraw them every refresh.
    Settings → Events view shows a short description next to
    the Helmsman toggle.
-8. **URLs** — Internal and external addresses with Wi‑Fi switching. If you only
+9. **URLs** — Internal and external addresses with Wi‑Fi switching. If you only
    have one address, put it in External URL and leave Internal URL empty.
 
 ## Build
@@ -89,7 +97,7 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.20-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.2.21-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
 devel-su pkcon install-local ~/harbour-helmsman-0.2.20-1.aarch64.rpm
 ```

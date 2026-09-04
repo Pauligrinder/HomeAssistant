@@ -1,6 +1,8 @@
 #include "hassclient.h"
 #include "appsettings.h"
 #include "hasspushchannel.h"
+#include "hasswebsocket.h"
+#include "lovelacecoordinator.h"
 #include "widgetcoordinator.h"
 
 #include <QNetworkAccessManager>
@@ -190,7 +192,9 @@ QString snapshotMetaPath()
 HassClient::HassClient(QObject *parent)
     : QObject(parent)
     , m_nam(new QNetworkAccessManager(this))
+    , m_websocket(new HassWebsocket(this))
     , m_pushChannel(new HassPushChannel(this))
+    , m_lovelace(new LovelaceCoordinator(this))
     , m_sensors(new SensorCoordinator(this))
     , m_widget(new WidgetCoordinator(this))
     , m_pendingKind(RequestNone)
@@ -207,6 +211,7 @@ HassClient::HassClient(QObject *parent)
     , m_testIgnoreSslErrors(false)
     , m_pendingPushAfterRefresh(false)
     , m_coverNotificationsEnabled(true)
+    , m_nativeDashboardEnabled(false)
     , m_networkState(NetworkUnknown)
     , m_pendingNetworkState(NetworkUnknown)
     , m_pushAuthRetries(0)
@@ -234,6 +239,10 @@ HassClient::HassClient(QObject *parent)
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
+
+    m_pushChannel->setWebsocket(m_websocket);
+    m_lovelace->setWebsocket(m_websocket);
+
     connect(m_pushChannel, SIGNAL(connectedChanged()),
             this, SLOT(onPushConnectedChanged()));
     connect(m_pushChannel, SIGNAL(accessTokenStale()),
@@ -242,6 +251,10 @@ HassClient::HassClient(QObject *parent)
             this, SLOT(onPushAuthenticationFailed(QString)));
     connect(m_pushChannel, SIGNAL(notificationReceived(QString,QString,QVariantMap)),
             this, SLOT(onPushNotificationReceived(QString,QString,QVariantMap)));
+    connect(m_websocket, SIGNAL(accessTokenStale()),
+            this, SLOT(onAccessTokenStale()));
+    connect(m_websocket, SIGNAL(authenticationFailed(QString)),
+            this, SLOT(onPushAuthenticationFailed(QString)));
     connect(m_widget, SIGNAL(accessTokenStale()),
             this, SLOT(onAccessTokenStale()));
 
@@ -250,6 +263,10 @@ HassClient::HassClient(QObject *parent)
     connect(this, SIGNAL(baseUrlChanged()), this, SLOT(configureWidget()));
     connect(this, SIGNAL(ignoreSslErrorsChanged()), this, SLOT(configureWidget()));
     connect(this, SIGNAL(loggedInChanged()), this, SLOT(syncWidgetRunning()));
+    connect(this, SIGNAL(accessTokenChanged()), this, SLOT(configureRealtime()));
+    connect(this, SIGNAL(accessExpiresAtChanged()), this, SLOT(configureRealtime()));
+    connect(this, SIGNAL(baseUrlChanged()), this, SLOT(configureRealtime()));
+    connect(this, SIGNAL(ignoreSslErrorsChanged()), this, SLOT(configureRealtime()));
 
     m_authClientId = QString();
     loadSession();
@@ -257,6 +274,8 @@ HassClient::HassClient(QObject *parent)
     QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
     if (ui.contains(QStringLiteral("coverNotificationsEnabled")))
         m_coverNotificationsEnabled = ui.value(QStringLiteral("coverNotificationsEnabled")).toBool();
+    if (ui.contains(QStringLiteral("nativeDashboardEnabled")))
+        m_nativeDashboardEnabled = ui.value(QStringLiteral("nativeDashboardEnabled")).toBool();
 }
 
 HassClient::~HassClient()
@@ -300,7 +319,9 @@ bool HassClient::mobileAppRegistered() const { return !m_webhookId.isEmpty(); }
 bool HassClient::pushConnected() const { return m_pushChannel && m_pushChannel->connected(); }
 SensorCoordinator *HassClient::sensors() const { return m_sensors; }
 WidgetCoordinator *HassClient::widget() const { return m_widget; }
+LovelaceCoordinator *HassClient::lovelace() const { return m_lovelace; }
 bool HassClient::coverNotificationsEnabled() const { return m_coverNotificationsEnabled; }
+bool HassClient::nativeDashboardEnabled() const { return m_nativeDashboardEnabled; }
 
 QString HassClient::dashboardSnapshotPath() const
 {
@@ -400,6 +421,17 @@ void HassClient::setCoverNotificationsEnabled(bool enabled)
     QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
     ui.setValue(QStringLiteral("coverNotificationsEnabled"), enabled);
     emit coverNotificationsEnabledChanged();
+}
+
+void HassClient::setNativeDashboardEnabled(bool enabled)
+{
+    if (m_nativeDashboardEnabled == enabled)
+        return;
+    m_nativeDashboardEnabled = enabled;
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    ui.setValue(QStringLiteral("nativeDashboardEnabled"), enabled);
+    emit nativeDashboardEnabledChanged();
+    syncLovelaceRunning();
 }
 
 void HassClient::setUsingInternalUrl(bool usingInternal)
@@ -1213,7 +1245,7 @@ void HassClient::reconnectPushAfterEndpointChange()
     // (or with a soon-to-expire token) — that shows up in HA as login failures.
     stopPushChannel();
 
-    if (!m_loggedIn || m_webhookId.isEmpty())
+    if (!m_loggedIn)
         return;
 
     if (accessTokenStillFresh(120)) {
@@ -1222,7 +1254,7 @@ void HassClient::reconnectPushAfterEndpointChange()
     }
 
     if (m_refreshToken.isEmpty()) {
-        qWarning() << "Helmsman: endpoint switched but no refresh token; push left stopped";
+        qWarning() << "Helmsman: endpoint switched but no refresh token; realtime left stopped";
         return;
     }
 
@@ -1804,8 +1836,9 @@ void HassClient::ensureMobileAppRegistration()
     if (!m_loggedIn || m_accessToken.isEmpty())
         return;
 
+    startPushChannel();
+
     if (!m_webhookId.isEmpty()) {
-        startPushChannel();
         scheduleSensorStart(kSensorStartFallbackMs);
         return;
     }
@@ -1938,6 +1971,26 @@ void HassClient::configureWidget()
     m_widget->configure(m_baseUrl, m_accessToken, m_accessExpiresAt, m_ignoreSslErrors);
 }
 
+void HassClient::configureRealtime()
+{
+    if (m_websocket)
+        m_websocket->configure(m_baseUrl, m_accessToken, m_accessExpiresAt, m_ignoreSslErrors);
+    if (m_lovelace)
+        m_lovelace->configure(m_baseUrl, m_accessToken, m_ignoreSslErrors);
+}
+
+void HassClient::syncLovelaceRunning()
+{
+    if (!m_lovelace)
+        return;
+    if (m_loggedIn && m_nativeDashboardEnabled && !m_accessToken.isEmpty()) {
+        configureRealtime();
+        m_lovelace->start();
+    } else {
+        m_lovelace->stop();
+    }
+}
+
 void HassClient::startWidget()
 {
     if (!m_widget)
@@ -1996,11 +2049,17 @@ void HassClient::notifyAppForegrounded()
 
 void HassClient::startPushChannel()
 {
-    if (!m_pushChannel || m_webhookId.isEmpty() || m_accessToken.isEmpty() || m_baseUrl.isEmpty())
+    if (m_accessToken.isEmpty() || m_baseUrl.isEmpty())
         return;
-    m_pushChannel->configure(m_baseUrl, m_accessToken, m_accessExpiresAt,
-                             m_webhookId, m_ignoreSslErrors);
-    m_pushChannel->start();
+    configureRealtime();
+    if (m_websocket)
+        m_websocket->start();
+    syncLovelaceRunning();
+    if (m_pushChannel) {
+        m_pushChannel->configure(m_baseUrl, m_accessToken, m_accessExpiresAt,
+                                 m_webhookId, m_ignoreSslErrors);
+        m_pushChannel->start();
+    }
     scheduleTokenRefresh();
 }
 
@@ -2008,8 +2067,12 @@ void HassClient::stopPushChannel()
 {
     // Keep the refresh watchdog running while logged in: the cover poller
     // still needs a live token even if the push socket is down.
+    if (m_lovelace)
+        m_lovelace->stop();
     if (m_pushChannel)
         m_pushChannel->stop();
+    if (m_websocket)
+        m_websocket->stop();
 }
 
 void HassClient::onPushConnectedChanged()

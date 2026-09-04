@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network websockets gui positioning dbus
 PKGCONFIG += qt5embedwidget
 
-VERSION = 0.2.20
+VERSION = 0.2.21
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
@@ -12,6 +12,8 @@ SOURCES += \
     src/harbour-homeassistant.cpp \
     src/hassclient.cpp \
     src/hasspushchannel.cpp \
+    src/hasswebsocket.cpp \
+    src/lovelacecoordinator.cpp \
     src/mdiiconrenderer.cpp \
     src/sensorcoordinator.cpp \
     src/widgetcoordinator.cpp
@@ -20,6 +22,8 @@ HEADERS += \
     src/appsettings.h \
     src/hassclient.h \
     src/hasspushchannel.h \
+    src/hasswebsocket.h \
+    src/lovelacecoordinator.h \
     src/mdiiconrenderer.h \
     src/sensorcoordinator.h \
     src/widgetcoordinator.h
@@ -33,6 +37,9 @@ DISTFILES += \
     qml/cover/CoverPage.qml \
     qml/pages/*.qml \
     qml/components/*.qml \
+    qml/dashboard/*.qml \
+    qml/dashboard/cards/*.qml \
+    qml/dashboard/features/*.qml \
     qml/eventsview/*.qml \
     eventsview/*.qml \
     eventsview/*.json \

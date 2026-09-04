@@ -4,15 +4,10 @@
 #include <QObject>
 #include <QString>
 #include <QVariantMap>
-#include <QTimer>
 #include <QDateTime>
-#include <QAbstractSocket>
-#include <QList>
-#include <QSslError>
+#include <QVariant>
 
-class QWebSocket;
-class QJsonObject;
-class QUrl;
+class HassWebsocket;
 
 class HassPushChannel : public QObject
 {
@@ -24,6 +19,7 @@ public:
     ~HassPushChannel() override;
 
     bool connected() const;
+    void setWebsocket(HassWebsocket *socket);
 
 public slots:
     void configure(const QString &baseUrl,
@@ -43,43 +39,20 @@ signals:
                               const QVariantMap &data);
 
 private slots:
-    void onConnected();
-    void onDisconnected();
-    void onTextMessageReceived(const QString &message);
-    void onError(QAbstractSocket::SocketError error);
-    void onSslErrors(const QList<QSslError> &errors);
-    void openSocket();
-    void sendPing();
-    void onPongTimeout();
+    void onConnectionReady();
+    void onResultReceived(int id, bool success, const QVariant &result, const QVariantMap &error);
+    void onEventReceived(int id, const QVariantMap &event);
+    void onAuthenticatedChanged();
 
 private:
-    void setConnected(bool connected);
-    void sendJson(const QJsonObject &obj);
     void subscribePushChannel();
     void confirmNotification(const QString &confirmId);
-    void startKeepalive();
-    void stopKeepalive();
-    void scheduleReconnect();
-    bool accessTokenFresh() const;
-    QUrl websocketUrl() const;
-    int nextMessageId();
 
-    QWebSocket *m_socket;
-    QTimer m_reconnectTimer;
-    QTimer m_pingTimer;
-    QTimer m_pongTimer;
-    QString m_baseUrl;
-    QString m_accessToken;
-    QDateTime m_accessExpiresAt;
+    HassWebsocket *m_socket;
     QString m_webhookId;
-    bool m_ignoreSslErrors;
-    bool m_connected;
     bool m_wantRunning;
-    bool m_authenticated;
-    int m_nextId;
+    bool m_subscribed;
     int m_pushSubscriptionId;
-    int m_pendingPingId;
-    int m_reconnectAttempt;
 };
 
 #endif

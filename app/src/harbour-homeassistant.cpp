@@ -5,6 +5,7 @@
 
 #include "appsettings.h"
 #include "hassclient.h"
+#include "lovelacecoordinator.h"
 #include "mdiiconrenderer.h"
 #include "sensorcoordinator.h"
 #include "widgetcoordinator.h"
@@ -25,6 +26,9 @@ int main(int argc, char *argv[])
     qmlRegisterUncreatableType<WidgetCoordinator>(
                 "harbour.helmsman", 1, 0, "WidgetCoordinator",
                 QStringLiteral("Use HassClient.widget"));
+    qmlRegisterUncreatableType<LovelaceCoordinator>(
+                "harbour.helmsman", 1, 0, "LovelaceCoordinator",
+                QStringLiteral("Use HassClient.lovelace"));
 
     QQuickView *view = SailfishApp::createView();
     view->setSource(SailfishApp::pathTo(QStringLiteral("qml/harbour-homeassistant.qml")));

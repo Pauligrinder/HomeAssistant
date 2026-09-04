@@ -218,6 +218,17 @@ Page {
                 onClicked: hassClient.coverNotificationsEnabled = !checked
             }
 
+            SectionHeader { text: "Dashboard" }
+
+            TextSwitch {
+                id: nativeDashboardSwitch
+                text: "Native dashboard"
+                automaticCheck: false
+                checked: hassClient.nativeDashboardEnabled
+                description: "Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards, energy, and the map still open in the web view."
+                onClicked: hassClient.nativeDashboardEnabled = !checked
+            }
+
             SectionHeader { text: "Cover favorites" }
 
             Label {
