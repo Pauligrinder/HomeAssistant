@@ -16,6 +16,7 @@
 #include <QUrlQuery>
 #include <QDebug>
 #include <QSslError>
+#include <algorithm>
 
 namespace {
 
@@ -153,6 +154,116 @@ QVariantList variantListOf(const QVariant &value)
     return QVariantList();
 }
 
+QString dashboardUrlPath(const QVariantMap &dashboard)
+{
+    QString path = dashboard.value(QStringLiteral("url_path")).toString();
+    if (path.isEmpty())
+        path = dashboard.value(QStringLiteral("path")).toString();
+    if (path == QLatin1String("lovelace") || path == QLatin1String("null"))
+        path.clear();
+    return path;
+}
+
+QVariantMap configMapFromResult(const QVariant &result)
+{
+    QVariantMap map = result.toMap();
+    if (!map.isEmpty())
+        return map;
+    if (result.type() == QVariant::String) {
+        const QByteArray json = result.toString().trimmed().toUtf8();
+        if (!json.isEmpty()) {
+            const QJsonDocument doc = QJsonDocument::fromJson(json);
+            if (doc.isObject())
+                return doc.object().toVariantMap();
+        }
+    }
+    return map;
+}
+
+bool isConfigNotFound(const QVariantMap &error)
+{
+    const QString code = error.value(QStringLiteral("code")).toString();
+    if (code == QLatin1String("config_not_found"))
+        return true;
+    const QString message = error.value(QStringLiteral("message")).toString();
+    return message.contains(QStringLiteral("No config found"), Qt::CaseInsensitive)
+            || message.startsWith(QStringLiteral("Unknown config specified"));
+}
+
+bool skipGeneratedDomain(const QString &domain)
+{
+    return domain == QLatin1String("persistent_notification")
+            || domain == QLatin1String("sun")
+            || domain == QLatin1String("zone")
+            || domain == QLatin1String("conversation")
+            || domain == QLatin1String("stt")
+            || domain == QLatin1String("tts")
+            || domain == QLatin1String("wake_word")
+            || domain == QLatin1String("assist_satellite")
+            || domain == QLatin1String("tag")
+            || domain == QLatin1String("event")
+            || domain == QLatin1String("update");
+}
+
+QString headingForDomain(const QString &domain)
+{
+    if (domain == QLatin1String("light"))
+        return QStringLiteral("Lights");
+    if (domain == QLatin1String("switch"))
+        return QStringLiteral("Switches");
+    if (domain == QLatin1String("binary_sensor"))
+        return QStringLiteral("Binary sensors");
+    if (domain == QLatin1String("media_player"))
+        return QStringLiteral("Media players");
+    if (domain == QLatin1String("climate"))
+        return QStringLiteral("Climate");
+    if (domain == QLatin1String("cover"))
+        return QStringLiteral("Covers");
+    if (domain == QLatin1String("sensor"))
+        return QStringLiteral("Sensors");
+    if (domain == QLatin1String("alarm_control_panel"))
+        return QStringLiteral("Alarms");
+    if (domain == QLatin1String("device_tracker"))
+        return QStringLiteral("Devices");
+    QString heading = domain;
+    heading.replace(QLatin1Char('_'), QLatin1Char(' '));
+    if (!heading.isEmpty())
+        heading[0] = heading.at(0).toUpper();
+    return heading;
+}
+
+const QStringList &generatedDomainOrder()
+{
+    static const QStringList order = QStringList()
+            << QStringLiteral("light")
+            << QStringLiteral("switch")
+            << QStringLiteral("fan")
+            << QStringLiteral("cover")
+            << QStringLiteral("climate")
+            << QStringLiteral("lock")
+            << QStringLiteral("alarm_control_panel")
+            << QStringLiteral("media_player")
+            << QStringLiteral("vacuum")
+            << QStringLiteral("humidifier")
+            << QStringLiteral("water_heater")
+            << QStringLiteral("camera")
+            << QStringLiteral("weather")
+            << QStringLiteral("scene")
+            << QStringLiteral("script")
+            << QStringLiteral("automation")
+            << QStringLiteral("input_boolean")
+            << QStringLiteral("input_button")
+            << QStringLiteral("button")
+            << QStringLiteral("person")
+            << QStringLiteral("device_tracker")
+            << QStringLiteral("binary_sensor")
+            << QStringLiteral("sensor")
+            << QStringLiteral("todo")
+            << QStringLiteral("calendar")
+            << QStringLiteral("plant");
+    return order;
+}
+
 QStringList stringListOf(const QVariant &value)
 {
     QStringList out;
@@ -190,6 +301,8 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_busy(false)
     , m_statesLoaded(false)
     , m_configLoaded(false)
+    , m_configFallbackTried(false)
+    , m_pendingGenerated(false)
     , m_userIsAdmin(false)
     , m_statesRevision(0)
     , m_currentViewIndex(0)
@@ -263,10 +376,12 @@ QString LovelaceCoordinator::pendingWebPath() const { return m_pendingWebPath; }
 void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
 {
     QString next = path;
-    if (next == QLatin1String("lovelace"))
+    if (next == QLatin1String("lovelace") || next == QLatin1String("null"))
         next.clear();
     if (m_currentUrlPath == next && m_configLoaded)
         return;
+    m_configFallbackTried = true;
+    m_pendingGenerated = false;
     m_currentUrlPath = next;
     emit currentUrlPathChanged();
     if (m_wantRunning && m_socket && m_socket->authenticated())
@@ -309,6 +424,8 @@ void LovelaceCoordinator::stop()
     setReady(false);
     m_statesLoaded = false;
     m_configLoaded = false;
+    m_configFallbackTried = false;
+    m_pendingGenerated = false;
 }
 
 void LovelaceCoordinator::refresh()
@@ -349,11 +466,14 @@ void LovelaceCoordinator::subscribeAll()
 {
     if (!m_socket || !m_socket->authenticated())
         return;
+    m_configLoaded = false;
+    m_configFallbackTried = false;
+    m_pendingGenerated = false;
+    setReady(false);
     setBusy(true);
     requestUser();
     requestStates();
     requestDashboards();
-    requestConfig();
     requestAreas();
     fetchEnergyPrefs();
 
@@ -377,6 +497,13 @@ void LovelaceCoordinator::requestDashboards()
 
 void LovelaceCoordinator::requestConfig()
 {
+    if (!m_socket || !m_socket->authenticated())
+        return;
+    setError(QString());
+    setReady(false);
+    m_configLoaded = false;
+    m_pendingGenerated = false;
+    setBusy(true);
     QJsonObject msg;
     msg.insert(QStringLiteral("type"), QStringLiteral("lovelace/config"));
     if (!m_currentUrlPath.isEmpty())
@@ -457,15 +584,18 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         m_dashboardsId = 0;
         if (success)
             applyDashboards(result);
+        else
+            applyDashboards(QVariantList());
+        if (m_wantRunning && m_socket && m_socket->authenticated() && m_configId == 0 && !m_configLoaded)
+            requestConfig();
         return;
     }
     if (id == m_configId) {
         m_configId = 0;
-        setBusy(false);
         if (success)
             applyConfig(result);
         else
-            setError(error.value(QStringLiteral("message")).toString());
+            handleConfigFailure(error);
         return;
     }
     if (id == m_userIdReq) {
@@ -524,7 +654,9 @@ void LovelaceCoordinator::applyStates(const QVariant &result)
     m_statesLoaded = true;
     ++m_statesRevision;
     emit statesRevisionChanged();
-    if (m_configLoaded)
+    if (m_pendingGenerated)
+        applyGeneratedConfig();
+    else if (m_configLoaded)
         setReady(true);
 }
 
@@ -554,7 +686,7 @@ void LovelaceCoordinator::applyStateChanged(const QVariantMap &event)
 
 void LovelaceCoordinator::applyDashboards(const QVariant &result)
 {
-    QVariantList list = variantListOf(result);
+    const QVariantList list = variantListOf(result);
     QVariantMap overview;
     overview.insert(QStringLiteral("id"), QStringLiteral("lovelace"));
     overview.insert(QStringLiteral("url_path"), QString());
@@ -562,24 +694,165 @@ void LovelaceCoordinator::applyDashboards(const QVariant &result)
     overview.insert(QStringLiteral("icon"), QStringLiteral("mdi:view-dashboard"));
     QVariantList withDefault;
     withDefault.append(overview);
-    for (int i = 0; i < list.size(); ++i)
-        withDefault.append(list.at(i));
+    for (int i = 0; i < list.size(); ++i) {
+        QVariantMap dash = list.at(i).toMap();
+        dash.insert(QStringLiteral("url_path"), dashboardUrlPath(dash));
+        if (dash.value(QStringLiteral("title")).toString().isEmpty()) {
+            const QString path = dash.value(QStringLiteral("url_path")).toString();
+            dash.insert(QStringLiteral("title"), path.isEmpty() ? QStringLiteral("Overview") : path);
+        }
+        withDefault.append(dash);
+    }
     m_dashboards = withDefault;
     emit dashboardsChanged();
 }
 
 void LovelaceCoordinator::applyConfig(const QVariant &result)
 {
-    m_currentConfig = result.toMap();
+    QVariantMap map = configMapFromResult(result);
+    if (map.isEmpty() && result.type() == QVariant::List) {
+        map.insert(QStringLiteral("views"), result.toList());
+    }
+    const QVariantList views = variantListOf(map.value(QStringLiteral("views")));
+    if (map.isEmpty() || (map.contains(QStringLiteral("strategy")) && views.isEmpty())) {
+        applyGeneratedConfig();
+        return;
+    }
+    setError(QString());
+    commitConfig(map);
+    setBusy(false);
+}
+
+void LovelaceCoordinator::commitConfig(const QVariantMap &config)
+{
+    m_currentConfig = config;
     m_views = normalizeViews(m_currentConfig);
     if (m_currentViewIndex >= m_views.size())
         m_currentViewIndex = 0;
     m_configLoaded = true;
+    m_pendingGenerated = false;
     emit currentConfigChanged();
     emit viewsChanged();
     emit currentViewChanged();
     if (m_statesLoaded)
         setReady(true);
+}
+
+void LovelaceCoordinator::handleConfigFailure(const QVariantMap &error)
+{
+    qWarning() << kClientName << "lovelace/config failed for"
+               << (m_currentUrlPath.isEmpty() ? QStringLiteral("(default)") : m_currentUrlPath)
+               << error;
+    if (isConfigNotFound(error)) {
+        if (tryFallbackDashboard())
+            return;
+        applyGeneratedConfig();
+        return;
+    }
+    setBusy(false);
+    setError(error.value(QStringLiteral("message")).toString());
+}
+
+bool LovelaceCoordinator::tryFallbackDashboard()
+{
+    if (m_configFallbackTried)
+        return false;
+    m_configFallbackTried = true;
+    QString next;
+    for (int i = 0; i < m_dashboards.size(); ++i) {
+        const QString path = dashboardUrlPath(m_dashboards.at(i).toMap());
+        if (!path.isEmpty()) {
+            next = path;
+            break;
+        }
+    }
+    if (next.isEmpty() || next == m_currentUrlPath)
+        return false;
+    m_currentUrlPath = next;
+    emit currentUrlPathChanged();
+    requestConfig();
+    return true;
+}
+
+void LovelaceCoordinator::applyGeneratedConfig()
+{
+    if (!m_statesLoaded) {
+        m_pendingGenerated = true;
+        setBusy(true);
+        return;
+    }
+    m_pendingGenerated = false;
+
+    QHash<QString, QStringList> byDomain;
+    QHash<QString, QVariantMap>::const_iterator it = m_entities.constBegin();
+    for (; it != m_entities.constEnd(); ++it) {
+        const QString entityId = it.key();
+        const QString domain = domainOfEntity(entityId);
+        if (domain.isEmpty() || skipGeneratedDomain(domain))
+            continue;
+        byDomain[domain].append(entityId);
+    }
+
+    QVariantList cards;
+    QStringList remaining = byDomain.keys();
+    const QStringList order = generatedDomainOrder();
+    for (int i = 0; i < order.size(); ++i) {
+        const QString domain = order.at(i);
+        QStringList ids = byDomain.take(domain);
+        remaining.removeAll(domain);
+        if (ids.isEmpty())
+            continue;
+        std::sort(ids.begin(), ids.end());
+        QVariantMap heading;
+        heading.insert(QStringLiteral("type"), QStringLiteral("heading"));
+        heading.insert(QStringLiteral("heading"), headingForDomain(domain));
+        cards.append(heading);
+        for (int e = 0; e < ids.size(); ++e) {
+            QVariantMap tile;
+            tile.insert(QStringLiteral("type"), QStringLiteral("tile"));
+            tile.insert(QStringLiteral("entity"), ids.at(e));
+            cards.append(tile);
+        }
+    }
+    remaining.sort();
+    for (int i = 0; i < remaining.size(); ++i) {
+        const QString domain = remaining.at(i);
+        QStringList ids = byDomain.value(domain);
+        if (ids.isEmpty())
+            continue;
+        std::sort(ids.begin(), ids.end());
+        QVariantMap heading;
+        heading.insert(QStringLiteral("type"), QStringLiteral("heading"));
+        heading.insert(QStringLiteral("heading"), headingForDomain(domain));
+        cards.append(heading);
+        for (int e = 0; e < ids.size(); ++e) {
+            QVariantMap tile;
+            tile.insert(QStringLiteral("type"), QStringLiteral("tile"));
+            tile.insert(QStringLiteral("entity"), ids.at(e));
+            cards.append(tile);
+        }
+    }
+
+    if (cards.isEmpty()) {
+        QVariantMap heading;
+        heading.insert(QStringLiteral("type"), QStringLiteral("heading"));
+        heading.insert(QStringLiteral("heading"), QStringLiteral("No entities yet"));
+        cards.append(heading);
+    }
+
+    QVariantMap section;
+    section.insert(QStringLiteral("cards"), cards);
+    QVariantMap view;
+    view.insert(QStringLiteral("title"), QStringLiteral("Home"));
+    view.insert(QStringLiteral("path"), QStringLiteral("home"));
+    view.insert(QStringLiteral("type"), QStringLiteral("sections"));
+    view.insert(QStringLiteral("sections"), QVariantList() << section);
+    QVariantMap config;
+    config.insert(QStringLiteral("views"), QVariantList() << view);
+
+    setError(QString());
+    commitConfig(config);
+    setBusy(false);
 }
 
 void LovelaceCoordinator::applyUser(const QVariant &result)
