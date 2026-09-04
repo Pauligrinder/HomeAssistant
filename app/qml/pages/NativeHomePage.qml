@@ -305,7 +305,8 @@ Page {
 
             Loader {
                 id: viewLoader
-                width: parent.width
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                anchors.horizontalCenter: parent.horizontalCenter
                 sourceComponent: {
                     if (!dashboard || !dashboard.currentView)
                         return emptyComp
@@ -325,7 +326,7 @@ Page {
     Component {
         id: emptyComp
         Item {
-            width: page.width
+            width: viewLoader.width
             height: Theme.itemSizeLarge
             Label {
                 anchors.centerIn: parent
@@ -338,7 +339,7 @@ Page {
     Component {
         id: sectionsComp
         SectionsLayout {
-            width: page.width
+            width: viewLoader.width
             view: dashboard ? dashboard.currentView : ({})
             dashboard: page.dashboard
             hassClient: page.hassClient
@@ -349,7 +350,7 @@ Page {
     Component {
         id: masonryComp
         MasonryLayout {
-            width: page.width
+            width: viewLoader.width
             view: dashboard ? dashboard.currentView : ({})
             dashboard: page.dashboard
             hassClient: page.hassClient
@@ -360,7 +361,7 @@ Page {
     Component {
         id: panelComp
         PanelLayout {
-            width: page.width
+            width: viewLoader.width
             view: dashboard ? dashboard.currentView : ({})
             dashboard: page.dashboard
             hassClient: page.hassClient
@@ -371,7 +372,7 @@ Page {
     Component {
         id: sidebarComp
         SidebarLayout {
-            width: page.width
+            width: viewLoader.width
             view: dashboard ? dashboard.currentView : ({})
             dashboard: page.dashboard
             hassClient: page.hassClient

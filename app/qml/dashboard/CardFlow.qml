@@ -52,13 +52,13 @@ Item {
     Column {
         id: column
         width: parent.width
-        spacing: Theme.paddingSmall
+        spacing: Theme.paddingMedium
 
         Repeater {
             model: flow.rows
             Row {
                 width: column.width
-                spacing: Theme.paddingSmall
+                spacing: Theme.paddingMedium
 
                 Repeater {
                     model: modelData

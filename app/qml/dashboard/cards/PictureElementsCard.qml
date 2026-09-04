@@ -6,6 +6,7 @@ CardChrome {
     id: root
     tapEnabled: false
     property string imageUrl: ""
+    property string requestedPath: ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
 
     function mediaPath() {
@@ -22,12 +23,23 @@ CardChrome {
             if (path === root.mediaPath())
                 root.imageUrl = fileUrl
         }
+        onStatesRevisionChanged: root.refresh()
     }
 
-    Component.onCompleted: {
-        if (dashboard && root.mediaPath().length)
-            dashboard.prefetchMedia(root.mediaPath())
+    function refresh() {
+        var path = root.mediaPath()
+        if (!dashboard || !path.length)
+            return
+        var cached = dashboard.cachedMediaUrl(path)
+        if (cached && cached.length)
+            root.imageUrl = cached
+        else if (path !== root.requestedPath) {
+            root.requestedPath = path
+            dashboard.prefetchMedia(path)
+        }
     }
+
+    Component.onCompleted: root.refresh()
 
     Item {
         id: stage

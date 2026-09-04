@@ -11,6 +11,7 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QUrlQuery>
@@ -1426,7 +1427,7 @@ void LovelaceCoordinator::prefetchMedia(const QString &path)
         emit mediaCached(path, m_mediaCache.value(path));
         return;
     }
-    getJson(resolveMedia(path), QStringLiteral("media"), path);
+    getMedia(QUrl(resolveMedia(path)), path);
 }
 
 QString LovelaceCoordinator::cachedMediaUrl(const QString &path) const
@@ -1573,6 +1574,32 @@ void LovelaceCoordinator::getJson(const QString &path, const QString &kind, cons
             this, SLOT(onSslErrors(QList<QSslError>)));
 }
 
+void LovelaceCoordinator::getMedia(const QUrl &url, const QString &tag, int redirects)
+{
+    if (!url.isValid() || tag.isEmpty())
+        return;
+
+    QNetworkRequest request(url);
+    request.setRawHeader("Accept", "image/*,*/*;q=0.8");
+    request.setRawHeader("User-Agent", kClientName);
+
+    const QUrl homeAssistantUrl(m_baseUrl);
+    const bool sameOrigin = url.scheme().compare(homeAssistantUrl.scheme(), Qt::CaseInsensitive) == 0
+            && url.host().compare(homeAssistantUrl.host(), Qt::CaseInsensitive) == 0
+            && url.port(url.scheme() == QLatin1String("https") ? 443 : 80)
+               == homeAssistantUrl.port(homeAssistantUrl.scheme() == QLatin1String("https") ? 443 : 80);
+    if (sameOrigin && !m_accessToken.isEmpty())
+        request.setRawHeader("Authorization", QByteArray("Bearer ") + m_accessToken.toUtf8());
+
+    QNetworkReply *reply = m_nam->get(request);
+    reply->setProperty("kind", QStringLiteral("media"));
+    reply->setProperty("tag", tag);
+    reply->setProperty("redirects", redirects);
+    connect(reply, SIGNAL(finished()), this, SLOT(onReplyFinished()));
+    connect(reply, SIGNAL(sslErrors(QList<QSslError>)),
+            this, SLOT(onSslErrors(QList<QSslError>)));
+}
+
 void LovelaceCoordinator::postJson(const QString &path, const QJsonObject &body,
                                    const QString &kind, const QString &tag)
 {
@@ -1605,7 +1632,7 @@ QString LovelaceCoordinator::mediaCachePath(const QString &path) const
             + QStringLiteral("/hass-media");
     QDir().mkpath(dir);
     const QByteArray hash = QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex();
-    return dir + QLatin1Char('/') + QString::fromLatin1(hash);
+    return dir + QLatin1Char('/') + QString::fromLatin1(hash) + QStringLiteral(".png");
 }
 
 void LovelaceCoordinator::onReplyFinished()
@@ -1619,6 +1646,42 @@ void LovelaceCoordinator::onReplyFinished()
     const QByteArray data = reply->readAll();
     if (reply->error() != QNetworkReply::NoError) {
         qWarning() << "Helmsman lovelace:" << kind << "failed" << reply->errorString();
+        return;
+    }
+    if (kind == QLatin1String("media")) {
+        const QUrl redirect = reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
+        if (redirect.isValid()) {
+            const int redirects = reply->property("redirects").toInt();
+            if (redirects >= 5) {
+                qWarning() << "Helmsman lovelace: media redirect limit reached for" << tag;
+                return;
+            }
+            getMedia(reply->url().resolved(redirect), tag, redirects + 1);
+            return;
+        }
+
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (status != 0 && (status < 200 || status >= 300)) {
+            qWarning() << "Helmsman lovelace: media HTTP" << status << "for" << tag;
+            return;
+        }
+
+        const QImage image = QImage::fromData(data);
+        if (image.isNull()) {
+            qWarning() << "Helmsman lovelace: invalid image response for" << tag
+                       << "content-type=" << reply->header(QNetworkRequest::ContentTypeHeader).toString()
+                       << "bytes=" << data.size();
+            return;
+        }
+
+        const QString filePath = mediaCachePath(tag);
+        if (!image.save(filePath, "PNG")) {
+            qWarning() << "Helmsman lovelace: failed to cache image for" << tag;
+            return;
+        }
+        const QString url = QStringLiteral("file://") + filePath;
+        m_mediaCache.insert(tag, url);
+        emit mediaCached(tag, url);
         return;
     }
     if (kind == QLatin1String("history")) {
@@ -1648,16 +1711,5 @@ void LovelaceCoordinator::onReplyFinished()
             emit historyReady(entityId, out);
         }
         return;
-    }
-    if (kind == QLatin1String("media")) {
-        const QString filePath = mediaCachePath(tag);
-        QFile file(filePath);
-        if (file.open(QIODevice::WriteOnly)) {
-            file.write(data);
-            file.close();
-            const QString url = QStringLiteral("file://") + filePath;
-            m_mediaCache.insert(tag, url);
-            emit mediaCached(tag, url);
-        }
     }
 }

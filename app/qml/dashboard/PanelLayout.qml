@@ -8,7 +8,7 @@ Column {
     property var hassClient
     property var mdiIcons
     width: parent ? parent.width : Screen.width
-    spacing: Theme.paddingSmall
+    spacing: Theme.paddingMedium
 
     Repeater {
         model: (layout.view && layout.view.cards) ? layout.view.cards : []

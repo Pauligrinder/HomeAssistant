@@ -16,7 +16,7 @@ Loader {
     width: {
         var cols = (card && card._columns) ? card._columns : 12
         var span = Math.min(loader.columns, Math.max(1, cols))
-        var gap = Theme.paddingSmall
+        var gap = Theme.paddingMedium
         var unit = (loader.unitWidth - gap * (loader.columns - 1)) / loader.columns
         return Math.max(Theme.itemSizeSmall, span * unit + Math.max(0, span - 1) * gap)
     }

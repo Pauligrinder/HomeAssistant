@@ -15,9 +15,12 @@ Image {
     cache: true
     opacity: name && name.length ? 1 : 0
     source: {
-        if (!icon.mdiIcons || !icon.name || icon.name.length === 0)
+        if (!icon.mdiIcons || !icon.mdiIcons.ready
+                || !icon.name || icon.name.length === 0)
             return ""
-        var path = icon.mdiIcons.renderIconFile(icon.name, String(icon.iconColor),
+        var renderName = icon.mdiIcons.hasIcon(icon.name)
+                ? icon.name : "mdi:help-circle-outline"
+        var path = icon.mdiIcons.renderIconFile(renderName, String(icon.iconColor),
                                                 Math.max(24, icon.pixelSize))
         return path && path.length ? ("file://" + path) : ""
     }

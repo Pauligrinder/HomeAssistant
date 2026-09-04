@@ -195,6 +195,7 @@ private:
     QString defaultActionType(const QString &entityId, bool icon) const;
     QUrl apiUrl(const QString &path) const;
     void getJson(const QString &path, const QString &kind, const QString &tag = QString());
+    void getMedia(const QUrl &url, const QString &tag, int redirects = 0);
     void postJson(const QString &path, const QJsonObject &body, const QString &kind, const QString &tag = QString());
     QString mediaCachePath(const QString &path) const;
 

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.2.23
+Version:    0.2.24
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,13 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.24-1
+- Fix native dashboard images by fetching binary media correctly, following
+  redirects, validating responses, and refreshing entity-backed images.
+- Render dashboard MDI icons after the renderer becomes ready and provide a
+  fallback for unknown icons.
+- Add page margins and more space between native dashboard cards.
+
 * Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.23-1
 - Fix the native dashboard: switching dashboards and view tabs now works,
   cards receive their config before they load so images and content appear,
