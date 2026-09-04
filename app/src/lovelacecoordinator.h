@@ -72,10 +72,12 @@ public:
     QString pendingMoreInfo() const;
     QString pendingWebPath() const;
 
+public slots:
+    // Property setters live here so QML can call them directly, not only
+    // through the property write.
     void setCurrentUrlPath(const QString &path);
     void setCurrentViewIndex(int index);
 
-public slots:
     void start();
     void stop();
     void refresh();

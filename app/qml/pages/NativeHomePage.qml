@@ -9,6 +9,7 @@ Page {
     property var hassClient
     property var mdiIcons
     property var dashboard: hassClient ? hassClient.lovelace : null
+    readonly property int rev: dashboard ? dashboard.statesRevision : 0
     property bool notifiedReady: false
     backNavigation: false
 
@@ -268,7 +269,8 @@ Page {
                         property string entityId: typeof modelData === "string"
                                                   ? modelData
                                                   : (modelData.entity ? String(modelData.entity) : "")
-                        text: dashboard && entityId.length ? dashboard.formatState(entityId) : ""
+                        text: (dashboard && entityId.length && page.rev >= 0)
+                              ? dashboard.formatState(entityId) : ""
                         font.pixelSize: Theme.fontSizeExtraSmall
                         color: Theme.secondaryHighlightColor
                         MouseArea {

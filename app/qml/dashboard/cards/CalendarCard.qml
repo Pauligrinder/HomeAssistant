@@ -23,7 +23,8 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId, "Calendar") : "Calendar"
+        text: (dashboard && root.statesRevision >= 0)
+              ? dashboard.friendlyName(entityId, "Calendar") : "Calendar"
         color: Theme.highlightColor
     }
     Repeater {

@@ -24,8 +24,9 @@ PictureEntityCard {
                     MdiIcon {
                         anchors.horizontalCenter: parent.horizontalCenter
                         mdiIcons: root.mdiIcons
-                        name: dashboard ? dashboard.entityIcon(entityId) : ""
-                        iconColor: (dashboard && dashboard.isOn(entityId)) ? Theme.highlightColor : Theme.primaryColor
+                        name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId) : ""
+                        iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
+                                   ? Theme.highlightColor : Theme.primaryColor
                         width: Theme.iconSizeSmall
                     }
                     Label {
@@ -33,7 +34,7 @@ PictureEntityCard {
                         horizontalAlignment: Text.AlignHCenter
                         font.pixelSize: Theme.fontSizeTiny
                         wrapMode: Text.Wrap
-                        text: dashboard ? dashboard.formatState(entityId) : ""
+                        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
                     }
                 }
             }

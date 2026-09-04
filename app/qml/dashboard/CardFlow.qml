@@ -8,13 +8,16 @@ Item {
     property var hassClient
     property var mdiIcons
     property int columns: 12
-    property var rows: flow.packRows(flow.cards, flow.columns)
+    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property var rows: flow.packRows(flow.cards, flow.columns, flow.rev)
 
     width: parent ? parent.width : Screen.width
     implicitHeight: column.height
     height: implicitHeight
 
-    function packRows(list, colCount) {
+    // rev is unused here beyond forcing a re-pack when card visibility
+    // conditions change with entity state.
+    function packRows(list, colCount, rev) {
         var src = list || []
         var packed = []
         var row = []

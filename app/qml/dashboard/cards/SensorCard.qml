@@ -10,13 +10,13 @@ CardChrome {
     Label {
         width: parent.width
         text: (card && card.name) ? card.name
-              : (dashboard ? dashboard.friendlyName(entityId) : entityId)
+              : ((dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId)
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         color: Theme.primaryColor
         font.pixelSize: Theme.fontSizeLarge
     }

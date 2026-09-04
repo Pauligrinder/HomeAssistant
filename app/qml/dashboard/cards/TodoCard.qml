@@ -31,7 +31,8 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId, "To-do") : "To-do"
+        text: (dashboard && root.statesRevision >= 0)
+              ? dashboard.friendlyName(entityId, "To-do") : "To-do"
         color: Theme.highlightColor
     }
     Repeater {

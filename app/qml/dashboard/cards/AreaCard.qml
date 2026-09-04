@@ -9,7 +9,7 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.areaName(root.areaId) : root.areaId
+        text: (dashboard && root.rev >= 0) ? dashboard.areaName(root.areaId) : root.areaId
         color: Theme.highlightColor
         font.pixelSize: Theme.fontSizeMedium
     }
@@ -19,7 +19,7 @@ CardChrome {
         font.pixelSize: Theme.fontSizeExtraSmall
         color: Theme.secondaryColor
         text: {
-            if (!dashboard)
+            if (!dashboard || root.rev < 0)
                 return ""
             var ids = dashboard.areaEntities(root.areaId)
             return ids.length + " entities"

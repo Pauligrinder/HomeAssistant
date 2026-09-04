@@ -9,22 +9,24 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId, "Plant") : "Plant"
+        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId, "Plant") : "Plant"
         color: Theme.highlightColor
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         font.pixelSize: Theme.fontSizeMedium
     }
     Repeater {
         model: ["moisture", "temperature", "brightness", "conductivity"]
         Label {
-            visible: dashboard && dashboard.attribute(entityId, modelData) !== undefined
+            visible: dashboard && root.rev >= 0
+                     && dashboard.attribute(entityId, modelData) !== undefined
             width: parent.width
             font.pixelSize: Theme.fontSizeExtraSmall
             color: Theme.secondaryColor
-            text: modelData + ": " + String(dashboard.attribute(entityId, modelData))
+            text: (dashboard && root.rev >= 0)
+                  ? (modelData + ": " + String(dashboard.attribute(entityId, modelData))) : ""
         }
     }
 }

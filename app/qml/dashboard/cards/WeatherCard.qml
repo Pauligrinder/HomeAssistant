@@ -7,25 +7,27 @@ CardChrome {
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property var forecast: {
-        var f = dashboard ? dashboard.attribute(entityId, "forecast") : []
+        var f = (dashboard && rev >= 0) ? dashboard.attribute(entityId, "forecast") : []
         return f || []
     }
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId, "Weather") : "Weather"
+        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId, "Weather") : "Weather"
         color: Theme.highlightColor
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         font.pixelSize: Theme.fontSizeLarge
     }
     Label {
         width: parent.width
         text: {
-            var t = dashboard ? dashboard.attribute(entityId, "temperature") : ""
-            var u = dashboard ? dashboard.attribute(entityId, "temperature_unit") : ""
+            if (!dashboard || root.rev < 0)
+                return ""
+            var t = dashboard.attribute(entityId, "temperature")
+            var u = dashboard.attribute(entityId, "temperature_unit")
             return t ? (String(t) + (u ? (" " + u) : "°")) : ""
         }
         color: Theme.secondaryColor

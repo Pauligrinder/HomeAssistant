@@ -7,6 +7,11 @@ Rectangle {
     property var dashboard
     property var hassClient
     property var mdiIcons
+    // The coordinator's entity accessors are plain slots with no change
+    // notification, so a binding that only calls them never re-runs. Cards
+    // read a revision counter (this, or their own rev) inside those bindings
+    // so Home Assistant state updates reach the UI. Removing those reads
+    // silently freezes the card at its first value.
     property int statesRevision: dashboard ? dashboard.statesRevision : 0
     property bool tapEnabled: true
     property bool showBackground: true
@@ -19,8 +24,8 @@ Rectangle {
            ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
            : "transparent"
     radius: Theme.paddingSmall
-    opacity: (dashboard && card && !dashboard.cardVisible(card)) ? 0 : 1
-    visible: !dashboard || !card || dashboard.cardVisible(card)
+    opacity: (dashboard && card && statesRevision >= 0 && !dashboard.cardVisible(card)) ? 0 : 1
+    visible: !dashboard || !card || (statesRevision >= 0 && dashboard.cardVisible(card))
     clip: true
 
     function entityId() {

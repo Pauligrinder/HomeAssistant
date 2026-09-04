@@ -8,10 +8,11 @@ Item {
     property var dashboard
     property var hassClient
     property var mdiIcons
+    readonly property int rev: dashboard ? dashboard.statesRevision : 0
     width: parent ? parent.width : Screen.width
     implicitHeight: visible ? loader.height : 0
     height: implicitHeight
-    visible: dashboard ? dashboard.cardVisible(card) : true
+    visible: (dashboard && rev >= 0) ? dashboard.cardVisible(card) : true
 
     CardLoader {
         id: loader

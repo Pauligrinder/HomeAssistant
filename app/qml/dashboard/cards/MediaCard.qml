@@ -40,17 +40,19 @@ CardChrome {
     Label {
         width: parent.width
         text: {
-            var title = dashboard ? dashboard.attribute(entityId, "media_title") : ""
+            if (!dashboard || root.rev < 0)
+                return entityId
+            var title = dashboard.attribute(entityId, "media_title")
             if (title)
                 return String(title)
-            return dashboard ? dashboard.friendlyName(entityId) : entityId
+            return dashboard.friendlyName(entityId)
         }
         truncationMode: TruncationMode.Fade
         color: Theme.primaryColor
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
     }
@@ -61,7 +63,8 @@ CardChrome {
             onClicked: dashboard.callService("media_player", "media_previous_track", {}, entityId)
         }
         Button {
-            text: (dashboard && dashboard.entityState(entityId) === "playing") ? "Pause" : "Play"
+            text: (dashboard && root.rev >= 0 && dashboard.entityState(entityId) === "playing")
+                  ? "Pause" : "Play"
             onClicked: dashboard.callService("media_player", "media_play_pause", {}, entityId)
         }
         Button {

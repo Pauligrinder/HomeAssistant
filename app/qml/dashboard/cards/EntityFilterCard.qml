@@ -6,7 +6,7 @@ CardChrome {
     id: root
     tapEnabled: false
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
-    readonly property var entities: dashboard ? dashboard.filterEntities(card || {}) : []
+    readonly property var entities: (dashboard && rev >= 0) ? dashboard.filterEntities(card || {}) : []
 
     Label {
         width: parent.width
@@ -23,14 +23,14 @@ CardChrome {
             Label {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: dashboard ? dashboard.friendlyName(String(modelData)) : String(modelData)
+                text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(String(modelData)) : String(modelData)
                 truncationMode: TruncationMode.Fade
                 width: parent.width * 0.6
             }
             Label {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                text: dashboard ? dashboard.formatState(String(modelData)) : ""
+                text: (dashboard && root.rev >= 0) ? dashboard.formatState(String(modelData)) : ""
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
             }

@@ -11,7 +11,7 @@ Page {
     property var dashboard: hassClient ? hassClient.lovelace : null
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property string domain: dashboard ? dashboard.domainOf(entityId) : ""
-    readonly property bool on: dashboard ? dashboard.isOn(entityId) : false
+    readonly property bool on: (dashboard && rev >= 0) ? dashboard.isOn(entityId) : false
 
     SilicaFlickable {
         anchors.fill: parent
@@ -25,7 +25,7 @@ Page {
             spacing: Theme.paddingMedium
 
             PageHeader {
-                title: dashboard ? dashboard.friendlyName(page.entityId) : page.entityId
+                title: (dashboard && page.rev >= 0) ? dashboard.friendlyName(page.entityId) : page.entityId
             }
 
             Item {
@@ -35,7 +35,7 @@ Page {
                     id: icon
                     anchors.horizontalCenter: parent.horizontalCenter
                     mdiIcons: page.mdiIcons
-                    name: dashboard ? dashboard.entityIcon(page.entityId) : ""
+                    name: (dashboard && page.rev >= 0) ? dashboard.entityIcon(page.entityId) : ""
                     iconColor: page.on ? Theme.highlightColor : Theme.primaryColor
                     width: Theme.iconSizeLarge
                     height: width
@@ -49,12 +49,12 @@ Page {
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: Theme.fontSizeLarge
                 wrapMode: Text.Wrap
-                text: dashboard ? dashboard.formatState(page.entityId) : ""
+                text: (dashboard && page.rev >= 0) ? dashboard.formatState(page.entityId) : ""
             }
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: dashboard && dashboard.isToggleable(page.entityId)
+                visible: dashboard && page.rev >= 0 && dashboard.isToggleable(page.entityId)
                 text: page.on ? "Turn off" : "Turn on"
                 onClicked: dashboard.toggle(page.entityId)
             }
@@ -65,7 +65,8 @@ Page {
                 minimumValue: 0
                 maximumValue: 100
                 value: {
-                    var b = dashboard ? Number(dashboard.attribute(page.entityId, "brightness")) : 0
+                    var b = (dashboard && page.rev >= 0)
+                            ? Number(dashboard.attribute(page.entityId, "brightness")) : 0
                     return b ? Math.round(b * 100 / 255) : 0
                 }
                 label: "Brightness"
@@ -115,11 +116,12 @@ Page {
 
             Slider {
                 width: parent.width
-                visible: page.domain === "cover" && dashboard
+                visible: page.domain === "cover" && dashboard && page.rev >= 0
                          && dashboard.attribute(page.entityId, "current_position") !== undefined
                 minimumValue: 0
                 maximumValue: 100
-                value: dashboard ? Number(dashboard.attribute(page.entityId, "current_position")) : 0
+                value: (dashboard && page.rev >= 0)
+                       ? Number(dashboard.attribute(page.entityId, "current_position")) : 0
                 label: "Position"
                 onReleased: dashboard.callService("cover", "set_cover_position",
                                                   { "position": Math.round(value) }, page.entityId)
@@ -141,7 +143,7 @@ Page {
     }
 
     function attributeList() {
-        if (!dashboard)
+        if (!dashboard || page.rev < 0)
             return []
         var st = dashboard.entity(page.entityId)
         var attrs = st && st.attributes ? st.attributes : {}

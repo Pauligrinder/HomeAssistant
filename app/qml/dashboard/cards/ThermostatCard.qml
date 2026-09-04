@@ -7,20 +7,20 @@ CardChrome {
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property double temp: {
-        var t = dashboard ? dashboard.attribute(entityId, "temperature") : 0
+        var t = (dashboard && rev >= 0) ? dashboard.attribute(entityId, "temperature") : 0
         return t ? Number(t) : 0
     }
-    readonly property string mode: dashboard ? dashboard.entityState(entityId) : ""
+    readonly property string mode: (dashboard && rev >= 0) ? dashboard.entityState(entityId) : ""
 
     Label {
         width: parent.width
-        text: dashboard ? dashboard.friendlyName(entityId) : entityId
+        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
         color: Theme.highlightColor
         font.pixelSize: Theme.fontSizeSmall
     }
     Label {
         width: parent.width
-        text: dashboard ? dashboard.formatState(entityId) : ""
+        text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
         font.pixelSize: Theme.fontSizeLarge
         color: Theme.primaryColor
     }
@@ -43,7 +43,7 @@ CardChrome {
         width: parent.width
         spacing: Theme.paddingSmall
         Repeater {
-            model: dashboard ? dashboard.attribute(entityId, "hvac_modes") : []
+            model: (dashboard && root.rev >= 0) ? dashboard.attribute(entityId, "hvac_modes") : []
             Button {
                 text: String(modelData)
                 color: String(modelData) === root.mode ? Theme.highlightColor : Theme.primaryColor

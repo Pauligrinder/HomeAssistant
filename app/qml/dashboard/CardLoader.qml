@@ -10,6 +10,9 @@ Loader {
     property int columns: 12
     property int unitWidth: parent ? parent.width : width
 
+    readonly property url cardSource: loader.sourceForType(card ? card.type : "")
+    property bool sourceReady: false
+
     width: {
         var cols = (card && card._columns) ? card._columns : 12
         var span = Math.min(loader.columns, Math.max(1, cols))
@@ -18,7 +21,26 @@ Loader {
         return Math.max(Theme.itemSizeSmall, span * unit + Math.max(0, span - 1) * gap)
     }
 
-    source: loader.sourceForType(card ? card.type : "")
+    // Cards read card and dashboard in their own Component.onCompleted, which
+    // runs before onLoaded, so the context has to arrive as initial properties.
+    // Binding source instead would leave those handlers with undefined values.
+    function loadCard() {
+        if (!loader.sourceReady)
+            return
+        loader.setSource(loader.cardSource, {
+                             "card": loader.card,
+                             "dashboard": loader.dashboard,
+                             "hassClient": loader.hassClient,
+                             "mdiIcons": loader.mdiIcons
+                         })
+    }
+
+    onCardSourceChanged: loader.loadCard()
+
+    Component.onCompleted: {
+        loader.sourceReady = true
+        loader.loadCard()
+    }
 
     onLoaded: {
         if (!item)

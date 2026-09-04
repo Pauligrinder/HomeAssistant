@@ -26,10 +26,12 @@ CardChrome {
             font.pixelSize: Theme.fontSizeExtraSmall
             text: {
                 var id = typeof modelData === "string" ? modelData : (modelData.entity || "")
-                var name = dashboard ? dashboard.friendlyName(id) : id
-                var lat = dashboard ? dashboard.attribute(id, "latitude") : ""
-                var lon = dashboard ? dashboard.attribute(id, "longitude") : ""
-                var state = dashboard ? dashboard.formatState(id) : ""
+                if (!dashboard || root.rev < 0)
+                    return id
+                var name = dashboard.friendlyName(id)
+                var lat = dashboard.attribute(id, "latitude")
+                var lon = dashboard.attribute(id, "longitude")
+                var state = dashboard.formatState(id)
                 if (lat && lon)
                     return name + " — " + state + "\n" + lat + ", " + lon
                 return name + " — " + state

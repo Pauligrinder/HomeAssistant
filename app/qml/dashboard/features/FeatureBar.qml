@@ -54,7 +54,8 @@ Column {
             property string entityId
             property var dashboard
             text: "On"
-            checked: dashboard ? dashboard.isOn(entityId) : false
+            automaticCheck: false
+            checked: (dashboard && bar.rev >= 0) ? dashboard.isOn(entityId) : false
             onClicked: if (dashboard) dashboard.toggle(entityId)
         }
     }
@@ -69,7 +70,7 @@ Column {
             minimumValue: 0
             maximumValue: 100
             value: {
-                var b = dashboard ? Number(dashboard.attribute(entityId, "brightness")) : 0
+                var b = (dashboard && bar.rev >= 0) ? Number(dashboard.attribute(entityId, "brightness")) : 0
                 return b ? Math.round(b * 100 / 255) : 0
             }
             label: "Brightness"
@@ -95,7 +96,7 @@ Column {
                 return "temperature"
             }
             function current() {
-                return dashboard ? Number(dashboard.attribute(entityId, attrName())) : 0
+                return (dashboard && bar.rev >= 0) ? Number(dashboard.attribute(entityId, attrName())) : 0
             }
             Button {
                 text: "−"
@@ -147,7 +148,7 @@ Column {
                     key = "available_modes"
                 if (t === "water-heater-operation-modes")
                     key = "operation_list"
-                var v = dashboard ? dashboard.attribute(entityId, key) : []
+                var v = (dashboard && bar.rev >= 0) ? dashboard.attribute(entityId, key) : []
                 return v || []
             }
             Repeater {
@@ -256,9 +257,11 @@ Column {
                     key = "volume_level"
                 if (t === "valve-position")
                     key = "current_position"
+                if (!dashboard || bar.rev < 0)
+                    return 0
                 if (t === "bar-gauge")
-                    return Number(dashboard ? dashboard.entityState(entityId) : 0)
-                var v = dashboard ? Number(dashboard.attribute(entityId, key)) : 0
+                    return Number(dashboard.entityState(entityId))
+                var v = Number(dashboard.attribute(entityId, key))
                 if (t === "media-player-volume")
                     return v * 100
                 return v
@@ -292,7 +295,7 @@ Column {
             font.pixelSize: Theme.fontSizeExtraSmall
             color: Theme.secondaryColor
             text: (feature && feature.type ? String(feature.type) : "feature")
-                  + ": " + (dashboard ? dashboard.formatState(entityId) : "")
+                  + ": " + ((dashboard && bar.rev >= 0) ? dashboard.formatState(entityId) : "")
         }
     }
 }

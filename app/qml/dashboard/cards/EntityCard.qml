@@ -14,14 +14,14 @@ CardChrome {
         Label {
             width: parent.width
             text: (card && card.name) ? card.name
-                  : (dashboard ? dashboard.friendlyName(root.entityId) : root.entityId)
+                  : ((dashboard && root.rev >= 0) ? dashboard.friendlyName(root.entityId) : root.entityId)
             color: Theme.secondaryColor
             font.pixelSize: Theme.fontSizeExtraSmall
             truncationMode: TruncationMode.Fade
         }
         Label {
             width: parent.width
-            text: dashboard ? dashboard.formatState(root.entityId) : ""
+            text: (dashboard && root.rev >= 0) ? dashboard.formatState(root.entityId) : ""
             color: Theme.primaryColor
             font.pixelSize: Theme.fontSizeLarge
             truncationMode: TruncationMode.Fade
