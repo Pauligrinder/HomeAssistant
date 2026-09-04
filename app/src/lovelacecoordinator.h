@@ -179,6 +179,10 @@ private:
     void applyStateChanged(const QVariantMap &event);
     void applyDashboards(const QVariant &result);
     void applyConfig(const QVariant &result);
+    void commitConfig(const QVariantMap &config);
+    void applyGeneratedConfig();
+    bool tryFallbackDashboard();
+    void handleConfigFailure(const QVariantMap &error);
     void applyUser(const QVariant &result);
     void applyAreas(const QVariant &result);
     QVariantList normalizeViews(const QVariantMap &config) const;
@@ -202,6 +206,8 @@ private:
     bool m_busy;
     bool m_statesLoaded;
     bool m_configLoaded;
+    bool m_configFallbackTried;
+    bool m_pendingGenerated;
     bool m_userIsAdmin;
     int m_statesRevision;
     int m_currentViewIndex;

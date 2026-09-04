@@ -119,6 +119,8 @@ Page {
             dashboard.clearPendingWebPath()
             page.openWeb(path)
         }
+        onDashboardsChanged: dashboardBox.syncFromCoordinator()
+        onCurrentUrlPathChanged: dashboardBox.syncFromCoordinator()
     }
 
     SilicaFlickable {
@@ -167,20 +169,58 @@ Page {
                 width: parent.width
                 visible: dashboard && dashboard.dashboards && dashboard.dashboards.length > 1
                 label: "Dashboard"
-                currentIndex: 0
+                property bool applyingIndex: false
+
+                function pathAt(index) {
+                    if (!dashboard || index < 0 || index >= dashboard.dashboards.length)
+                        return ""
+                    var d = dashboard.dashboards[index]
+                    return (d && d.url_path) ? String(d.url_path) : ""
+                }
+
+                function syncFromCoordinator() {
+                    if (!dashboard)
+                        return
+                    var path = dashboard.currentUrlPath || ""
+                    var list = dashboard.dashboards
+                    var idx = 0
+                    for (var i = 0; i < list.length; ++i) {
+                        var p = (list[i] && list[i].url_path) ? String(list[i].url_path) : ""
+                        if (p === path) {
+                            idx = i
+                            break
+                        }
+                    }
+                    if (currentIndex !== idx) {
+                        applyingIndex = true
+                        currentIndex = idx
+                        applyingIndex = false
+                    }
+                }
+
                 menu: ContextMenu {
                     Repeater {
                         model: dashboard ? dashboard.dashboards : []
                         MenuItem {
+                            property string dashboardPath: (modelData && modelData.url_path)
+                                                           ? String(modelData.url_path) : ""
                             text: (modelData.title && String(modelData.title).length)
                                   ? modelData.title
-                                  : (modelData.url_path || "Overview")
+                                  : (dashboardPath || "Overview")
                             onClicked: {
                                 if (dashboard)
-                                    dashboard.setCurrentUrlPath(modelData.url_path || "")
+                                    dashboard.setCurrentUrlPath(dashboardPath)
                             }
                         }
                     }
+                }
+
+                onCurrentIndexChanged: {
+                    if (applyingIndex || !dashboard)
+                        return
+                    var path = pathAt(currentIndex)
+                    if (path !== (dashboard.currentUrlPath || ""))
+                        dashboard.setCurrentUrlPath(path)
                 }
             }
 

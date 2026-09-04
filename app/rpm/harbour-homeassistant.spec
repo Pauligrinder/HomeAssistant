@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.2.21
+Version:    0.2.22
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -61,6 +61,11 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.22-1
+- Load native Lovelace dashboards that have no saved config (auto-gen
+  Overview) instead of showing "No config found." Selecting a listed
+  dashboard now requests that dashboard's url_path.
+
 * Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.21-1
 - Optional native Lovelace dashboard renderer (Settings → Dashboard), off
   by default. The Home Assistant web UI remains the home screen until it
