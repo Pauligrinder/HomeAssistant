@@ -84,7 +84,7 @@ CardChrome {
                 spacing: Theme.paddingSmall
 
                 MdiIcon {
-                    anchors.verticalCenter: parent.verticalCenter
+                    y: (parent.height - height) / 2
                     mdiIcons: root.mdiIcons
                     name: {
                         if (entry.icon)

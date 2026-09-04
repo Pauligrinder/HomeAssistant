@@ -21,10 +21,14 @@ CardChrome {
     }
 
     Component.onCompleted: {
-        if (dashboard && root.mediaPath().length)
-            dashboard.prefetchMedia(root.mediaPath())
-        else if (card && card.image && String(card.image).indexOf("http") === 0)
-            root.imageUrl = card.image
+        var path = root.mediaPath()
+        if (!dashboard || !path.length)
+            return
+        var cached = dashboard.cachedMediaUrl(path)
+        if (cached && cached.length)
+            root.imageUrl = cached
+        else
+            dashboard.prefetchMedia(path)
     }
 
     Image {

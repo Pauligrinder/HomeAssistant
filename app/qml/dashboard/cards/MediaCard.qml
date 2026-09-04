@@ -7,6 +7,7 @@ CardChrome {
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     property string artUrl: ""
+    property string requestedArtPath: ""
 
     Connections {
         target: dashboard
@@ -24,8 +25,15 @@ CardChrome {
 
     function prefetchArt() {
         var p = root.artPath()
-        if (dashboard && p.length)
+        if (!dashboard || !p.length)
+            return
+        var cached = dashboard.cachedMediaUrl(p)
+        if (cached && cached.length)
+            root.artUrl = cached
+        else if (p !== root.requestedArtPath) {
+            root.requestedArtPath = p
             dashboard.prefetchMedia(p)
+        }
     }
 
     Component.onCompleted: root.prefetchArt()

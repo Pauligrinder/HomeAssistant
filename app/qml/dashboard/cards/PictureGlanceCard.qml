@@ -22,7 +22,7 @@ PictureEntityCard {
                 Column {
                     anchors.fill: parent
                     MdiIcon {
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        x: (parent.width - width) / 2
                         mdiIcons: root.mdiIcons
                         name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId) : ""
                         iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))

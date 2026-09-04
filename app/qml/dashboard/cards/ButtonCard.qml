@@ -12,7 +12,7 @@ CardChrome {
         spacing: Theme.paddingSmall
 
         MdiIcon {
-            anchors.horizontalCenter: parent.horizontalCenter
+            x: (parent.width - width) / 2
             mdiIcons: root.mdiIcons
             name: (card && card.icon) ? card.icon
                   : ((dashboard && root.rev >= 0) ? dashboard.entityIcon(root.entityId) : "mdi:gesture-tap-button")

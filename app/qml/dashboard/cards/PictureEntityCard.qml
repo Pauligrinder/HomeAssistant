@@ -6,6 +6,7 @@ CardChrome {
     id: root
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     property string imageUrl: ""
+    property string requestedPath: ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
 
     function mediaPath() {
@@ -29,12 +30,20 @@ CardChrome {
             if (entityId === root.entityId)
                 root.refresh()
         }
+        onStatesRevisionChanged: root.refresh()
     }
 
     function refresh() {
         var p = root.mediaPath()
-        if (dashboard && p.length)
+        if (!dashboard || !p.length)
+            return
+        var cached = dashboard.cachedMediaUrl(p)
+        if (cached && cached.length)
+            root.imageUrl = cached
+        else if (p !== root.requestedPath) {
+            root.requestedPath = p
             dashboard.prefetchMedia(p)
+        }
     }
 
     Component.onCompleted: root.refresh()

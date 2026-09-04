@@ -44,7 +44,7 @@ CardChrome {
                     spacing: Theme.paddingSmall / 2
 
                     MdiIcon {
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        x: (parent.width - width) / 2
                         mdiIcons: root.mdiIcons
                         name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId, modelData.icon || "") : ""
                         iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
