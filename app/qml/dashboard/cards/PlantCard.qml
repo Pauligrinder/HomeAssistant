@@ -9,7 +9,7 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId, "Plant") : "Plant"
+        text: (dashboard && root.rev >= 0) ? root.configName(entityId, "Plant") : "Plant"
         color: Theme.highlightColor
     }
     Label {

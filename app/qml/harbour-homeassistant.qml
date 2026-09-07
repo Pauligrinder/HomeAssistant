@@ -26,7 +26,7 @@ ApplicationWindow
     }
 
     function homePageProperties() {
-        var props = { hassClient: hassClientInstance, mdiIcons: mdiIcons }
+        var props = { hassClient: hassClientInstance, mdiIcons: mdiIconRenderer }
         if (!hassClientInstance.nativeDashboardEnabled)
             props.isHome = true
         return props
@@ -215,14 +215,14 @@ ApplicationWindow
     function trayIconPath(iconUrl, notificationIcon, color) {
         if (iconUrl.length > 0)
             return resolveMediaUrl(iconUrl)
-        if (!mdiIcons.ready)
+        if (!mdiIconRenderer.ready)
             return ""
         var mdiName = notificationIcon
         if (!mdiName.length && color.length > 0)
             mdiName = "mdi:bell"
         if (!mdiName.length)
             return ""
-        var iconPath = mdiIcons.renderIconFile(mdiName, color, 128)
+        var iconPath = mdiIconRenderer.renderIconFile(mdiName, color, 128)
         console.log("Helmsman: mdi icon", mdiName, "color=", color, "path=", iconPath)
         return iconPath || ""
     }
@@ -290,12 +290,12 @@ ApplicationWindow
 
         if (iconUrl.length > 0) {
             coverIconPath = resolveMediaUrl(iconUrl)
-        } else if (mdiIcons.ready) {
+        } else if (mdiIconRenderer.ready) {
             var mdiName = notificationIcon
             if (!mdiName.length && color.length > 0)
                 mdiName = "mdi:bell"
             if (mdiName.length > 0)
-                coverIconPath = mdiIcons.renderIconFile(mdiName, "#FFFFFF", 256)
+                coverIconPath = mdiIconRenderer.renderIconFile(mdiName, "#FFFFFF", 256)
         }
 
         var widgetEnabled = hassClientInstance.widget
@@ -435,9 +435,12 @@ ApplicationWindow
         }
     }
 
+    // The id must differ from the mdiIcons property the pages and the cover
+    // declare: an object's own properties shadow ids of the file it sits in, so
+    // "mdiIcons: mdiIcons" would bind those properties to themselves.
     MdiIconRenderer {
-        id: mdiIcons
-        Component.onCompleted: hassClientInstance.widget.iconRenderer = mdiIcons
+        id: mdiIconRenderer
+        Component.onCompleted: hassClientInstance.widget.iconRenderer = mdiIconRenderer
     }
 
     Component {
@@ -498,12 +501,12 @@ ApplicationWindow
     initialPage: Component {
         FirstPage {
             hassClient: hassClientInstance
-            mdiIcons: mdiIcons
+            mdiIcons: mdiIconRenderer
         }
     }
     cover: CoverDir.CoverPage {
         hassClient: hassClientInstance
-        mdiIcons: mdiIcons
+        mdiIcons: mdiIconRenderer
         notificationCount: appWindow.notificationCount
         notificationTitle: appWindow.coverNotificationTitle
         notificationBody: appWindow.coverNotificationBody

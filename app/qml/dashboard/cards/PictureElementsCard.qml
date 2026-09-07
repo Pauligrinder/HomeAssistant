@@ -8,11 +8,16 @@ CardChrome {
     property string imageUrl: ""
     property string requestedPath: ""
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    contentTopMargin: 0
+    contentBottomMargin: 0
 
     function mediaPath() {
-        if (card && card.image)
-            return String(card.image)
-        if (card && card.camera_image && dashboard)
+        if (!dashboard)
+            return ""
+        var image = dashboard.mediaPathOf(card ? card.image : "")
+        if (image.length)
+            return image
+        if (card && card.camera_image)
             return dashboard.cameraPath(String(card.camera_image))
         return ""
     }
@@ -43,13 +48,14 @@ CardChrome {
 
     Item {
         id: stage
-        width: parent.width
+        x: -Theme.paddingMedium
+        width: root.width
         height: width * 0.66
 
-        Image {
+        RoundedImage {
             anchors.fill: parent
-            fillMode: Image.PreserveAspectCrop
             source: root.imageUrl
+            cornerRadius: root.radius
         }
 
         Repeater {

@@ -8,9 +8,21 @@ CardChrome {
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property var entities: (dashboard && rev >= 0) ? dashboard.filterEntities(card || {}) : []
 
+    // The filter returns plain entity ids, so a name set on the card's entity
+    // list has to be looked up again here.
+    function rowName(entityId) {
+        var list = (card && card.entities) ? card.entities : []
+        for (var i = 0; i < list.length; ++i) {
+            var e = list[i]
+            if (e && typeof e === "object" && String(e.entity || "") === entityId && e.name)
+                return String(e.name)
+        }
+        return (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
+    }
+
     Label {
         width: parent.width
-        visible: card && card.title
+        visible: !!(card && card.title && String(card.title).length > 0)
         text: card && card.title ? card.title : ""
         color: Theme.highlightColor
     }
@@ -23,7 +35,7 @@ CardChrome {
             Label {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(String(modelData)) : String(modelData)
+                text: (dashboard && root.rev >= 0) ? root.rowName(String(modelData)) : String(modelData)
                 truncationMode: TruncationMode.Fade
                 width: parent.width * 0.6
             }

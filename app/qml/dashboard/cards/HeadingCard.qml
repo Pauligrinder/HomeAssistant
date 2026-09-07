@@ -12,7 +12,7 @@ CardChrome {
         spacing: Theme.paddingMedium
 
         MdiIcon {
-            visible: card && card.icon && String(card.icon).length > 0
+            visible: !!(card && card.icon && String(card.icon).length > 0)
             mdiIcons: root.mdiIcons
             name: card && card.icon ? card.icon : ""
             iconColor: Theme.highlightColor

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.2.24
+Version:    0.3.0
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -8,6 +8,7 @@ Source0:    %{name}-%{version}.tar.bz2
 Requires:   sailfishsilica-qt5 >= 0.10.9
 Requires:   qt5-qtcore
 Requires:   qt5-qtdeclarative
+Requires:   qt5-qtgraphicaleffects
 Requires:   qt5-qtnetwork
 Requires:   qt5-qtwebsockets
 Requires:   qt5-qtpositioning
@@ -61,6 +62,24 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Mon Sep 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.0-1
+- Render native cards for the person-status, custom-calendar, and ApexCharts
+  custom Lovelace cards.
+- Fix dashboard icons by keeping the MDI renderer out of the QML scope that
+  shadowed it.
+- Show pictures edge to edge and clipped to the card corners, with
+  picture-entity names overlaid on the image.
+- Collapse conditional cards and rows whose conditions are not met, and drop
+  the space reserved for missing titles.
+- Support entities-card headers and footers, and honour names set in the
+  Lovelace config.
+- Replace the dashboard combo box with a pulley entry that opens a dashboard
+  picker, show view tabs as icons, and start on the profile's default
+  dashboard.
+- Rebuild the climate card with the mode pills and temperature slider used by
+  the events view.
+- Read calendars over REST and keep data URIs out of media requests.
+
 * Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.24-1
 - Fix native dashboard images by fetching binary media correctly, following
   redirects, validating responses, and refreshing entity-backed images.

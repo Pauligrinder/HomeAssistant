@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QSet>
 #include <QSslError>
 #include <QList>
 #include <QUrl>
@@ -115,6 +116,7 @@ public slots:
     void prefetchMedia(const QString &path);
     QString cachedMediaUrl(const QString &path) const;
     QString cameraPath(const QString &entityId) const;
+    QString mediaPathOf(const QVariant &value) const;
     QString resolveMedia(const QString &path) const;
     void renderTemplate(const QString &templateText, const QString &key);
     QString templateValue(const QString &key) const;
@@ -126,6 +128,9 @@ public slots:
     void openMoreInfo(const QString &entityId);
     void fetchEnergyPrefs();
     void fetchCalendar(const QString &entityId);
+    void fetchCalendarRange(const QString &entityId,
+                            const QString &start,
+                            const QString &end);
     void fetchTodo(const QString &entityId);
     void setTodoItem(const QString &entityId, const QString &item, bool checked);
     QVariantList calendarEvents(const QString &entityId) const;
@@ -175,7 +180,9 @@ private:
     void requestConfig();
     void requestStates();
     void requestUser();
+    void requestFrontendDefaults();
     void requestAreas();
+    void maybeRequestInitialConfig();
     void applyStates(const QVariant &result);
     void applyStateObject(const QVariantMap &state);
     void applyStateChanged(const QVariantMap &event);
@@ -196,6 +203,7 @@ private:
     QUrl apiUrl(const QString &path) const;
     void getJson(const QString &path, const QString &kind, const QString &tag = QString());
     void getMedia(const QUrl &url, const QString &tag, int redirects = 0);
+    void resolveMediaSource(const QString &path);
     void postJson(const QString &path, const QJsonObject &body, const QString &kind, const QString &tag = QString());
     QString mediaCachePath(const QString &path) const;
 
@@ -220,12 +228,17 @@ private:
     int m_dashboardsId;
     int m_configId;
     int m_userIdReq;
+    int m_frontendUserDataId;
+    int m_frontendSystemDataId;
     int m_areasId;
     int m_energyId;
     QString m_lastError;
     QString m_currentUrlPath;
     QString m_userId;
     QString m_userName;
+    QString m_userDefaultPanel;
+    QString m_systemDefaultPanel;
+    bool m_initialDashboardSelected;
     QString m_pendingNavigate;
     QString m_pendingUrl;
     QString m_pendingMoreInfo;
@@ -237,12 +250,13 @@ private:
     QVariantMap m_energyPrefs;
     QHash<QString, QVariantMap> m_entities;
     QHash<QString, QString> m_mediaCache;
+    QSet<QString> m_mediaPending;
+    QHash<int, QString> m_mediaSourceById;
     QHash<QString, QString> m_templates;
     QHash<int, QString> m_templateKeys;
     QHash<QString, QVariantList> m_calendarEvents;
     QHash<QString, QVariantList> m_todoItems;
     QHash<int, QString> m_todoById;
-    QHash<int, QString> m_calendarById;
 };
 
 #endif

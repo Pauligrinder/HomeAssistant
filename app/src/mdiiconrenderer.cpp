@@ -49,6 +49,11 @@ bool MdiIconRenderer::ready() const
     return m_ready;
 }
 
+QString MdiIconRenderer::fontFamily() const
+{
+    return m_fontFamily;
+}
+
 bool MdiIconRenderer::loadResources()
 {
     QFile fontFile(QStringLiteral(":/mdi/materialdesignicons-webfont.ttf"));
@@ -146,6 +151,14 @@ uint MdiIconRenderer::codepointFor(const QString &name) const
 bool MdiIconRenderer::hasIcon(const QString &mdiName) const
 {
     return codepointFor(normalizeName(mdiName)) != 0;
+}
+
+QString MdiIconRenderer::glyph(const QString &mdiName) const
+{
+    uint code = codepointFor(normalizeName(mdiName));
+    if (code == 0)
+        code = codepointFor(QStringLiteral("help-circle-outline"));
+    return code == 0 ? QString() : QString::fromUcs4(&code, 1);
 }
 
 QImage MdiIconRenderer::renderIcon(const QString &mdiName,
