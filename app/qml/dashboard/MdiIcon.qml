@@ -24,4 +24,9 @@ Image {
                                                 Math.max(24, icon.pixelSize))
         return path && path.length ? ("file://" + path) : ""
     }
+
+    onStatusChanged: {
+        if (icon.status === Image.Error)
+            console.log("Helmsman mdi icon: cannot load", icon.source)
+    }
 }

@@ -10,7 +10,7 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId, "Statistic") : "Statistic"
+        text: (dashboard && root.rev >= 0) ? root.configName(entityId, "Statistic") : "Statistic"
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
     }

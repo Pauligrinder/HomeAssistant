@@ -17,6 +17,13 @@ Page {
         pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { hassClient: hassClient })
     }
 
+    function openDashboardSwitcher() {
+        pageStack.push(Qt.resolvedUrl("DashboardSwitchPage.qml"), {
+                           hassClient: hassClient,
+                           mdiIcons: page.mdiIcons
+                       })
+    }
+
     function openWeb(path) {
         pageStack.push(Qt.resolvedUrl("HassWebViewPage.qml"), {
                            hassClient: hassClient,
@@ -120,24 +127,24 @@ Page {
             dashboard.clearPendingWebPath()
             page.openWeb(path)
         }
-        onDashboardsChanged: dashboardBox.syncFromCoordinator()
-        onCurrentUrlPathChanged: dashboardBox.syncFromCoordinator()
     }
 
     SilicaFlickable {
         id: flick
         anchors.fill: parent
-        contentHeight: column.height + Theme.paddingLarge
+        contentHeight: column.y + column.height + Theme.paddingLarge
         clip: true
 
         PullDownMenu {
             MenuItem {
-                text: "Settings"
-                onClicked: page.openSettings()
+                text: "Change dashboard"
+                visible: !!(dashboard && dashboard.dashboards
+                            && dashboard.dashboards.length > 1)
+                onClicked: page.openDashboardSwitcher()
             }
             MenuItem {
-                text: "Open Home Assistant"
-                onClicked: page.openWeb("/lovelace")
+                text: "Settings"
+                onClicked: page.openSettings()
             }
             MenuItem {
                 text: "Refresh"
@@ -153,81 +160,14 @@ Page {
         Column {
             id: column
             width: parent.width
+            // Without a page header the first row would otherwise sit against
+            // the very top of the screen.
+            y: Theme.paddingLarge
             spacing: Theme.paddingMedium
-
-            PageHeader {
-                title: {
-                    var view = dashboard ? dashboard.currentView : null
-                    if (view && view.title)
-                        return view.title
-                    return hassClient && hassClient.instanceName.length
-                            ? hassClient.instanceName : "Home Assistant"
-                }
-            }
-
-            ComboBox {
-                id: dashboardBox
-                width: parent.width
-                visible: dashboard && dashboard.dashboards && dashboard.dashboards.length > 1
-                label: "Dashboard"
-                property bool applyingIndex: false
-
-                function pathAt(index) {
-                    if (!dashboard || index < 0 || index >= dashboard.dashboards.length)
-                        return ""
-                    var d = dashboard.dashboards[index]
-                    return (d && d.url_path) ? String(d.url_path) : ""
-                }
-
-                function syncFromCoordinator() {
-                    if (!dashboard)
-                        return
-                    var path = dashboard.currentUrlPath || ""
-                    var list = dashboard.dashboards
-                    var idx = 0
-                    for (var i = 0; i < list.length; ++i) {
-                        var p = (list[i] && list[i].url_path) ? String(list[i].url_path) : ""
-                        if (p === path) {
-                            idx = i
-                            break
-                        }
-                    }
-                    if (currentIndex !== idx) {
-                        applyingIndex = true
-                        currentIndex = idx
-                        applyingIndex = false
-                    }
-                }
-
-                menu: ContextMenu {
-                    Repeater {
-                        model: dashboard ? dashboard.dashboards : []
-                        MenuItem {
-                            property string dashboardPath: (modelData && modelData.url_path)
-                                                           ? String(modelData.url_path) : ""
-                            text: (modelData.title && String(modelData.title).length)
-                                  ? modelData.title
-                                  : (dashboardPath || "Overview")
-                            onClicked: {
-                                if (dashboard)
-                                    dashboard.setCurrentUrlPath(dashboardPath)
-                            }
-                        }
-                    }
-                }
-
-                onCurrentIndexChanged: {
-                    if (applyingIndex || !dashboard)
-                        return
-                    var path = pathAt(currentIndex)
-                    if (path !== (dashboard.currentUrlPath || ""))
-                        dashboard.setCurrentUrlPath(path)
-                }
-            }
 
             Flickable {
                 id: tabFlick
-                visible: dashboard && dashboard.views && dashboard.views.length > 1
+                visible: !!(dashboard && dashboard.views && dashboard.views.length > 1)
                 width: parent.width
                 height: visible ? Theme.itemSizeSmall : 0
                 contentWidth: tabRow.width
@@ -240,12 +180,20 @@ Page {
                     x: Theme.horizontalPageMargin
                     Repeater {
                         model: dashboard ? dashboard.views : []
-                        Label {
-                            text: modelData.title || modelData.path || ("View " + (index + 1))
-                            color: index === (dashboard ? dashboard.currentViewIndex : -1)
-                                   ? Theme.highlightColor : Theme.secondaryColor
-                            font.pixelSize: Theme.fontSizeSmall
-                            font.bold: index === (dashboard ? dashboard.currentViewIndex : -1)
+                        Item {
+                            width: Theme.itemSizeSmall
+                            height: Theme.itemSizeSmall
+
+                            MdiIcon {
+                                anchors.centerIn: parent
+                                mdiIcons: page.mdiIcons
+                                name: modelData && modelData.icon
+                                      ? String(modelData.icon) : "mdi:view-dashboard"
+                                iconColor: index === (dashboard ? dashboard.currentViewIndex : -1)
+                                           ? Theme.highlightColor : Theme.secondaryColor
+                                width: Theme.iconSizeSmall
+                            }
+
                             MouseArea {
                                 anchors.fill: parent
                                 onClicked: dashboard.setCurrentViewIndex(index)
@@ -260,9 +208,11 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: Theme.paddingMedium
-                visible: dashboard && dashboard.currentView
-                         && dashboard.currentView.badges
-                         && dashboard.currentView.badges.length
+                // A chained && yields undefined for a view without badges, which
+                // QML refuses to assign and leaves the row taking up space.
+                visible: !!(dashboard && dashboard.currentView
+                            && dashboard.currentView.badges
+                            && dashboard.currentView.badges.length)
                 Repeater {
                     model: dashboard && dashboard.currentView ? dashboard.currentView.badges : []
                     Label {

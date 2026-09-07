@@ -11,11 +11,13 @@ class MdiIconRenderer : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool ready READ ready NOTIFY readyChanged)
+    Q_PROPERTY(QString fontFamily READ fontFamily NOTIFY readyChanged)
 
 public:
     explicit MdiIconRenderer(QObject *parent = nullptr);
 
     bool ready() const;
+    QString fontFamily() const;
 
     // Renders mdi:name (or bare name) into a square ARGB image.
     Q_INVOKABLE QImage renderIcon(const QString &mdiName,
@@ -29,6 +31,7 @@ public:
                                        int pixelSize = 128) const;
 
     Q_INVOKABLE bool hasIcon(const QString &mdiName) const;
+    Q_INVOKABLE QString glyph(const QString &mdiName) const;
 
 signals:
     void readyChanged();

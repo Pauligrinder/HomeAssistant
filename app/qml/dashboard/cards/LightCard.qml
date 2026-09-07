@@ -24,7 +24,7 @@ CardChrome {
         Label {
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width - Theme.iconSizeMedium - Theme.paddingMedium
-            text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
+            text: (dashboard && root.rev >= 0) ? root.configName(entityId, "") : entityId
             truncationMode: TruncationMode.Fade
         }
     }

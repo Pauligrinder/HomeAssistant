@@ -13,7 +13,7 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: (dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId
+        text: (dashboard && root.rev >= 0) ? root.configName(entityId, "") : entityId
         color: Theme.highlightColor
     }
     Label {

@@ -5,11 +5,11 @@ import ".."
 CardChrome {
     id: root
     property string imageUrl: ""
+    contentTopMargin: 0
+    contentBottomMargin: 0
 
     function mediaPath() {
-        if (card && card.image)
-            return String(card.image)
-        return ""
+        return dashboard ? dashboard.mediaPathOf(card ? card.image : "") : ""
     }
 
     Connections {
@@ -31,11 +31,17 @@ CardChrome {
             dashboard.prefetchMedia(path)
     }
 
-    Image {
-        width: parent.width
+    Item {
+        x: -Theme.paddingMedium
+        width: root.width
         height: Math.max(Theme.itemSizeExtraLarge, width * 0.45)
-        fillMode: Image.PreserveAspectCrop
-        source: root.imageUrl
+
+        RoundedImage {
+            anchors.fill: parent
+            source: root.imageUrl
+            cornerRadius: root.radius
+        }
+
         Label {
             anchors.bottom: parent.bottom
             anchors.left: parent.left

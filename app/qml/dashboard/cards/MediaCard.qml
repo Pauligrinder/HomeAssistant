@@ -8,6 +8,7 @@ CardChrome {
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     property string artUrl: ""
     property string requestedArtPath: ""
+    contentTopMargin: 0
 
     Connections {
         target: dashboard
@@ -19,8 +20,9 @@ CardChrome {
     }
 
     function artPath() {
-        var pic = dashboard ? dashboard.attribute(entityId, "entity_picture") : ""
-        return pic ? String(pic) : ""
+        if (!dashboard)
+            return ""
+        return dashboard.mediaPathOf(dashboard.attribute(entityId, "entity_picture"))
     }
 
     function prefetchArt() {
@@ -38,12 +40,14 @@ CardChrome {
 
     Component.onCompleted: root.prefetchArt()
 
-    Image {
-        width: parent.width
+    RoundedImage {
+        x: -Theme.paddingMedium
+        width: root.width
         height: width * 0.56
-        fillMode: Image.PreserveAspectCrop
         source: root.artUrl
         visible: root.artUrl.length > 0
+        cornerRadius: root.radius
+        roundBottom: false
     }
     Label {
         width: parent.width

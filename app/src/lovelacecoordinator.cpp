@@ -313,8 +313,11 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_dashboardsId(0)
     , m_configId(0)
     , m_userIdReq(0)
+    , m_frontendUserDataId(0)
+    , m_frontendSystemDataId(0)
     , m_areasId(0)
     , m_energyId(0)
+    , m_initialDashboardSelected(false)
 {
 }
 
@@ -422,6 +425,15 @@ void LovelaceCoordinator::stop()
     m_subscribeLovelaceId = 0;
     m_dashboardsId = 0;
     m_configId = 0;
+    m_frontendUserDataId = 0;
+    m_frontendSystemDataId = 0;
+    m_userDefaultPanel.clear();
+    m_systemDefaultPanel.clear();
+    m_initialDashboardSelected = false;
+    // Command ids do not survive a reconnect, so in-flight media resolves have
+    // to be forgotten or their pictures would never be requested again.
+    m_mediaSourceById.clear();
+    m_mediaPending.clear();
     setReady(false);
     m_statesLoaded = false;
     m_configLoaded = false;
@@ -475,6 +487,7 @@ void LovelaceCoordinator::subscribeAll()
     requestUser();
     requestStates();
     requestDashboards();
+    requestFrontendDefaults();
     requestAreas();
     fetchEnergyPrefs();
 
@@ -526,6 +539,45 @@ void LovelaceCoordinator::requestUser()
     m_userIdReq = m_socket->sendCommand(msg);
 }
 
+void LovelaceCoordinator::requestFrontendDefaults()
+{
+    if (m_initialDashboardSelected)
+        return;
+
+    QJsonObject user;
+    user.insert(QStringLiteral("type"), QStringLiteral("frontend/get_user_data"));
+    user.insert(QStringLiteral("key"), QStringLiteral("core"));
+    m_frontendUserDataId = m_socket->sendCommand(user);
+
+    QJsonObject system;
+    system.insert(QStringLiteral("type"), QStringLiteral("frontend/get_system_data"));
+    system.insert(QStringLiteral("key"), QStringLiteral("core"));
+    m_frontendSystemDataId = m_socket->sendCommand(system);
+}
+
+void LovelaceCoordinator::maybeRequestInitialConfig()
+{
+    if (m_dashboardsId != 0 || m_frontendUserDataId != 0
+            || m_frontendSystemDataId != 0)
+        return;
+
+    if (!m_initialDashboardSelected) {
+        QString path = !m_userDefaultPanel.isEmpty()
+                ? m_userDefaultPanel : m_systemDefaultPanel;
+        if (path == QLatin1String("lovelace") || path == QLatin1String("null"))
+            path.clear();
+        if (m_currentUrlPath != path) {
+            m_currentUrlPath = path;
+            emit currentUrlPathChanged();
+        }
+        m_initialDashboardSelected = true;
+    }
+
+    if (m_wantRunning && m_socket && m_socket->authenticated()
+            && m_configId == 0 && !m_configLoaded)
+        requestConfig();
+}
+
 void LovelaceCoordinator::requestAreas()
 {
     QJsonObject msg;
@@ -564,12 +616,38 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         }
         return;
     }
-    if (m_calendarById.contains(id)) {
-        const QString entityId = m_calendarById.take(id);
-        if (success) {
-            m_calendarEvents.insert(entityId, variantListOf(result));
-            emit calendarReady(entityId);
+    if (m_mediaSourceById.contains(id)) {
+        const QString path = m_mediaSourceById.take(id);
+        // The resolved URL is signed and short-lived, so the cache stays keyed
+        // on the media-source reference the cards already know.
+        const QString url = success
+                ? result.toMap().value(QStringLiteral("url")).toString()
+                : QString();
+        if (url.isEmpty()) {
+            qWarning() << "Helmsman lovelace: cannot resolve media source" << path
+                       << error.value(QStringLiteral("message")).toString();
+            m_mediaPending.remove(path);
+            return;
         }
+        getMedia(QUrl(resolveMedia(url)), path);
+        return;
+    }
+    if (id == m_frontendUserDataId) {
+        m_frontendUserDataId = 0;
+        if (success) {
+            const QVariantMap core = result.toMap().value(QStringLiteral("value")).toMap();
+            m_userDefaultPanel = core.value(QStringLiteral("default_panel")).toString();
+        }
+        maybeRequestInitialConfig();
+        return;
+    }
+    if (id == m_frontendSystemDataId) {
+        m_frontendSystemDataId = 0;
+        if (success) {
+            const QVariantMap core = result.toMap().value(QStringLiteral("value")).toMap();
+            m_systemDefaultPanel = core.value(QStringLiteral("default_panel")).toString();
+        }
+        maybeRequestInitialConfig();
         return;
     }
 
@@ -587,8 +665,7 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
             applyDashboards(result);
         else
             applyDashboards(QVariantList());
-        if (m_wantRunning && m_socket && m_socket->authenticated() && m_configId == 0 && !m_configLoaded)
-            requestConfig();
+        maybeRequestInitialConfig();
         return;
     }
     if (id == m_configId) {
@@ -1423,8 +1500,26 @@ void LovelaceCoordinator::prefetchMedia(const QString &path)
 {
     if (path.isEmpty())
         return;
+    // A data URI already carries the picture, so handing it back untouched is
+    // both the fastest path and the only correct one: resolving it against the
+    // Home Assistant base URL turns the payload into a bogus request.
+    if (path.startsWith(QLatin1String("data:"))) {
+        emit mediaCached(path, path);
+        return;
+    }
     if (m_mediaCache.contains(path)) {
         emit mediaCached(path, m_mediaCache.value(path));
+        return;
+    }
+    // Several cards can point at the same picture, so one request per path is
+    // enough until it either lands in the cache or fails.
+    if (m_mediaPending.contains(path))
+        return;
+    m_mediaPending.insert(path);
+    // Media browser references carry no host and are signed by Home Assistant,
+    // so they have to be resolved over the websocket before they can be read.
+    if (path.startsWith(QLatin1String("media-source://"))) {
+        resolveMediaSource(path);
         return;
     }
     getMedia(QUrl(resolveMedia(path)), path);
@@ -1432,6 +1527,8 @@ void LovelaceCoordinator::prefetchMedia(const QString &path)
 
 QString LovelaceCoordinator::cachedMediaUrl(const QString &path) const
 {
+    if (path.startsWith(QLatin1String("data:")))
+        return path;
     return m_mediaCache.value(path);
 }
 
@@ -1440,6 +1537,20 @@ QString LovelaceCoordinator::cameraPath(const QString &entityId) const
     if (entityId.isEmpty())
         return QString();
     return QStringLiteral("/api/camera_proxy/%1").arg(entityId);
+}
+
+// Lovelace picture options accept either a path or a media browser reference
+// such as { media_content_id: "media-source://image_upload/<id>" }. Anything
+// else has to be rejected here: stringifying a map yields "[object Object]",
+// which used to be requested from Home Assistant verbatim.
+QString LovelaceCoordinator::mediaPathOf(const QVariant &value) const
+{
+    const QVariantMap map = value.toMap();
+    if (!map.isEmpty())
+        return map.value(QStringLiteral("media_content_id")).toString();
+    if (value.type() == QVariant::String || value.type() == QVariant::Url)
+        return value.toString();
+    return QString();
 }
 
 QString LovelaceCoordinator::resolveMedia(const QString &path) const
@@ -1477,18 +1588,25 @@ QString LovelaceCoordinator::templateValue(const QString &key) const
 
 void LovelaceCoordinator::fetchCalendar(const QString &entityId)
 {
-    if (!m_socket || entityId.isEmpty())
+    fetchCalendarRange(entityId,
+                       QDateTime::currentDateTimeUtc().toString(Qt::ISODate),
+                       QDateTime::currentDateTimeUtc().addDays(7).toString(Qt::ISODate));
+}
+
+// Calendars are read over REST because the websocket API has no list command
+// for them; this is the same endpoint the Home Assistant frontend uses.
+void LovelaceCoordinator::fetchCalendarRange(const QString &entityId,
+                                             const QString &start,
+                                             const QString &end)
+{
+    if (entityId.isEmpty())
         return;
-    QJsonObject msg;
-    msg.insert(QStringLiteral("type"), QStringLiteral("calendar/events"));
-    msg.insert(QStringLiteral("entity_id"), entityId);
-    msg.insert(QStringLiteral("start"),
-               QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-    msg.insert(QStringLiteral("end"),
-               QDateTime::currentDateTimeUtc().addDays(7).toString(Qt::ISODate));
-    const int id = m_socket->sendCommand(msg);
-    if (id)
-        m_calendarById.insert(id, entityId);
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("start"), start);
+    query.addQueryItem(QStringLiteral("end"), end);
+    getJson(QStringLiteral("/api/calendars/") + entityId + QLatin1Char('?')
+            + query.toString(QUrl::FullyEncoded),
+            QStringLiteral("calendar"), entityId);
 }
 
 void LovelaceCoordinator::fetchTodo(const QString &entityId)
@@ -1600,6 +1718,22 @@ void LovelaceCoordinator::getMedia(const QUrl &url, const QString &tag, int redi
             this, SLOT(onSslErrors(QList<QSslError>)));
 }
 
+void LovelaceCoordinator::resolveMediaSource(const QString &path)
+{
+    if (!m_socket) {
+        m_mediaPending.remove(path);
+        return;
+    }
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("media_source/resolve_media"));
+    msg.insert(QStringLiteral("media_content_id"), path);
+    const int id = m_socket->sendCommand(msg);
+    if (id)
+        m_mediaSourceById.insert(id, path);
+    else
+        m_mediaPending.remove(path);
+}
+
 void LovelaceCoordinator::postJson(const QString &path, const QJsonObject &body,
                                    const QString &kind, const QString &tag)
 {
@@ -1646,6 +1780,8 @@ void LovelaceCoordinator::onReplyFinished()
     const QByteArray data = reply->readAll();
     if (reply->error() != QNetworkReply::NoError) {
         qWarning() << "Helmsman lovelace:" << kind << "failed" << reply->errorString();
+        if (kind == QLatin1String("media"))
+            m_mediaPending.remove(tag);
         return;
     }
     if (kind == QLatin1String("media")) {
@@ -1654,11 +1790,15 @@ void LovelaceCoordinator::onReplyFinished()
             const int redirects = reply->property("redirects").toInt();
             if (redirects >= 5) {
                 qWarning() << "Helmsman lovelace: media redirect limit reached for" << tag;
+                m_mediaPending.remove(tag);
                 return;
             }
+            // Still pending: the follow-up request carries the same tag.
             getMedia(reply->url().resolved(redirect), tag, redirects + 1);
             return;
         }
+
+        m_mediaPending.remove(tag);
 
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status != 0 && (status < 200 || status >= 300)) {
@@ -1710,6 +1850,12 @@ void LovelaceCoordinator::onReplyFinished()
                 entityId = tag.split(QLatin1Char(',')).at(i);
             emit historyReady(entityId, out);
         }
+        return;
+    }
+    if (kind == QLatin1String("calendar")) {
+        const QJsonDocument doc = QJsonDocument::fromJson(data);
+        m_calendarEvents.insert(tag, doc.array().toVariantList());
+        emit calendarReady(tag);
         return;
     }
 }

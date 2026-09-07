@@ -37,8 +37,10 @@ app/
    restored on launch.
 5. **Dashboards** — The Home Assistant frontend in a WebView is the default
    home screen. Settings → Dashboard can enable an experimental native Silica
-   renderer of Lovelace JSON. Custom cards, energy, and the map still open
-   in the web view. The native renderer is off by default.
+   renderer of Lovelace JSON. Energy and the map still open in the web view,
+   as do custom cards other than the person-status, custom-calendar, and
+   ApexCharts ones that have native equivalents. The native renderer is off
+   by default.
 6. **Sensors** — After mobile_app registration, Helmsman reports battery level/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
    location. Native settings can disable individual sensors and select a
@@ -97,9 +99,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.2.24-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.3.0-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.2.24-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.3.0-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`.

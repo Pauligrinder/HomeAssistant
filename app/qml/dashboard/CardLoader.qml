@@ -9,10 +9,15 @@ Loader {
     property var mdiIcons
     property int columns: 12
     property int unitWidth: parent ? parent.width : width
+    readonly property int statesRevision: dashboard ? dashboard.statesRevision : 0
+    readonly property bool cardIsVisible: !dashboard || !card
+                                                   || (statesRevision >= 0
+                                                       && dashboard.cardVisible(card))
 
     readonly property url cardSource: loader.sourceForType(card ? card.type : "")
     property bool sourceReady: false
 
+    visible: cardIsVisible
     width: {
         var cols = (card && card._columns) ? card._columns : 12
         var span = Math.min(loader.columns, Math.max(1, cols))
@@ -54,6 +59,12 @@ Loader {
 
     function sourceForType(type) {
         var t = String(type || "")
+        if (t === "custom:person-status-card")
+            return Qt.resolvedUrl("cards/PersonStatusCard.qml")
+        if (t === "custom:custom-calendar-card")
+            return Qt.resolvedUrl("cards/CustomCalendarCard.qml")
+        if (t === "custom:apexcharts-card")
+            return Qt.resolvedUrl("cards/ApexChartsCard.qml")
         if (t.indexOf("custom:") === 0)
             return Qt.resolvedUrl("cards/FallbackCard.qml")
         if (t.indexOf("energy-") === 0 || t === "energy")

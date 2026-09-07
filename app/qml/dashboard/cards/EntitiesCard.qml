@@ -8,10 +8,27 @@ CardChrome {
 
     readonly property var entities: (card && card.entities) ? card.entities : []
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property bool pictureHeader: !!(card && card.header
+                                              && card.header.type === "picture")
+    readonly property bool pictureFooter: !!(card && card.footer
+                                              && card.footer.type === "picture")
+    contentTopMargin: pictureHeader ? 0 : Theme.paddingMedium
+    contentBottomMargin: pictureFooter ? 0 : Theme.paddingMedium
+
+    CardHeaderFooter {
+        config: (card && card.header) ? card.header : ({})
+        dashboard: root.dashboard
+        edgeWidth: root.width
+        edgeOffset: -Theme.paddingMedium
+        cornerRadius: root.radius
+        roundTop: true
+    }
 
     Label {
         width: parent.width
-        visible: card && card.title && String(card.title).length > 0
+        // A chained && yields undefined rather than false when the card has no
+        // title, which leaves visible untouched and reserves an empty line.
+        visible: !!(card && card.title && String(card.title).length > 0)
         text: card && card.title ? card.title : ""
         color: Theme.highlightColor
         font.pixelSize: Theme.fontSizeSmall
@@ -23,24 +40,34 @@ CardChrome {
         BackgroundItem {
             id: row
             width: parent.width
-            height: Theme.itemSizeSmall
-            property var entry: typeof modelData === "object" ? modelData : { "entity": String(modelData) }
-            property string entityId: {
-                if (typeof modelData === "string")
-                    return modelData
-                if (modelData && modelData.entity)
-                    return String(modelData.entity)
-                if (modelData && modelData.type === "weblink")
-                    return ""
-                return ""
-            }
-            property string rowType: (typeof modelData === "object" && modelData.type) ? modelData.type : "entity"
+            height: visible ? Theme.itemSizeSmall : 0
+            property var config: (modelData && typeof modelData === "object")
+                                 ? modelData : { "entity": String(modelData) }
+            // A conditional row holds its conditions at the top level and the
+            // row they guard under "row", so the row itself is what every other
+            // binding has to read.
+            readonly property bool conditionalRow: String(row.config.type || "") === "conditional"
+            readonly property var entry: (row.conditionalRow && row.config.row)
+                                         ? row.config.row : row.config
+            readonly property string rowType: (row.entry && row.entry.type)
+                                              ? String(row.entry.type) : "entity"
+            property string entityId: (row.entry && row.entry.entity)
+                                      ? String(row.entry.entity) : ""
             property bool toggleable: (rowType === "entity" && row.entityId.length > 0
                                        && dashboard && root.rev >= 0)
                                       ? dashboard.isToggleable(row.entityId) : false
 
-            visible: rowType !== "conditional"
-                     || (dashboard && root.rev >= 0 && dashboard.isVisible(entry.conditions))
+            // Both a conditional row and a plain row carrying "visibility" are
+            // collapsed rather than left blank when their conditions fail.
+            visible: {
+                if (!dashboard || root.rev < 0)
+                    return true
+                if (row.conditionalRow)
+                    return !!dashboard.isVisible(row.config.conditions)
+                if (row.config.visibility)
+                    return !!dashboard.isVisible(row.config.visibility)
+                return true
+            }
 
             onClicked: {
                 if (rowType === "weblink" && dashboard) {
@@ -84,6 +111,7 @@ CardChrome {
                 spacing: Theme.paddingSmall
 
                 MdiIcon {
+                    id: rowIcon
                     y: (parent.height - height) / 2
                     mdiIcons: root.mdiIcons
                     name: {
@@ -100,9 +128,13 @@ CardChrome {
                 }
 
                 Label {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - Theme.iconSizeSmall * 2 - Theme.paddingLarge
-                           - (row.toggleable ? toggle.width : 0)
+                    y: (parent.height - height) / 2
+                    // The name gets whatever the icon, state and switch leave,
+                    // so nothing is pushed past the edge of the card.
+                    width: Math.max(0, parent.width - rowIcon.width - Theme.paddingSmall
+                                    - (stateLabel.visible
+                                       ? stateLabel.width + Theme.paddingSmall : 0)
+                                    - (toggle.visible ? toggle.width + Theme.paddingSmall : 0))
                     text: {
                         if (entry.name)
                             return entry.name
@@ -118,8 +150,12 @@ CardChrome {
                 }
 
                 Label {
-                    anchors.verticalCenter: parent.verticalCenter
+                    id: stateLabel
+                    y: (parent.height - height) / 2
                     visible: row.entityId.length > 0 && !row.toggleable
+                    // Long states keep at most part of the row for themselves.
+                    width: Math.min(implicitWidth, row.width * 0.45)
+                    horizontalAlignment: Text.AlignRight
                     text: (dashboard && row.entityId.length && root.rev >= 0)
                           ? dashboard.formatState(row.entityId) : ""
                     font.pixelSize: Theme.fontSizeExtraSmall
@@ -129,7 +165,7 @@ CardChrome {
 
                 Switch {
                     id: toggle
-                    anchors.verticalCenter: parent.verticalCenter
+                    y: (parent.height - height) / 2
                     visible: row.toggleable
                     automaticCheck: false
                     // root.rev is read so the switch follows entity updates.
@@ -139,5 +175,14 @@ CardChrome {
                 }
             }
         }
+    }
+
+    CardHeaderFooter {
+        config: (card && card.footer) ? card.footer : ({})
+        dashboard: root.dashboard
+        edgeWidth: root.width
+        edgeOffset: -Theme.paddingMedium
+        cornerRadius: root.radius
+        roundBottom: true
     }
 }
