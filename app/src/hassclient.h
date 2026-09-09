@@ -63,6 +63,9 @@ class HassClient : public QObject
     Q_PROPERTY(LovelaceCoordinator *lovelace READ lovelace CONSTANT)
     Q_PROPERTY(bool coverNotificationsEnabled READ coverNotificationsEnabled WRITE setCoverNotificationsEnabled NOTIFY coverNotificationsEnabledChanged)
     Q_PROPERTY(bool nativeDashboardEnabled READ nativeDashboardEnabled WRITE setNativeDashboardEnabled NOTIFY nativeDashboardEnabledChanged)
+    Q_PROPERTY(bool next153WebViewAvailable READ next153WebViewAvailable NOTIFY next153WebViewAvailableChanged)
+    Q_PROPERTY(bool next153WebViewEnabled READ next153WebViewEnabled WRITE setNext153WebViewEnabled NOTIFY next153WebViewEnabledChanged)
+    Q_PROPERTY(bool next153WebViewActive READ next153WebViewActive CONSTANT)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -105,6 +108,11 @@ public:
     LovelaceCoordinator *lovelace() const;
     bool coverNotificationsEnabled() const;
     bool nativeDashboardEnabled() const;
+    bool next153WebViewAvailable() const;
+    bool next153WebViewEnabled() const;
+    bool next153WebViewActive() const;
+    static bool next153ModuleInstalled();
+    static bool preloadWebViewEmbed();
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -115,6 +123,7 @@ public:
     void setHomeWifiSsid(const QString &ssid);
     void setCoverNotificationsEnabled(bool enabled);
     void setNativeDashboardEnabled(bool enabled);
+    void setNext153WebViewEnabled(bool enabled);
 
 public slots:
     void restoreSession();
@@ -137,6 +146,7 @@ public slots:
     void clearDashboardSnapshot();
     void notifyAppForegrounded();
     void notifyDashboardReady();
+    void refreshNext153WebViewAvailable();
 
 signals:
     void busyChanged();
@@ -176,6 +186,8 @@ signals:
     void loginFailed(const QString &message);
     void coverNotificationsEnabledChanged();
     void nativeDashboardEnabledChanged();
+    void next153WebViewAvailableChanged();
+    void next153WebViewEnabledChanged();
     void notificationReceived(const QString &title,
                               const QString &message,
                               const QVariantMap &data);
@@ -299,6 +311,9 @@ private:
     bool m_pendingPushAfterRefresh;
     bool m_coverNotificationsEnabled;
     bool m_nativeDashboardEnabled;
+    bool m_next153WebViewAvailable;
+    bool m_next153WebViewEnabled;
+    bool m_next153WebViewActive;
     NetworkState m_networkState;
     NetworkState m_pendingNetworkState;
     int m_pushAuthRetries;

@@ -23,6 +23,9 @@
 #include <QSysInfo>
 #include <QHostInfo>
 #include <QTimer>
+#include <QLibraryInfo>
+
+#include <dlfcn.h>
 
 namespace {
 
@@ -47,6 +50,13 @@ const int kSensorStartFallbackMs = 15000;
 // not land in the same turn as the sensor webhook calls.
 const int kWidgetStartAfterDashboardMs = 3000;
 const int kWidgetStartFallbackMs = 16000;
+
+const char *kStockEmbedWidget = "libqt5embedwidget.so.1";
+const char *kNext153EmbedWidget = "libqt5embedwidget-next153.so.1";
+
+// Which Gecko embed this process actually loaded. Both engines export
+// libxul.so; swapping them after the first mapping is in place crashes.
+bool g_next153WebViewActive = false;
 
 QString canonicalClientId(const QString &baseUrl)
 {
@@ -212,6 +222,9 @@ HassClient::HassClient(QObject *parent)
     , m_pendingPushAfterRefresh(false)
     , m_coverNotificationsEnabled(true)
     , m_nativeDashboardEnabled(false)
+    , m_next153WebViewAvailable(false)
+    , m_next153WebViewEnabled(false)
+    , m_next153WebViewActive(g_next153WebViewActive)
     , m_networkState(NetworkUnknown)
     , m_pendingNetworkState(NetworkUnknown)
     , m_pushAuthRetries(0)
@@ -276,6 +289,9 @@ HassClient::HassClient(QObject *parent)
         m_coverNotificationsEnabled = ui.value(QStringLiteral("coverNotificationsEnabled")).toBool();
     if (ui.contains(QStringLiteral("nativeDashboardEnabled")))
         m_nativeDashboardEnabled = ui.value(QStringLiteral("nativeDashboardEnabled")).toBool();
+    if (ui.contains(QStringLiteral("next153WebViewEnabled")))
+        m_next153WebViewEnabled = ui.value(QStringLiteral("next153WebViewEnabled")).toBool();
+    m_next153WebViewAvailable = next153ModuleInstalled();
 }
 
 HassClient::~HassClient()
@@ -322,6 +338,51 @@ WidgetCoordinator *HassClient::widget() const { return m_widget; }
 LovelaceCoordinator *HassClient::lovelace() const { return m_lovelace; }
 bool HassClient::coverNotificationsEnabled() const { return m_coverNotificationsEnabled; }
 bool HassClient::nativeDashboardEnabled() const { return m_nativeDashboardEnabled; }
+bool HassClient::next153WebViewAvailable() const { return m_next153WebViewAvailable; }
+bool HassClient::next153WebViewEnabled() const { return m_next153WebViewEnabled; }
+bool HassClient::next153WebViewActive() const { return m_next153WebViewActive; }
+
+bool HassClient::next153ModuleInstalled()
+{
+    // sailfish-browser-next153 pulls in sailfish-components-webview-qt5-next153,
+    // which installs a parallel QML module rather than replacing the stock one.
+    const QString qmldir = QLibraryInfo::location(QLibraryInfo::Qml2ImportsPath)
+            + QStringLiteral("/SailfishNext153/WebView/qmldir");
+    if (QFile::exists(qmldir))
+        return true;
+    // Qml2ImportsPath is lib64 on aarch64 and lib on armv7hl; keep the other
+    // root in case a device reports the path differently under Sailjail.
+    const QStringList fallbacks = QStringList()
+            << QStringLiteral("/usr/lib64/qt5/qml/SailfishNext153/WebView/qmldir")
+            << QStringLiteral("/usr/lib/qt5/qml/SailfishNext153/WebView/qmldir");
+    for (int i = 0; i < fallbacks.size(); ++i) {
+        if (fallbacks.at(i) != qmldir && QFile::exists(fallbacks.at(i)))
+            return true;
+    }
+    return false;
+}
+
+bool HassClient::preloadWebViewEmbed()
+{
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    const bool preferNext153 = ui.value(QStringLiteral("next153WebViewEnabled")).toBool()
+            && next153ModuleInstalled();
+    const char *lib = preferNext153 ? kNext153EmbedWidget : kStockEmbedWidget;
+    void *handle = dlopen(lib, RTLD_NOW | RTLD_GLOBAL);
+    if (!handle && preferNext153) {
+        qWarning() << "Helmsman: failed to load ESR153 embedwidget:" << dlerror();
+        handle = dlopen(kStockEmbedWidget, RTLD_NOW | RTLD_GLOBAL);
+        g_next153WebViewActive = false;
+    } else {
+        g_next153WebViewActive = preferNext153 && handle;
+        if (!handle)
+            qWarning() << "Helmsman: failed to load stock embedwidget:" << dlerror();
+    }
+    qWarning() << "Helmsman: using"
+               << (g_next153WebViewActive ? "ESR153" : "stock")
+               << "webview embed";
+    return handle != nullptr;
+}
 
 QString HassClient::dashboardSnapshotPath() const
 {
@@ -432,6 +493,25 @@ void HassClient::setNativeDashboardEnabled(bool enabled)
     ui.setValue(QStringLiteral("nativeDashboardEnabled"), enabled);
     emit nativeDashboardEnabledChanged();
     syncLovelaceRunning();
+}
+
+void HassClient::setNext153WebViewEnabled(bool enabled)
+{
+    if (m_next153WebViewEnabled == enabled)
+        return;
+    m_next153WebViewEnabled = enabled;
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    ui.setValue(QStringLiteral("next153WebViewEnabled"), enabled);
+    emit next153WebViewEnabledChanged();
+}
+
+void HassClient::refreshNext153WebViewAvailable()
+{
+    const bool available = next153ModuleInstalled();
+    if (m_next153WebViewAvailable == available)
+        return;
+    m_next153WebViewAvailable = available;
+    emit next153WebViewAvailableChanged();
 }
 
 void HassClient::setUsingInternalUrl(bool usingInternal)

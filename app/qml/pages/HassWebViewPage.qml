@@ -1,9 +1,8 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import Sailfish.WebView 1.0
 import "../components"
 
-WebViewPage {
+Page {
     id: page
     objectName: page.isHome ? "HomePage" : "HassWebViewPage"
     property var hassClient
@@ -22,6 +21,11 @@ WebViewPage {
     property int snapshotRevision: 1
     property bool snapshotUsable: false
     property string lastLoadedBase: ""
+    // WebViewPage is only a Page with this marker; WebView looks it up on
+    // a parent so either Gecko stack can sit in the same Silica page.
+    property int __sailfish_webviewpage
+    readonly property var dashboardView: webViewLoader.item
+    readonly property bool useNext153WebView: !!(hassClient && hassClient.next153WebViewActive)
     property color overlayBackgroundColor: page.fallbackOverlayBackground
     property color overlayTextColor: page.fallbackOverlayText
     readonly property color haDarkBackground: "#111111"
@@ -42,7 +46,7 @@ WebViewPage {
     property string loadStatusText: {
         if (!page.tokensInjected)
             return "Preparing session..."
-        if (dashboardView.loading && dashboardView.loadProgress > 0)
+        if (dashboardView && dashboardView.loading && dashboardView.loadProgress > 0)
             return "Loading dashboard… " + dashboardView.loadProgress + "%"
         if (page.readyCheckRunning)
             return "Loading dashboard…"
@@ -52,6 +56,17 @@ WebViewPage {
 
     function jsString(value) {
         return JSON.stringify(value ? String(value) : "")
+    }
+
+    function runViewJavaScript(script, ok, fail) {
+        if (!dashboardView)
+            return
+        if (typeof ok === "function" && typeof fail === "function")
+            dashboardView.runJavaScript(script, ok, fail)
+        else if (typeof ok === "function")
+            dashboardView.runJavaScript(script, ok)
+        else
+            dashboardView.runJavaScript(script)
     }
 
     function instancePath(path) {
@@ -88,7 +103,8 @@ WebViewPage {
             return
         }
         page.authHops += 1
-        dashboardView.url = page.dashboardUrl
+        if (dashboardView)
+            dashboardView.url = page.dashboardUrl
     }
 
     function resetDashboardState() {
@@ -146,7 +162,7 @@ WebViewPage {
                 + "return JSON.stringify({bg:'#fafafa',fg:'#212121'});"
                 + "})();"
 
-        dashboardView.runJavaScript(
+        page.runViewJavaScript(
                     script,
                     function(result) {
                         page.applyLoadingTheme(result)
@@ -158,7 +174,8 @@ WebViewPage {
 
     function reloadDashboard() {
         page.resetDashboardState()
-        dashboardView.url = page.startUrl
+        if (dashboardView)
+            dashboardView.url = page.startUrl
     }
 
     // Keep the live Lovelace document warm across cover/background. Never
@@ -236,7 +253,7 @@ WebViewPage {
                 + "} catch (e2) { return 'dead'; }"
                 + "})();"
 
-        dashboardView.runJavaScript(
+        page.runViewJavaScript(
                     script,
                     function(result) {
                         if (!page.resumeProbeRunning)
@@ -300,7 +317,7 @@ WebViewPage {
                 + "}catch(e){return 'skip';}"
                 + "})();"
 
-        dashboardView.runJavaScript(
+        page.runViewJavaScript(
                     script,
                     function() { snapshotDelayTimer.restart() },
                     function() { snapshotDelayTimer.restart() })
@@ -320,7 +337,7 @@ WebViewPage {
             return
         if (!hassClient || !hassClient.loggedIn)
             return
-        if (dashboardView.width < 8 || dashboardView.height < 8)
+        if (!dashboardView || dashboardView.width < 8 || dashboardView.height < 8)
             return
 
         page.capturingSnapshot = true
@@ -362,7 +379,7 @@ WebViewPage {
                 + "return 'wait';"
                 + "})();"
 
-        dashboardView.runJavaScript(
+        page.runViewJavaScript(
                     script,
                     function(result) {
                         if (!page.readyCheckRunning)
@@ -439,7 +456,7 @@ WebViewPage {
                 + "return 'ok';"
                 + "})();"
 
-        dashboardView.runJavaScript(
+        page.runViewJavaScript(
                     script,
                     function(result) {
                         if (result !== "ok") {
@@ -450,7 +467,7 @@ WebViewPage {
                         page.updateLoadingThemeFromWebView()
                         if (!page.tokensInjected) {
                             page.tokensInjected = true
-                            if (page.isHassFrontendUrl(dashboardView.url))
+                            if (dashboardView && page.isHassFrontendUrl(dashboardView.url))
                                 page.beginReadyCheck()
                             else
                                 page.openFrontendAfterAuth()
@@ -458,7 +475,7 @@ WebViewPage {
                         }
                         if (silent)
                             return
-                        if (page.isHassFrontendUrl(dashboardView.url))
+                        if (dashboardView && page.isHassFrontendUrl(dashboardView.url))
                             page.beginReadyCheck()
                         else
                             page.pollBridge()
@@ -472,7 +489,7 @@ WebViewPage {
         if (!page.bridgeInstalled || !page.dashboardReady)
             return
 
-        dashboardView.runJavaScript(
+        page.runViewJavaScript(
                     "return (function(){"
                     + "try{window.__helmsmanAttachExternal&&window.__helmsmanAttachExternal();}catch(e){}"
                     + "var q=window.__helmsmanQueue||[]; window.__helmsmanQueue=[]; return JSON.stringify(q);"
@@ -516,7 +533,7 @@ WebViewPage {
         else
             payload.error = resultObj
 
-        dashboardView.runJavaScript(
+        page.runViewJavaScript(
                     "window.externalBus && window.externalBus("
                     + JSON.stringify(payload)
                     + "); return true;")
@@ -571,25 +588,36 @@ WebViewPage {
         }
     }
 
-    WebView {
-        id: dashboardView
+    Loader {
+        id: webViewLoader
         anchors.fill: parent
-        // Sailfish.WebView already ties `active` to app + page status, which
-        // pauses the compositor in the background while keeping the document.
+        // Either Gecko stack pauses itself from app + page status the same way.
         opacity: page.dashboardReady ? 1.0 : 0.0
-        // Assigned explicitly so token refresh / property churn cannot
-        // navigate and flash the loading overlay.
-        url: ""
+        source: page.useNext153WebView
+                ? Qt.resolvedUrl("Next153DashboardWebView.qml")
+                : Qt.resolvedUrl("StockDashboardWebView.qml")
+        onStatusChanged: {
+            if (status === Loader.Error)
+                console.log("Helmsman: dashboard webview failed to load")
+        }
+
+        Behavior on opacity {
+            NumberAnimation { duration: 180 }
+        }
+    }
+
+    Connections {
+        target: dashboardView
         onLoadedChanged: {
-            if (!loaded)
+            if (!dashboardView || !dashboardView.loaded)
                 return
             page.lastLoadedBase = hassClient.baseUrl
             page.injectSessionAndBridge()
         }
         onUrlChanged: {
-            if (!hassClient.loggedIn)
+            if (!hassClient.loggedIn || !dashboardView)
                 return
-            var value = String(url)
+            var value = String(dashboardView.url)
             if (value.indexOf("/_my_redirect/companion_app") >= 0
                     || value.indexOf("#external-app-configuration") >= 0) {
                 page.openSettings()
@@ -606,10 +634,6 @@ WebViewPage {
                 page.tokensInjected = false
                 page.injectSessionAndBridge()
             }
-        }
-
-        Behavior on opacity {
-            NumberAnimation { duration: 180 }
         }
     }
 
@@ -665,6 +689,10 @@ WebViewPage {
         onTriggered: {
             if (!hassClient || !hassClient.loggedIn)
                 return
+            if (!dashboardView) {
+                startWebViewTimer.start()
+                return
+            }
             var current = String(dashboardView.url)
             if (current.length > 0 && current.indexOf("about:blank") < 0)
                 return

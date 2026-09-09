@@ -330,6 +330,19 @@ Page {
         }
     }
 
+    ActionConfirmDialog {
+        anchors.fill: parent
+        prompt: dashboard ? dashboard.pendingConfirmation : ({})
+        onAccepted: {
+            if (dashboard)
+                dashboard.confirmPendingAction()
+        }
+        onRejected: {
+            if (dashboard)
+                dashboard.cancelPendingAction()
+        }
+    }
+
     Component.onCompleted: {
         if (dashboard && dashboard.ready && hassClient && !page.notifiedReady) {
             page.notifiedReady = true

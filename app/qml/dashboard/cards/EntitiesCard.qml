@@ -75,7 +75,8 @@ CardChrome {
                     return
                 }
                 if (rowType === "button" && dashboard) {
-                    dashboard.performAction(entry.tap_action || { "action": "toggle" }, row.entityId)
+                    dashboard.performAction(root.mergeConfirmation(entry.tap_action || { "action": "toggle" },
+                                                                   entry.confirmation), row.entityId)
                     return
                 }
                 if (row.entityId.length && dashboard)
@@ -171,7 +172,13 @@ CardChrome {
                     // root.rev is read so the switch follows entity updates.
                     checked: (row.toggleable && root.rev >= 0)
                              ? dashboard.isOn(row.entityId) : false
-                    onClicked: dashboard.toggle(row.entityId)
+                    onClicked: {
+                        var confirm = entry.confirmation
+                        if (confirm === undefined && entry.tap_action)
+                            confirm = entry.tap_action.confirmation
+                        dashboard.performAction(root.mergeConfirmation({ "action": "toggle" }, confirm),
+                                               row.entityId)
+                    }
                 }
             }
         }

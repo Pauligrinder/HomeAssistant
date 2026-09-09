@@ -1,7 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 
-Image {
+Label {
     id: icon
     property var mdiIcons
     property string name
@@ -10,23 +10,18 @@ Image {
 
     width: Theme.iconSizeMedium
     height: width
-    fillMode: Image.PreserveAspectFit
-    asynchronous: true
-    cache: true
-    opacity: name && name.length ? 1 : 0
-    source: {
+    horizontalAlignment: Text.AlignHCenter
+    verticalAlignment: Text.AlignVCenter
+    color: icon.iconColor
+    font.family: icon.mdiIcons && icon.mdiIcons.ready
+                 ? icon.mdiIcons.fontFamily : Theme.fontFamily
+    font.pixelSize: Math.max(8, Math.round(icon.pixelSize * 0.88))
+    renderType: Text.NativeRendering
+    opacity: text.length ? 1 : 0
+    text: {
         if (!icon.mdiIcons || !icon.mdiIcons.ready
                 || !icon.name || icon.name.length === 0)
             return ""
-        var renderName = icon.mdiIcons.hasIcon(icon.name)
-                ? icon.name : "mdi:help-circle-outline"
-        var path = icon.mdiIcons.renderIconFile(renderName, String(icon.iconColor),
-                                                Math.max(24, icon.pixelSize))
-        return path && path.length ? ("file://" + path) : ""
-    }
-
-    onStatusChanged: {
-        if (icon.status === Image.Error)
-            console.log("Helmsman mdi icon: cannot load", icon.source)
+        return icon.mdiIcons.glyph(icon.name)
     }
 }

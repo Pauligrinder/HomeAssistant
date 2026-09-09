@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.0
+Version:    0.3.1
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -62,6 +62,15 @@ desktop-file-install --delete-original \
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 
 %changelog
+* Wed Sep 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.1-1
+- Honour Lovelace confirmation on the native dashboard with an Allow/Deny
+  prompt for scripts and taps that define it.
+- Optional Gecko ESR153 webview when sailfish-browser-next153 is installed;
+  off by default, and a restart is required to switch engines.
+- Load only one webview engine per process so toggling ESR153 cannot crash
+  Helmsman.
+- Draw native dashboard MDI icons from the font instead of cached PNGs.
+
 * Mon Sep 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.0-1
 - Render native cards for the person-status, custom-calendar, and ApexCharts
   custom Lovelace cards.
