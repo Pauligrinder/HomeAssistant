@@ -51,13 +51,29 @@ Rectangle {
         return ""
     }
 
+    function mergeConfirmation(action, confirmation) {
+        var out = {}
+        if (action) {
+            for (var key in action)
+                out[key] = action[key]
+        }
+        if (!out.action)
+            out.action = "toggle"
+        if (confirmation !== undefined && confirmation !== null
+                && out.confirmation === undefined)
+            out.confirmation = confirmation
+        return out
+    }
+
     function iconTap() {
         if (!dashboard || !card)
             return
         var action = card.icon_tap_action
-        if (action && action.action)
-            dashboard.performAction(action, chrome.entityId())
-        else if (dashboard.isToggleable(chrome.entityId()))
+        if (action) {
+            dashboard.performAction(chrome.mergeConfirmation(action), chrome.entityId())
+            return
+        }
+        if (dashboard.isToggleable(chrome.entityId()))
             dashboard.toggle(chrome.entityId())
         else
             dashboard.handleCardTap(card)

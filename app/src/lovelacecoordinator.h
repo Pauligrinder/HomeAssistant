@@ -42,6 +42,7 @@ class LovelaceCoordinator : public QObject
     Q_PROPERTY(QString pendingUrl READ pendingUrl NOTIFY pendingUrlChanged)
     Q_PROPERTY(QString pendingMoreInfo READ pendingMoreInfo NOTIFY pendingMoreInfoChanged)
     Q_PROPERTY(QString pendingWebPath READ pendingWebPath NOTIFY pendingWebPathChanged)
+    Q_PROPERTY(QVariantMap pendingConfirmation READ pendingConfirmation NOTIFY pendingConfirmationChanged)
 
 public:
     explicit LovelaceCoordinator(QObject *parent = nullptr);
@@ -72,6 +73,7 @@ public:
     QString pendingUrl() const;
     QString pendingMoreInfo() const;
     QString pendingWebPath() const;
+    QVariantMap pendingConfirmation() const;
 
 public slots:
     // Property setters live here so QML can call them directly, not only
@@ -110,6 +112,8 @@ public slots:
     void handleCardTap(const QVariantMap &card);
     void handleCardHold(const QVariantMap &card);
     void handleCardDoubleTap(const QVariantMap &card);
+    void confirmPendingAction();
+    void cancelPendingAction();
 
     void fetchHistory(const QStringList &entityIds, int hours = 24);
     void fetchStatistics(const QStringList &entityIds);
@@ -156,6 +160,7 @@ signals:
     void pendingUrlChanged();
     void pendingMoreInfoChanged();
     void pendingWebPathChanged();
+    void pendingConfirmationChanged();
     void historyReady(const QString &entityId, const QVariantList &points);
     void statisticsReady(const QString &entityId, const QVariantList &points);
     void mediaCached(const QString &path, const QString &fileUrl);
@@ -200,6 +205,12 @@ private:
     bool evalConditions(const QVariantList &conditions, bool matchAll) const;
     bool evalCondition(const QVariantMap &condition) const;
     QString defaultActionType(const QString &entityId, bool icon) const;
+    void attachCardConfirmation(QVariantMap *action, const QVariantMap &card) const;
+    bool confirmationRequired(const QVariant &confirmation) const;
+    QVariantMap buildConfirmationPrompt(const QVariant &confirmation,
+                                        const QString &entityId) const;
+    bool requestConfirmationIfNeeded(const QVariantMap &action, const QString &entityId);
+    void clearPendingConfirmation();
     QUrl apiUrl(const QString &path) const;
     void getJson(const QString &path, const QString &kind, const QString &tag = QString());
     void getMedia(const QUrl &url, const QString &tag, int redirects = 0);
@@ -243,6 +254,9 @@ private:
     QString m_pendingUrl;
     QString m_pendingMoreInfo;
     QString m_pendingWebPath;
+    QVariantMap m_pendingConfirmation;
+    QVariantMap m_pendingConfirmedAction;
+    QString m_pendingActionEntityId;
     QVariantList m_dashboards;
     QVariantMap m_currentConfig;
     QVariantList m_views;

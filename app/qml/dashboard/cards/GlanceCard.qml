@@ -30,8 +30,16 @@ CardChrome {
                                           ? modelData
                                           : (modelData.entity ? String(modelData.entity) : "")
                 onClicked: {
-                    if (dashboard && entityId.length)
-                        dashboard.handleCardTap({ "entity": entityId, "tap_action": modelData.tap_action })
+                    if (dashboard && entityId.length) {
+                        var card = { "entity": entityId }
+                        if (typeof modelData === "object") {
+                            if (modelData.tap_action)
+                                card.tap_action = modelData.tap_action
+                            if (modelData.confirmation !== undefined)
+                                card.confirmation = modelData.confirmation
+                        }
+                        dashboard.handleCardTap(card)
+                    }
                 }
                 onPressAndHold: {
                     if (dashboard && entityId.length)

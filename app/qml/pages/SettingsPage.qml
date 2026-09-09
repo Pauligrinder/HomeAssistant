@@ -9,6 +9,11 @@ Page {
     property string internalTestResult: ""
     property string externalTestResult: ""
 
+    onStatusChanged: {
+        if (status === PageStatus.Active && hassClient)
+            hassClient.refreshNext153WebViewAvailable()
+    }
+
     function save() {
         hassClient.saveConnectionSettings(
                     internalField.text,
@@ -227,6 +232,18 @@ Page {
                 checked: hassClient.nativeDashboardEnabled
                 description: "Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards, energy, and the map still open in the web view."
                 onClicked: hassClient.nativeDashboardEnabled = !checked
+            }
+
+            TextSwitch {
+                id: next153WebViewSwitch
+                visible: hassClient.next153WebViewAvailable
+                text: "Use Gecko ESR153 webview"
+                automaticCheck: false
+                checked: hassClient.next153WebViewEnabled
+                description: hassClient.next153WebViewEnabled !== hassClient.next153WebViewActive
+                             ? "Load the Home Assistant web UI with sailfish-browser-next153's Gecko ESR153 engine instead of the Sailfish stock webview. Off by default. Experimental. Restart Helmsman to apply."
+                             : "Load the Home Assistant web UI with sailfish-browser-next153's Gecko ESR153 engine instead of the Sailfish stock webview. Off by default. Experimental. Restart Helmsman after changing this."
+                onClicked: hassClient.next153WebViewEnabled = !checked
             }
 
             SectionHeader { text: "Cover favorites" }
@@ -504,4 +521,6 @@ Page {
             }
         }
     }
+
+    Component.onCompleted: hassClient.refreshNext153WebViewAvailable()
 }

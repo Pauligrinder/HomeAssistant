@@ -2,9 +2,9 @@ TARGET = harbour-helmsman
 
 CONFIG += sailfishapp
 QT += network websockets gui positioning dbus
-PKGCONFIG += qt5embedwidget
+LIBS += -ldl
 
-VERSION = 0.3.0
+VERSION = 0.3.1
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \

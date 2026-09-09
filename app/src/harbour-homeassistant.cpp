@@ -17,6 +17,9 @@ int main(int argc, char *argv[])
     app->setApplicationName(QStringLiteral("harbour-helmsman"));
 
     AppSettings::migrateLegacyFile();
+    // Load one Gecko embedwidget before any QML import. Both engines ship
+    // libxul.so under the same SONAME, so the process can host only one.
+    HassClient::preloadWebViewEmbed();
 
     qmlRegisterType<HassClient>("harbour.helmsman", 1, 0, "HassClient");
     qmlRegisterType<MdiIconRenderer>("harbour.helmsman", 1, 0, "MdiIconRenderer");

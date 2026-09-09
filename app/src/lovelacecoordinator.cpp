@@ -376,6 +376,7 @@ QString LovelaceCoordinator::pendingNavigate() const { return m_pendingNavigate;
 QString LovelaceCoordinator::pendingUrl() const { return m_pendingUrl; }
 QString LovelaceCoordinator::pendingMoreInfo() const { return m_pendingMoreInfo; }
 QString LovelaceCoordinator::pendingWebPath() const { return m_pendingWebPath; }
+QVariantMap LovelaceCoordinator::pendingConfirmation() const { return m_pendingConfirmation; }
 
 void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
 {
@@ -439,6 +440,7 @@ void LovelaceCoordinator::stop()
     m_configLoaded = false;
     m_configFallbackTried = false;
     m_pendingGenerated = false;
+    clearPendingConfirmation();
 }
 
 void LovelaceCoordinator::refresh()
@@ -1291,6 +1293,7 @@ void LovelaceCoordinator::handleCardTap(const QVariantMap &card)
     if (action.isEmpty()) {
         action.insert(QStringLiteral("action"), defaultActionType(entityId, false));
     }
+    attachCardConfirmation(&action, card);
     performAction(action, entityId);
 }
 
@@ -1300,6 +1303,7 @@ void LovelaceCoordinator::handleCardHold(const QVariantMap &card)
     const QString entityId = card.value(QStringLiteral("entity")).toString();
     if (action.isEmpty())
         action.insert(QStringLiteral("action"), QStringLiteral("more-info"));
+    attachCardConfirmation(&action, card);
     performAction(action, entityId);
 }
 
@@ -1309,6 +1313,7 @@ void LovelaceCoordinator::handleCardDoubleTap(const QVariantMap &card)
     const QString entityId = card.value(QStringLiteral("entity")).toString();
     if (action.isEmpty())
         return;
+    attachCardConfirmation(&action, card);
     performAction(action, entityId);
 }
 
@@ -1324,7 +1329,25 @@ void LovelaceCoordinator::performAction(const QVariantMap &action, const QString
     if (entityId.isEmpty())
         entityId = action.value(QStringLiteral("target")).toMap().value(QStringLiteral("entity_id")).toString();
     if (entityId.isEmpty())
+        entityId = action.value(QStringLiteral("service_data")).toMap().value(QStringLiteral("entity_id")).toString();
+    if (entityId.isEmpty())
+        entityId = action.value(QStringLiteral("data")).toMap().value(QStringLiteral("entity_id")).toString();
+    if (entityId.isEmpty())
         entityId = defaultEntityId;
+    if (entityId.isEmpty()) {
+        QString service = action.value(QStringLiteral("service")).toString();
+        if (service.isEmpty())
+            service = action.value(QStringLiteral("perform_action")).toString();
+        if (service.startsWith(QLatin1String("script."))
+                && service != QLatin1String("script.turn_on")
+                && service != QLatin1String("script.turn_off")
+                && service != QLatin1String("script.toggle")) {
+            entityId = service;
+        }
+    }
+
+    if (requestConfirmationIfNeeded(action, entityId))
+        return;
 
     if (type == QLatin1String("toggle")) {
         toggle(entityId);
@@ -1463,6 +1486,127 @@ void LovelaceCoordinator::clearPendingWebPath()
         return;
     m_pendingWebPath.clear();
     emit pendingWebPathChanged();
+}
+
+void LovelaceCoordinator::attachCardConfirmation(QVariantMap *action, const QVariantMap &card) const
+{
+    if (!action || action->contains(QStringLiteral("confirmation")))
+        return;
+    if (!card.contains(QStringLiteral("confirmation")))
+        return;
+    action->insert(QStringLiteral("confirmation"), card.value(QStringLiteral("confirmation")));
+}
+
+bool LovelaceCoordinator::confirmationRequired(const QVariant &confirmation) const
+{
+    if (!confirmation.isValid() || confirmation.isNull())
+        return false;
+    if (confirmation.type() == QVariant::Bool)
+        return confirmation.toBool();
+    if (confirmation.type() == QVariant::String) {
+        const QString text = confirmation.toString().trimmed().toLower();
+        return text != QLatin1String("false") && text != QLatin1String("0")
+                && text != QLatin1String("no");
+    }
+
+    const QVariantMap map = confirmation.toMap();
+    if (map.isEmpty() && confirmation.type() != QVariant::Map)
+        return false;
+
+    const QVariantList exemptions = map.value(QStringLiteral("exemptions")).toList();
+    for (int i = 0; i < exemptions.size(); ++i) {
+        const QString user = exemptions.at(i).toMap().value(QStringLiteral("user")).toString();
+        if (!user.isEmpty() && user == m_userId)
+            return false;
+    }
+    return true;
+}
+
+QVariantMap LovelaceCoordinator::buildConfirmationPrompt(const QVariant &confirmation,
+                                                         const QString &entityId) const
+{
+    QVariantMap map;
+    if (confirmation.type() == QVariant::Map)
+        map = confirmation.toMap();
+
+    QString title = map.value(QStringLiteral("title")).toString().trimmed();
+    QString text = map.value(QStringLiteral("text")).toString().trimmed();
+    if (text.isEmpty() && confirmation.type() == QVariant::String) {
+        const QString raw = confirmation.toString().trimmed();
+        if (raw.compare(QLatin1String("true"), Qt::CaseInsensitive) != 0)
+            text = raw;
+    }
+
+    const QString name = entityId.isEmpty() ? QString() : friendlyName(entityId);
+    if (title.isEmpty()) {
+        if (!name.isEmpty())
+            title = QStringLiteral("Wants to run %1").arg(name);
+        else
+            title = QStringLiteral("Wants to perform this action");
+    }
+
+    QString confirmText = map.value(QStringLiteral("confirm_text")).toString().trimmed();
+    QString dismissText = map.value(QStringLiteral("dismiss_text")).toString().trimmed();
+    if (confirmText.isEmpty())
+        confirmText = QStringLiteral("Allow");
+    if (dismissText.isEmpty())
+        dismissText = QStringLiteral("Deny");
+
+    QVariantMap prompt;
+    prompt.insert(QStringLiteral("active"), true);
+    prompt.insert(QStringLiteral("entityId"), entityId);
+    prompt.insert(QStringLiteral("name"), name);
+    prompt.insert(QStringLiteral("title"), title);
+    prompt.insert(QStringLiteral("text"), text);
+    prompt.insert(QStringLiteral("confirmText"), confirmText);
+    prompt.insert(QStringLiteral("dismissText"), dismissText);
+    return prompt;
+}
+
+bool LovelaceCoordinator::requestConfirmationIfNeeded(const QVariantMap &action,
+                                                      const QString &entityId)
+{
+    if (action.value(QStringLiteral("confirmed")).toBool())
+        return false;
+    const QVariant confirmation = action.value(QStringLiteral("confirmation"));
+    if (!confirmationRequired(confirmation))
+        return false;
+
+    m_pendingConfirmedAction = action;
+    m_pendingConfirmedAction.insert(QStringLiteral("confirmed"), true);
+    m_pendingActionEntityId = entityId;
+    m_pendingConfirmation = buildConfirmationPrompt(confirmation, entityId);
+    emit pendingConfirmationChanged();
+    return true;
+}
+
+void LovelaceCoordinator::clearPendingConfirmation()
+{
+    if (m_pendingConfirmation.isEmpty() && m_pendingConfirmedAction.isEmpty()
+            && m_pendingActionEntityId.isEmpty()) {
+        return;
+    }
+    m_pendingConfirmation.clear();
+    m_pendingConfirmedAction.clear();
+    m_pendingActionEntityId.clear();
+    emit pendingConfirmationChanged();
+}
+
+void LovelaceCoordinator::confirmPendingAction()
+{
+    if (m_pendingConfirmedAction.isEmpty()) {
+        clearPendingConfirmation();
+        return;
+    }
+    const QVariantMap action = m_pendingConfirmedAction;
+    const QString entityId = m_pendingActionEntityId;
+    clearPendingConfirmation();
+    performAction(action, entityId);
+}
+
+void LovelaceCoordinator::cancelPendingAction()
+{
+    clearPendingConfirmation();
 }
 
 void LovelaceCoordinator::fetchHistory(const QStringList &entityIds, int hours)
