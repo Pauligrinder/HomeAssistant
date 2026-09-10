@@ -15,6 +15,8 @@
 #include <QList>
 #include <QUrl>
 
+#include "hasscamerastream.h"
+
 class HassWebsocket;
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -43,6 +45,7 @@ class LovelaceCoordinator : public QObject
     Q_PROPERTY(QString pendingMoreInfo READ pendingMoreInfo NOTIFY pendingMoreInfoChanged)
     Q_PROPERTY(QString pendingWebPath READ pendingWebPath NOTIFY pendingWebPathChanged)
     Q_PROPERTY(QVariantMap pendingConfirmation READ pendingConfirmation NOTIFY pendingConfirmationChanged)
+    Q_PROPERTY(HassCameraStream *cameraStream READ cameraStream CONSTANT)
 
 public:
     explicit LovelaceCoordinator(QObject *parent = nullptr);
@@ -74,6 +77,7 @@ public:
     QString pendingMoreInfo() const;
     QString pendingWebPath() const;
     QVariantMap pendingConfirmation() const;
+    HassCameraStream *cameraStream() const;
 
 public slots:
     // Property setters live here so QML can call them directly, not only
@@ -98,6 +102,7 @@ public slots:
     QString formatState(const QString &entityId) const;
     QString areaName(const QString &areaId) const;
     QVariantList areaEntities(const QString &areaId) const;
+    QVariantList zones() const;
 
     bool isVisible(const QVariant &visibility) const;
     bool cardVisible(const QVariantMap &card) const;
@@ -220,6 +225,7 @@ private:
 
     HassWebsocket *m_socket;
     QNetworkAccessManager *m_nam;
+    HassCameraStream *m_cameraStream;
     QString m_baseUrl;
     QString m_accessToken;
     bool m_ignoreSslErrors;

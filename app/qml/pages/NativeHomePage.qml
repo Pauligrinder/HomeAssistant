@@ -10,7 +10,34 @@ Page {
     property var mdiIcons
     property var dashboard: hassClient ? hassClient.lovelace : null
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property bool panelMapView: {
+        if (!dashboard || !dashboard.currentView)
+            return false
+        if (String(dashboard.currentView.type || "") !== "panel")
+            return false
+        var cards = dashboard.currentView.cards
+        if (!cards || cards.length < 1)
+            return false
+        return String(cards[0].type || "") === "map"
+    }
+    readonly property int viewFillHeight: {
+        if (!page.panelMapView)
+            return 0
+        var h = flick.height - column.y
+        var n = 1
+        if (tabFlick.visible) {
+            h -= tabFlick.height
+            n++
+        }
+        if (badges.visible) {
+            h -= badges.height
+            n++
+        }
+        h -= (n - 1) * column.spacing
+        return Math.max(Theme.itemSizeHuge, Math.floor(h))
+    }
     property bool notifiedReady: false
+    property var confirmDialogPage: null
     backNavigation: false
 
     function openSettings() {
@@ -39,6 +66,24 @@ Page {
                            mdiIcons: page.mdiIcons,
                            entityId: entityId
                        })
+    }
+
+    function openActionConfirm(prompt, onOk, onCancel) {
+        if (page.confirmDialogPage)
+            return
+        var dlg = pageStack.push(Qt.resolvedUrl("../components/ActionConfirmDialog.qml"),
+                                 { prompt: prompt })
+        page.confirmDialogPage = dlg
+        dlg.accepted.connect(function() {
+            page.confirmDialogPage = null
+            if (onOk)
+                onOk()
+        })
+        dlg.rejected.connect(function() {
+            page.confirmDialogPage = null
+            if (onCancel)
+                onCancel()
+        })
     }
 
     function handleNavigate(path) {
@@ -127,12 +172,24 @@ Page {
             dashboard.clearPendingWebPath()
             page.openWeb(path)
         }
+        onPendingConfirmationChanged: {
+            var prompt = dashboard ? dashboard.pendingConfirmation : null
+            if (!(prompt && prompt.active))
+                return
+            page.openActionConfirm(prompt, function() {
+                if (dashboard)
+                    dashboard.confirmPendingAction()
+            }, function() {
+                if (dashboard)
+                    dashboard.cancelPendingAction()
+            })
+        }
     }
 
     SilicaFlickable {
         id: flick
         anchors.fill: parent
-        contentHeight: column.y + column.height + Theme.paddingLarge
+        contentHeight: page.panelMapView ? height : (column.y + column.height + Theme.paddingLarge)
         clip: true
 
         PullDownMenu {
@@ -215,18 +272,11 @@ Page {
                             && dashboard.currentView.badges.length)
                 Repeater {
                     model: dashboard && dashboard.currentView ? dashboard.currentView.badges : []
-                    Label {
-                        property string entityId: typeof modelData === "string"
-                                                  ? modelData
-                                                  : (modelData.entity ? String(modelData.entity) : "")
-                        text: (dashboard && entityId.length && page.rev >= 0)
-                              ? dashboard.formatState(entityId) : ""
-                        font.pixelSize: Theme.fontSizeExtraSmall
-                        color: Theme.secondaryHighlightColor
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: page.openMoreInfo(entityId)
-                        }
+                    BadgeChip {
+                        dashboard: page.dashboard
+                        mdiIcons: page.mdiIcons
+                        badge: modelData
+                        onClicked: page.openMoreInfo(entityId)
                     }
                 }
             }
@@ -255,7 +305,7 @@ Page {
 
             Loader {
                 id: viewLoader
-                width: parent.width - 2 * Theme.horizontalPageMargin
+                width: page.panelMapView ? parent.width : parent.width - 2 * Theme.horizontalPageMargin
                 anchors.horizontalCenter: parent.horizontalCenter
                 sourceComponent: {
                     if (!dashboard || !dashboard.currentView)
@@ -312,6 +362,7 @@ Page {
         id: panelComp
         PanelLayout {
             width: viewLoader.width
+            fillHeight: page.viewFillHeight
             view: dashboard ? dashboard.currentView : ({})
             dashboard: page.dashboard
             hassClient: page.hassClient
@@ -327,19 +378,6 @@ Page {
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
-        }
-    }
-
-    ActionConfirmDialog {
-        anchors.fill: parent
-        prompt: dashboard ? dashboard.pendingConfirmation : ({})
-        onAccepted: {
-            if (dashboard)
-                dashboard.confirmPendingAction()
-        }
-        onRejected: {
-            if (dashboard)
-                dashboard.cancelPendingAction()
         }
     }
 

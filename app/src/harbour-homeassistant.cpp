@@ -4,6 +4,7 @@
 #include <QtQml>
 
 #include "appsettings.h"
+#include "hasscamerastream.h"
 #include "hassclient.h"
 #include "lovelacecoordinator.h"
 #include "mdiiconrenderer.h"
@@ -17,8 +18,8 @@ int main(int argc, char *argv[])
     app->setApplicationName(QStringLiteral("harbour-helmsman"));
 
     AppSettings::migrateLegacyFile();
-    // Load one Gecko embedwidget before any QML import. Both engines ship
-    // libxul.so under the same SONAME, so the process can host only one.
+    // Prepare exactly one web engine before any QML import. Gecko stacks
+    // share libxul.so; Atlantic is WPE WebKit. Mixing them in-process crashes.
     HassClient::preloadWebViewEmbed();
 
     qmlRegisterType<HassClient>("harbour.helmsman", 1, 0, "HassClient");
@@ -32,6 +33,9 @@ int main(int argc, char *argv[])
     qmlRegisterUncreatableType<LovelaceCoordinator>(
                 "harbour.helmsman", 1, 0, "LovelaceCoordinator",
                 QStringLiteral("Use HassClient.lovelace"));
+    qmlRegisterUncreatableType<HassCameraStream>(
+                "harbour.helmsman", 1, 0, "HassCameraStream",
+                QStringLiteral("Use HassClient.lovelace.cameraStream"));
 
     QQuickView *view = SailfishApp::createView();
     view->setSource(SailfishApp::pathTo(QStringLiteral("qml/harbour-homeassistant.qml")));

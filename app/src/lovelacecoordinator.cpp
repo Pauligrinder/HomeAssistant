@@ -1,4 +1,5 @@
 #include "lovelacecoordinator.h"
+#include "hasscamerastream.h"
 #include "hasswebsocket.h"
 
 #include <QNetworkAccessManager>
@@ -296,6 +297,7 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     : QObject(parent)
     , m_socket(0)
     , m_nam(new QNetworkAccessManager(this))
+    , m_cameraStream(new HassCameraStream(this))
     , m_ignoreSslErrors(false)
     , m_wantRunning(false)
     , m_ready(false)
@@ -349,6 +351,8 @@ void LovelaceCoordinator::configure(const QString &baseUrl,
     m_baseUrl = baseUrl;
     m_accessToken = accessToken;
     m_ignoreSslErrors = ignoreSslErrors;
+    if (m_cameraStream)
+        m_cameraStream->configure(baseUrl, accessToken, ignoreSslErrors);
 }
 
 bool LovelaceCoordinator::ready() const { return m_ready; }
@@ -377,6 +381,7 @@ QString LovelaceCoordinator::pendingUrl() const { return m_pendingUrl; }
 QString LovelaceCoordinator::pendingMoreInfo() const { return m_pendingMoreInfo; }
 QString LovelaceCoordinator::pendingWebPath() const { return m_pendingWebPath; }
 QVariantMap LovelaceCoordinator::pendingConfirmation() const { return m_pendingConfirmation; }
+HassCameraStream *LovelaceCoordinator::cameraStream() const { return m_cameraStream; }
 
 void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
 {
@@ -435,6 +440,8 @@ void LovelaceCoordinator::stop()
     // to be forgotten or their pictures would never be requested again.
     m_mediaSourceById.clear();
     m_mediaPending.clear();
+    if (m_cameraStream)
+        m_cameraStream->stop();
     setReady(false);
     m_statesLoaded = false;
     m_configLoaded = false;
@@ -1131,6 +1138,17 @@ QVariantList LovelaceCoordinator::areaEntities(const QString &areaId) const
         const QVariantMap attrs = it.value().value(QStringLiteral("attributes")).toMap();
         if (attrs.value(QStringLiteral("area_id")).toString() == areaId)
             out.append(it.key());
+    }
+    return out;
+}
+
+QVariantList LovelaceCoordinator::zones() const
+{
+    QVariantList out;
+    QHash<QString, QVariantMap>::const_iterator it = m_entities.constBegin();
+    for (; it != m_entities.constEnd(); ++it) {
+        if (it.key().startsWith(QLatin1String("zone.")))
+            out.append(it.value());
     }
     return out;
 }
@@ -1843,7 +1861,13 @@ void LovelaceCoordinator::getMedia(const QUrl &url, const QString &tag, int redi
 
     QNetworkRequest request(url);
     request.setRawHeader("Accept", "image/*,*/*;q=0.8");
-    request.setRawHeader("User-Agent", kClientName);
+    // OSM's tile CDN rejects generic or empty User-Agents with HTTP 403.
+    if (url.host().contains(QLatin1String("openstreetmap"))) {
+        request.setRawHeader("User-Agent",
+                             "Helmsman/" APP_VERSION " (Sailfish OS Home Assistant client)");
+    } else {
+        request.setRawHeader("User-Agent", kClientName);
+    }
 
     const QUrl homeAssistantUrl(m_baseUrl);
     const bool sameOrigin = url.scheme().compare(homeAssistantUrl.scheme(), Qt::CaseInsensitive) == 0

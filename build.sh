@@ -2,6 +2,7 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+rm -f "$ROOT/app/RPMS"/*.rpm
 CONTAINER="${CONTAINER:-helmsman-build}"
 TARGET="${TARGET:-SailfishOS-5.2.0.15-aarch64}"
 STATE_FILE="$ROOT/.build-release"

@@ -8,6 +8,7 @@ Item {
     property var dashboard
     property var hassClient
     property var mdiIcons
+    property int fillHeight: 0
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     width: parent ? parent.width : Screen.width
     implicitHeight: visible ? loader.height : 0

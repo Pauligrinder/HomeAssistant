@@ -16,6 +16,15 @@
 class QNetworkAccessManager;
 class QNetworkReply;
 
+struct HassZoneFence {
+    QString entityId;
+    QString locationName;
+    double latitude;
+    double longitude;
+    double radius;
+    bool passive;
+};
+
 // Registers and updates mobile_app sensors over the HA webhook, matching
 // Android companion unique_ids. Home Assistant enable/disable is the source
 // of truth (get_config + is_disabled on updates).
@@ -50,7 +59,10 @@ public:
                    const QString &cloudhookUrl,
                    const QString &remoteUiUrl,
                    const QString &baseUrl,
+                   const QString &accessToken,
                    bool ignoreSslErrors);
+    void setHomeCoordinates(double latitude, double longitude, double radiusMeters);
+    void replaceZones(const QVariantList &states);
     void start();
     void stop();
 
@@ -95,7 +107,8 @@ private:
         WebhookGetConfig,
         WebhookRegisterSensor,
         WebhookUpdateSensors,
-        WebhookUpdateLocation
+        WebhookUpdateLocation,
+        WebhookGetZones
     };
 
     struct SensorDef {
@@ -132,6 +145,11 @@ private:
     void updateLocationReporting();
     void updateHomeHeartbeat();
     void postLocationUpdate(bool force);
+    void fetchZones();
+    void handleZones(const QByteArray &data);
+    void applyZoneList(const QList<HassZoneFence> &zones);
+    void persistZones() const;
+    void loadPersistedZones();
     void ensureOsVersionSensor();
     void setSensorState(const QString &id, const QVariant &state,
                         const QString &icon, const QVariantMap &attrs = QVariantMap());
@@ -167,6 +185,7 @@ private:
     QString m_cloudhookUrl;
     QString m_remoteUiUrl;
     QString m_baseUrl;
+    QString m_accessToken;
     bool m_ignoreSslErrors;
     bool m_active;
     bool m_locationEnabled;
@@ -189,10 +208,16 @@ private:
     bool m_haveBattery;
     bool m_haveWifi;
     bool m_haveLocation;
+    bool m_haveHomeCoordinates;
+    bool m_zonesFetchPending;
     QDateTime m_lastLocationSent;
     double m_lastLat;
     double m_lastLon;
     double m_lastAccuracy;
+    double m_homeLat;
+    double m_homeLon;
+    double m_homeRadius;
+    QList<HassZoneFence> m_zones;
 };
 
 #endif

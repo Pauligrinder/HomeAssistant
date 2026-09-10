@@ -24,6 +24,9 @@
 #include <QHostInfo>
 #include <QTimer>
 #include <QLibraryInfo>
+#include <QCoreApplication>
+#include <QProcess>
+#include <QVariantList>
 
 #include <dlfcn.h>
 
@@ -54,9 +57,125 @@ const int kWidgetStartFallbackMs = 16000;
 const char *kStockEmbedWidget = "libqt5embedwidget.so.1";
 const char *kNext153EmbedWidget = "libqt5embedwidget-next153.so.1";
 
-// Which Gecko embed this process actually loaded. Both engines export
-// libxul.so; swapping them after the first mapping is in place crashes.
-bool g_next153WebViewActive = false;
+// Engine this process actually prepared. Gecko stacks share libxul.so;
+// Atlantic is WPE WebKit. Never swap after the first mapping is in place.
+QString g_webViewEngineActive = QStringLiteral("stock");
+
+bool qmlModuleExists(const QString &relativeQmldir)
+{
+    const QString primary = QLibraryInfo::location(QLibraryInfo::Qml2ImportsPath)
+            + QLatin1Char('/') + relativeQmldir;
+    if (QFile::exists(primary))
+        return true;
+    const QStringList fallbacks = QStringList()
+            << (QStringLiteral("/usr/lib64/qt5/qml/") + relativeQmldir)
+            << (QStringLiteral("/usr/lib/qt5/qml/") + relativeQmldir);
+    for (int i = 0; i < fallbacks.size(); ++i) {
+        if (fallbacks.at(i) != primary && QFile::exists(fallbacks.at(i)))
+            return true;
+    }
+    return false;
+}
+
+QVariantMap engineEntry(const QString &id, const QString &name)
+{
+    QVariantMap map;
+    map.insert(QStringLiteral("id"), id);
+    map.insert(QStringLiteral("name"), name);
+    return map;
+}
+
+QVariantList buildAvailableWebViewEngines()
+{
+    QVariantList list;
+    list << engineEntry(QStringLiteral("stock"), QStringLiteral("Stock (Gecko)"));
+    if (qmlModuleExists(QStringLiteral("SailfishNext153/WebView/qmldir")))
+        list << engineEntry(QStringLiteral("next153"), QStringLiteral("ESR153 (Gecko)"));
+    if (qmlModuleExists(QStringLiteral("org/wpewebkit/qtwpe/qmldir")))
+        list << engineEntry(QStringLiteral("atlantic"), QStringLiteral("Atlantic (WebKit)"));
+    return list;
+}
+
+QString sanitizeWebViewEngine(const QString &engine)
+{
+    const QVariantList available = buildAvailableWebViewEngines();
+    for (int i = 0; i < available.size(); ++i) {
+        if (available.at(i).toMap().value(QStringLiteral("id")).toString() == engine)
+            return engine;
+    }
+    return QStringLiteral("stock");
+}
+
+QString preferredWebViewEngine(QSettings *ui)
+{
+    QString engine = ui->value(QStringLiteral("webViewEngine")).toString().trimmed();
+    if (engine.isEmpty() && ui->value(QStringLiteral("next153WebViewEnabled")).toBool())
+        engine = QStringLiteral("next153");
+    if (engine.isEmpty())
+        engine = QStringLiteral("stock");
+    return sanitizeWebViewEngine(engine);
+}
+
+void applyAtlanticRuntimeEnv()
+{
+    // Atlantic's WPE stack blanks on hybris if bubblewrap sandbox stays on.
+    qputenv("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1");
+
+    QByteArray compat("/usr/lib64/wpe-compat");
+    if (!QDir(QString::fromUtf8(compat)).exists()
+            && QDir(QStringLiteral("/usr/lib/wpe-compat")).exists()) {
+        compat = "/usr/lib/wpe-compat";
+    }
+
+    QByteArray libPath = compat + QByteArray(":/usr/lib64:/usr/lib:/opt/wpe-sfos/lib");
+    const QByteArray currentLib = qgetenv("LD_LIBRARY_PATH");
+    if (!currentLib.isEmpty() && !currentLib.contains(compat))
+        libPath += ':' + currentLib;
+    qputenv("LD_LIBRARY_PATH", libPath);
+
+    QByteArray preload;
+    const char *shims[] = {
+        "libsigill_skip.so",
+        "libegl-stubs.so",
+        "libsyncskip.so"
+    };
+    for (int i = 0; i < 3; ++i) {
+        const QString path = QString::fromUtf8(compat) + QLatin1Char('/')
+                + QLatin1String(shims[i]);
+        if (!QFile::exists(path))
+            continue;
+        if (!preload.isEmpty())
+            preload += ':';
+        preload += QFile::encodeName(path);
+    }
+    if (!preload.isEmpty()) {
+        const QByteArray currentPre = qgetenv("LD_PRELOAD");
+        if (!currentPre.isEmpty())
+            preload += ':' + currentPre;
+        qputenv("LD_PRELOAD", preload);
+    }
+
+    // ld.so snapshots LD_LIBRARY_PATH at exec. dlopen the compat SONAMEs
+    // by absolute path so libqtwpe.so can resolve them in this process.
+    const char *needed[] = {
+        "libjpeg.so.8",
+        "libharfbuzz-icu.so.0",
+        "libavif.so.16",
+        "libenchant-2.so.2",
+        "libgbm.so.1"
+    };
+    for (int i = 0; i < 5; ++i) {
+        const QString path = QString::fromUtf8(compat) + QLatin1Char('/')
+                + QLatin1String(needed[i]);
+        if (!QFile::exists(path))
+            continue;
+        if (!dlopen(QFile::encodeName(path).constData(), RTLD_NOW | RTLD_GLOBAL))
+            qWarning() << "Helmsman: Atlantic compat dlopen failed for"
+                       << path << dlerror();
+        else
+            qWarning() << "Helmsman: Atlantic preloaded" << path;
+    }
+}
 
 QString canonicalClientId(const QString &baseUrl)
 {
@@ -222,9 +341,8 @@ HassClient::HassClient(QObject *parent)
     , m_pendingPushAfterRefresh(false)
     , m_coverNotificationsEnabled(true)
     , m_nativeDashboardEnabled(false)
-    , m_next153WebViewAvailable(false)
-    , m_next153WebViewEnabled(false)
-    , m_next153WebViewActive(g_next153WebViewActive)
+    , m_webViewEngine(QStringLiteral("stock"))
+    , m_webViewEngineActive(g_webViewEngineActive)
     , m_networkState(NetworkUnknown)
     , m_pendingNetworkState(NetworkUnknown)
     , m_pushAuthRetries(0)
@@ -280,6 +398,11 @@ HassClient::HassClient(QObject *parent)
     connect(this, SIGNAL(accessExpiresAtChanged()), this, SLOT(configureRealtime()));
     connect(this, SIGNAL(baseUrlChanged()), this, SLOT(configureRealtime()));
     connect(this, SIGNAL(ignoreSslErrorsChanged()), this, SLOT(configureRealtime()));
+    connect(this, SIGNAL(accessTokenChanged()), this, SLOT(configureSensors()));
+    connect(m_lovelace, SIGNAL(entityChanged(QString)),
+            this, SLOT(onLovelaceEntityChanged(QString)));
+    connect(m_lovelace, SIGNAL(readyChanged()),
+            this, SLOT(syncZonesFromLovelace()));
 
     m_authClientId = QString();
     loadSession();
@@ -289,9 +412,8 @@ HassClient::HassClient(QObject *parent)
         m_coverNotificationsEnabled = ui.value(QStringLiteral("coverNotificationsEnabled")).toBool();
     if (ui.contains(QStringLiteral("nativeDashboardEnabled")))
         m_nativeDashboardEnabled = ui.value(QStringLiteral("nativeDashboardEnabled")).toBool();
-    if (ui.contains(QStringLiteral("next153WebViewEnabled")))
-        m_next153WebViewEnabled = ui.value(QStringLiteral("next153WebViewEnabled")).toBool();
-    m_next153WebViewAvailable = next153ModuleInstalled();
+    m_webViewEngine = preferredWebViewEngine(&ui);
+    m_availableWebViewEngines = buildAvailableWebViewEngines();
 }
 
 HassClient::~HassClient()
@@ -338,49 +460,45 @@ WidgetCoordinator *HassClient::widget() const { return m_widget; }
 LovelaceCoordinator *HassClient::lovelace() const { return m_lovelace; }
 bool HassClient::coverNotificationsEnabled() const { return m_coverNotificationsEnabled; }
 bool HassClient::nativeDashboardEnabled() const { return m_nativeDashboardEnabled; }
-bool HassClient::next153WebViewAvailable() const { return m_next153WebViewAvailable; }
-bool HassClient::next153WebViewEnabled() const { return m_next153WebViewEnabled; }
-bool HassClient::next153WebViewActive() const { return m_next153WebViewActive; }
+QString HassClient::webViewEngine() const { return m_webViewEngine; }
+QString HassClient::webViewEngineActive() const { return m_webViewEngineActive; }
+QVariantList HassClient::availableWebViewEngines() const { return m_availableWebViewEngines; }
 
 bool HassClient::next153ModuleInstalled()
 {
-    // sailfish-browser-next153 pulls in sailfish-components-webview-qt5-next153,
-    // which installs a parallel QML module rather than replacing the stock one.
-    const QString qmldir = QLibraryInfo::location(QLibraryInfo::Qml2ImportsPath)
-            + QStringLiteral("/SailfishNext153/WebView/qmldir");
-    if (QFile::exists(qmldir))
-        return true;
-    // Qml2ImportsPath is lib64 on aarch64 and lib on armv7hl; keep the other
-    // root in case a device reports the path differently under Sailjail.
-    const QStringList fallbacks = QStringList()
-            << QStringLiteral("/usr/lib64/qt5/qml/SailfishNext153/WebView/qmldir")
-            << QStringLiteral("/usr/lib/qt5/qml/SailfishNext153/WebView/qmldir");
-    for (int i = 0; i < fallbacks.size(); ++i) {
-        if (fallbacks.at(i) != qmldir && QFile::exists(fallbacks.at(i)))
-            return true;
-    }
-    return false;
+    return qmlModuleExists(QStringLiteral("SailfishNext153/WebView/qmldir"));
+}
+
+bool HassClient::atlanticModuleInstalled()
+{
+    return qmlModuleExists(QStringLiteral("org/wpewebkit/qtwpe/qmldir"));
 }
 
 bool HassClient::preloadWebViewEmbed()
 {
     QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
-    const bool preferNext153 = ui.value(QStringLiteral("next153WebViewEnabled")).toBool()
-            && next153ModuleInstalled();
+    const QString preferred = preferredWebViewEngine(&ui);
+    if (preferred == QLatin1String("atlantic")) {
+        applyAtlanticRuntimeEnv();
+        g_webViewEngineActive = QStringLiteral("atlantic");
+        qWarning() << "Helmsman: using Atlantic WPE webview";
+        return true;
+    }
+
+    const bool preferNext153 = preferred == QLatin1String("next153");
     const char *lib = preferNext153 ? kNext153EmbedWidget : kStockEmbedWidget;
     void *handle = dlopen(lib, RTLD_NOW | RTLD_GLOBAL);
     if (!handle && preferNext153) {
         qWarning() << "Helmsman: failed to load ESR153 embedwidget:" << dlerror();
         handle = dlopen(kStockEmbedWidget, RTLD_NOW | RTLD_GLOBAL);
-        g_next153WebViewActive = false;
+        g_webViewEngineActive = QStringLiteral("stock");
     } else {
-        g_next153WebViewActive = preferNext153 && handle;
+        g_webViewEngineActive = (preferNext153 && handle)
+                ? QStringLiteral("next153") : QStringLiteral("stock");
         if (!handle)
             qWarning() << "Helmsman: failed to load stock embedwidget:" << dlerror();
     }
-    qWarning() << "Helmsman: using"
-               << (g_next153WebViewActive ? "ESR153" : "stock")
-               << "webview embed";
+    qWarning() << "Helmsman: using" << g_webViewEngineActive << "webview embed";
     return handle != nullptr;
 }
 
@@ -495,23 +613,39 @@ void HassClient::setNativeDashboardEnabled(bool enabled)
     syncLovelaceRunning();
 }
 
-void HassClient::setNext153WebViewEnabled(bool enabled)
+void HassClient::setWebViewEngine(const QString &engine)
 {
-    if (m_next153WebViewEnabled == enabled)
+    const QString sanitized = sanitizeWebViewEngine(engine);
+    if (m_webViewEngine == sanitized)
         return;
-    m_next153WebViewEnabled = enabled;
+    m_webViewEngine = sanitized;
     QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
-    ui.setValue(QStringLiteral("next153WebViewEnabled"), enabled);
-    emit next153WebViewEnabledChanged();
+    ui.setValue(QStringLiteral("webViewEngine"), sanitized);
+    ui.remove(QStringLiteral("next153WebViewEnabled"));
+    emit webViewEngineChanged();
 }
 
-void HassClient::refreshNext153WebViewAvailable()
+void HassClient::refreshWebViewEngines()
 {
-    const bool available = next153ModuleInstalled();
-    if (m_next153WebViewAvailable == available)
+    const QVariantList available = buildAvailableWebViewEngines();
+    if (m_availableWebViewEngines == available)
         return;
-    m_next153WebViewAvailable = available;
-    emit next153WebViewAvailableChanged();
+    m_availableWebViewEngines = available;
+    emit availableWebViewEnginesChanged();
+    const QString sanitized = sanitizeWebViewEngine(m_webViewEngine);
+    if (sanitized != m_webViewEngine)
+        setWebViewEngine(sanitized);
+}
+
+void HassClient::restartApp()
+{
+    const QString bin = QCoreApplication::applicationFilePath();
+    QStringList args = QCoreApplication::arguments();
+    if (!args.isEmpty())
+        args.removeFirst();
+    if (!QProcess::startDetached(bin, args))
+        qWarning() << "Helmsman: could not restart" << bin;
+    QCoreApplication::quit();
 }
 
 void HassClient::setUsingInternalUrl(bool usingInternal)
@@ -1999,7 +2133,7 @@ void HassClient::configureSensors()
     if (!m_sensors)
         return;
     m_sensors->configure(m_webhookId, m_cloudhookUrl, m_remoteUiUrl,
-                         m_baseUrl, m_ignoreSslErrors);
+                         m_baseUrl, m_accessToken, m_ignoreSslErrors);
 }
 
 void HassClient::scheduleSensorStart(int delayMs)
@@ -2069,6 +2203,19 @@ void HassClient::syncLovelaceRunning()
     } else {
         m_lovelace->stop();
     }
+}
+
+void HassClient::onLovelaceEntityChanged(const QString &entityId)
+{
+    if (entityId.startsWith(QLatin1String("zone.")))
+        syncZonesFromLovelace();
+}
+
+void HassClient::syncZonesFromLovelace()
+{
+    if (!m_lovelace || !m_sensors || !m_lovelace->ready())
+        return;
+    m_sensors->replaceZones(m_lovelace->zones());
 }
 
 void HassClient::startWidget()

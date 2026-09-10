@@ -4,12 +4,13 @@ CONFIG += sailfishapp
 QT += network websockets gui positioning dbus
 LIBS += -ldl
 
-VERSION = 0.3.1
+VERSION = 0.3.2
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
     src/appsettings.cpp \
     src/harbour-homeassistant.cpp \
+    src/hasscamerastream.cpp \
     src/hassclient.cpp \
     src/hasspushchannel.cpp \
     src/hasswebsocket.cpp \
@@ -20,6 +21,7 @@ SOURCES += \
 
 HEADERS += \
     src/appsettings.h \
+    src/hasscamerastream.h \
     src/hassclient.h \
     src/hasspushchannel.h \
     src/hasswebsocket.h \
@@ -43,7 +45,8 @@ DISTFILES += \
     qml/eventsview/*.qml \
     eventsview/*.qml \
     eventsview/*.json \
-    data/mdi/LICENSE.txt
+    data/mdi/LICENSE.txt \
+    sailjail/harbour-helmsman.profile
 
 icon86.files = icons/86x86/harbour-helmsman.png
 icon86.path = /usr/share/icons/hicolor/86x86/apps
@@ -60,4 +63,7 @@ eventsWidgetQml.path = /usr/share/harbour-helmsman/eventsview
 eventsWidgetJson.files = eventsview/harbour-helmsman.json
 eventsWidgetJson.path = /usr/share/lipstick/eventswidgets
 
-INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson
+sailjailProfile.files = sailjail/harbour-helmsman.profile
+sailjailProfile.path = /etc/sailjail/permissions
+
+INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson sailjailProfile

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.1
+Version:    0.3.2
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -60,8 +60,20 @@ desktop-file-install --delete-original \
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 %{_datadir}/lipstick/eventswidgets/%{name}.json
+%config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Thu Sep 10 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.2-1
+- Play live camera streams on the native details page from Home Assistant
+  MJPEG, instead of a still snapshot.
+- Draw Lovelace map cards and entity locations with OpenStreetMap tiles.
+  A panel map fills the view, fits every listed person, and uses their
+  pictures as markers.
+- On the internal URL, home reports include the Home zone coordinates so
+  the device is placed on the map without turning GPS on.
+- Choose the Home Assistant web UI engine (stock Gecko, ESR153, or Atlantic
+  WPE) from settings. A Sailjail profile lets Atlantic's WebKit load.
+
 * Wed Sep 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.1-1
 - Honour Lovelace confirmation on the native dashboard with an Allow/Deny
   prompt for scripts and taps that define it.

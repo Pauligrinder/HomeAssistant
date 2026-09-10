@@ -8,6 +8,7 @@ Column {
     property var dashboard
     property var hassClient
     property var mdiIcons
+    property int fillHeight: 0
     width: parent ? parent.width : Screen.width
     spacing: Theme.paddingSmall
 

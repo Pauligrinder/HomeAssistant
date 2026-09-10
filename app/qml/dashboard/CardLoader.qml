@@ -7,6 +7,7 @@ Loader {
     property var dashboard
     property var hassClient
     property var mdiIcons
+    property int fillHeight: 0
     property int columns: 12
     property int unitWidth: parent ? parent.width : width
     readonly property int statesRevision: dashboard ? dashboard.statesRevision : 0
@@ -36,7 +37,8 @@ Loader {
                              "card": loader.card,
                              "dashboard": loader.dashboard,
                              "hassClient": loader.hassClient,
-                             "mdiIcons": loader.mdiIcons
+                             "mdiIcons": loader.mdiIcons,
+                             "fillHeight": loader.fillHeight
                          })
     }
 
@@ -55,6 +57,7 @@ Loader {
         item.hassClient = Qt.binding(function() { return loader.hassClient })
         item.mdiIcons = Qt.binding(function() { return loader.mdiIcons })
         item.width = Qt.binding(function() { return loader.width })
+        item.fillHeight = Qt.binding(function() { return loader.fillHeight })
     }
 
     function sourceForType(type) {
