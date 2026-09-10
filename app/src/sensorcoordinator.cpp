@@ -4,6 +4,7 @@
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonArray>
 #include <QJsonValue>
 #include <QSettings>
@@ -11,6 +12,7 @@
 #include <QDebug>
 #include <QSysInfo>
 #include <QtMath>
+#include <algorithm>
 
 #include "appsettings.h"
 
@@ -23,6 +25,7 @@ const int kUpdateDebounceMs = 750;
 // HA device_tracker consider_home defaults to 180s. Keep the internal-home
 // webhook fresher than that so overnight Wi‑Fi stays "home".
 const int kHomeHeartbeatMs = 60 * 1000;
+const double kHomeAccuracyFallbackMeters = 100.0;
 // Gap between the first webhook calls after start. Issuing config, sensor
 // registration, and the first state update together stalled the UI thread on
 // slow external endpoints.
@@ -71,6 +74,73 @@ double haversineMeters(double lat1, double lon1, double lat2, double lon2)
     return 2 * r * qAtan2(qSqrt(a), qSqrt(1 - a));
 }
 
+QString locationNameForZone(const QString &entityId, const QString &friendlyName)
+{
+    if (entityId == QLatin1String("zone.home"))
+        return QStringLiteral("home");
+    if (!friendlyName.isEmpty())
+        return friendlyName;
+    const int dot = entityId.indexOf(QLatin1Char('.'));
+    return dot >= 0 ? entityId.mid(dot + 1) : entityId;
+}
+
+bool zoneFenceFromState(const QVariantMap &state, HassZoneFence *out)
+{
+    const QString entityId = state.value(QStringLiteral("entity_id")).toString();
+    if (!entityId.startsWith(QLatin1String("zone.")))
+        return false;
+    const QVariantMap attrs = state.value(QStringLiteral("attributes")).toMap();
+    const QVariant latValue = attrs.contains(QStringLiteral("latitude"))
+            ? attrs.value(QStringLiteral("latitude"))
+            : state.value(QStringLiteral("latitude"));
+    const QVariant lonValue = attrs.contains(QStringLiteral("longitude"))
+            ? attrs.value(QStringLiteral("longitude"))
+            : state.value(QStringLiteral("longitude"));
+    if (!latValue.isValid() || !lonValue.isValid())
+        return false;
+    const double lat = latValue.toDouble();
+    const double lon = lonValue.toDouble();
+    if (!qIsFinite(lat) || !qIsFinite(lon)
+            || (qFuzzyIsNull(lat) && qFuzzyIsNull(lon)))
+        return false;
+    const QVariant radiusValue = attrs.contains(QStringLiteral("radius"))
+            ? attrs.value(QStringLiteral("radius"))
+            : state.value(QStringLiteral("radius"));
+    const QString friendly = attrs.value(QStringLiteral("friendly_name")).toString();
+    const QString name = state.value(QStringLiteral("name")).toString();
+    out->entityId = entityId;
+    out->locationName = locationNameForZone(entityId,
+                                            !friendly.isEmpty() ? friendly : name);
+    out->latitude = lat;
+    out->longitude = lon;
+    out->radius = radiusValue.isValid() ? radiusValue.toDouble() : -1;
+    out->passive = attrs.value(QStringLiteral("passive")).toBool()
+            || state.value(QStringLiteral("passive")).toBool();
+    return true;
+}
+
+bool zoneIdLess(const HassZoneFence &a, const HassZoneFence &b)
+{
+    return a.entityId < b.entityId;
+}
+
+bool zoneListsEqual(const QList<HassZoneFence> &a,
+                    const QList<HassZoneFence> &b)
+{
+    if (a.size() != b.size())
+        return false;
+    for (int i = 0; i < a.size(); ++i) {
+        if (a.at(i).entityId != b.at(i).entityId
+                || a.at(i).locationName != b.at(i).locationName
+                || a.at(i).passive != b.at(i).passive
+                || !qFuzzyCompare(a.at(i).latitude + 1.0, b.at(i).latitude + 1.0)
+                || !qFuzzyCompare(a.at(i).longitude + 1.0, b.at(i).longitude + 1.0)
+                || !qFuzzyCompare(a.at(i).radius + 1.0, b.at(i).radius + 1.0))
+            return false;
+    }
+    return true;
+}
+
 void insertSensorState(QJsonObject &obj, const QVariant &state)
 {
     if (!state.isValid() || state.isNull())
@@ -105,9 +175,14 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_haveBattery(false)
     , m_haveWifi(false)
     , m_haveLocation(false)
+    , m_haveHomeCoordinates(false)
+    , m_zonesFetchPending(false)
     , m_lastLat(0)
     , m_lastLon(0)
     , m_lastAccuracy(-1)
+    , m_homeLat(0)
+    , m_homeLon(0)
+    , m_homeRadius(-1)
 {
     m_defs = builtInSensors();
     for (const SensorDef &def : m_defs) {
@@ -237,7 +312,21 @@ void SensorCoordinator::loadPersistedState()
                 settings.value(QStringLiteral("locationStaleMinutes")).toInt());
     if (settings.contains(QStringLiteral("homeOnInternal")))
         m_homeOnInternal = settings.value(QStringLiteral("homeOnInternal")).toBool();
+    if (settings.contains(QStringLiteral("homeLatitude"))
+            && settings.contains(QStringLiteral("homeLongitude"))) {
+        const double lat = settings.value(QStringLiteral("homeLatitude")).toDouble();
+        const double lon = settings.value(QStringLiteral("homeLongitude")).toDouble();
+        const double radius = settings.value(QStringLiteral("homeRadius"), -1).toDouble();
+        if (qIsFinite(lat) && qIsFinite(lon)
+                && !(qFuzzyIsNull(lat) && qFuzzyIsNull(lon))) {
+            m_homeLat = lat;
+            m_homeLon = lon;
+            m_homeRadius = radius;
+            m_haveHomeCoordinates = true;
+        }
+    }
     settings.endGroup();
+    loadPersistedZones();
 }
 
 void SensorCoordinator::persistState() const
@@ -256,7 +345,13 @@ void SensorCoordinator::persistState() const
     settings.setValue(QStringLiteral("locationPreset"), m_locationPreset);
     settings.setValue(QStringLiteral("locationStaleMinutes"), m_locationStaleMinutes);
     settings.setValue(QStringLiteral("homeOnInternal"), m_homeOnInternal);
+    if (m_haveHomeCoordinates) {
+        settings.setValue(QStringLiteral("homeLatitude"), m_homeLat);
+        settings.setValue(QStringLiteral("homeLongitude"), m_homeLon);
+        settings.setValue(QStringLiteral("homeRadius"), m_homeRadius);
+    }
     settings.endGroup();
+    persistZones();
 }
 
 QStringList SensorCoordinator::registeredIds() const
@@ -306,8 +401,10 @@ void SensorCoordinator::setLocationEnabled(bool enabled)
     persistState();
     emit locationEnabledChanged();
     updateLocationReporting();
-    if (locationReporting() && m_started)
+    if (locationReporting() && m_started) {
+        fetchZones();
         postLocationUpdate(true);
+    }
 }
 
 void SensorCoordinator::setLocationPreset(int preset)
@@ -335,18 +432,21 @@ void SensorCoordinator::configure(const QString &webhookId,
                                   const QString &cloudhookUrl,
                                   const QString &remoteUiUrl,
                                   const QString &baseUrl,
+                                  const QString &accessToken,
                                   bool ignoreSslErrors)
 {
     const bool changed = m_webhookId != webhookId
             || m_cloudhookUrl != cloudhookUrl
             || m_remoteUiUrl != remoteUiUrl
             || m_baseUrl != baseUrl
+            || m_accessToken != accessToken
             || m_ignoreSslErrors != ignoreSslErrors;
 
     m_webhookId = webhookId;
     m_cloudhookUrl = cloudhookUrl;
     m_remoteUiUrl = remoteUiUrl;
     m_baseUrl = baseUrl;
+    m_accessToken = accessToken;
     m_ignoreSslErrors = ignoreSslErrors;
 
     if (changed && m_started && !m_webhookId.isEmpty()) {
@@ -355,6 +455,7 @@ void SensorCoordinator::configure(const QString &webhookId,
         // slow host while the push channel and dashboard were also reloading.
         m_startupStep = 0;
         m_startupTimer.start();
+        fetchZones();
     }
 }
 
@@ -373,6 +474,7 @@ void SensorCoordinator::start()
     ensureOsVersionSensor();
     m_startupStep = 0;
     m_startupTimer.start();
+    fetchZones();
     qWarning() << "Helmsman sensors: started";
 }
 
@@ -485,6 +587,13 @@ void SensorCoordinator::onWebhookFinished()
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QNetworkReply::NetworkError netError = reply->error();
     reply->deleteLater();
+
+    if (kind == WebhookGetZones) {
+        m_zonesFetchPending = false;
+        if (status == 200)
+            handleZones(data);
+        return;
+    }
 
     if (netError != QNetworkReply::NoError && status == 0) {
         // Try next URL fallback.
@@ -888,8 +997,12 @@ void SensorCoordinator::postLocationUpdate(bool force)
         return;
 
     const bool atHome = m_homeOnInternal && m_usingInternalUrl;
-    // Internal connectivity is sufficient to determine "home"; never include
-    // a stale GPS fix or require the location hardware on that connection.
+    // Internal connectivity is sufficient to determine "home". Use the Home
+    // zone coordinates rather than a leftover GPS fix from an earlier trip.
+    if (atHome && !m_haveHomeCoordinates)
+        fetchZones();
+    const bool haveHomeGps = atHome && m_haveHomeCoordinates
+            && qIsFinite(m_homeLat) && qIsFinite(m_homeLon);
     const bool haveGps = !m_usingInternalUrl && m_haveLocation
             && qIsFinite(m_lastLat) && qIsFinite(m_lastLon);
     if (!atHome && !haveGps)
@@ -903,7 +1016,14 @@ void SensorCoordinator::postLocationUpdate(bool force)
     const int battery = m_batteryLevel >= 0 ? m_batteryLevel : 0;
 
     QJsonObject data;
-    if (haveGps) {
+    if (haveHomeGps) {
+        QJsonArray gps;
+        gps.append(m_homeLat);
+        gps.append(m_homeLon);
+        data.insert(QStringLiteral("gps"), gps);
+        const double accuracy = m_homeRadius > 0 ? m_homeRadius : kHomeAccuracyFallbackMeters;
+        data.insert(QStringLiteral("gps_accuracy"), qRound(accuracy));
+    } else if (haveGps) {
         QJsonArray gps;
         gps.append(m_lastLat);
         gps.append(m_lastLon);
@@ -922,13 +1042,13 @@ void SensorCoordinator::postLocationUpdate(bool force)
     postWebhook(WebhookUpdateLocation, body);
 
     m_lastLocationSent = QDateTime::currentDateTimeUtc();
-    if (atHome && !haveGps)
-        m_lastLocationText = QStringLiteral("home (internal connection)");
-    else if (atHome)
+    if (atHome && haveHomeGps)
         m_lastLocationText = QStringLiteral("home · %1, %2 (±%3 m)")
-                .arg(m_lastLat, 0, 'f', 5)
-                .arg(m_lastLon, 0, 'f', 5)
-                .arg(qMax(0.0, m_lastAccuracy), 0, 'f', 0);
+                .arg(m_homeLat, 0, 'f', 5)
+                .arg(m_homeLon, 0, 'f', 5)
+                .arg(m_homeRadius > 0 ? m_homeRadius : kHomeAccuracyFallbackMeters, 0, 'f', 0);
+    else if (atHome)
+        m_lastLocationText = QStringLiteral("home (internal connection)");
     else
         m_lastLocationText = QStringLiteral("%1, %2 (±%3 m)")
                 .arg(m_lastLat, 0, 'f', 5)
@@ -1018,6 +1138,151 @@ void SensorCoordinator::setSensorState(const QString &id, const QVariant &state,
         rt.attributes = attrs;
         rt.dirty = true;
     }
+}
+
+void SensorCoordinator::setHomeCoordinates(double latitude, double longitude, double radiusMeters)
+{
+    if (!qIsFinite(latitude) || !qIsFinite(longitude)
+            || (qFuzzyIsNull(latitude) && qFuzzyIsNull(longitude)))
+        return;
+    const bool changed = !m_haveHomeCoordinates
+            || !qFuzzyCompare(m_homeLat + 1.0, latitude + 1.0)
+            || !qFuzzyCompare(m_homeLon + 1.0, longitude + 1.0)
+            || !qFuzzyCompare(m_homeRadius + 1.0, radiusMeters + 1.0);
+    m_homeLat = latitude;
+    m_homeLon = longitude;
+    m_homeRadius = qIsFinite(radiusMeters) ? radiusMeters : -1;
+    m_haveHomeCoordinates = true;
+    if (changed)
+        persistState();
+    if (changed && m_started && locationReporting()
+            && m_homeOnInternal && m_usingInternalUrl)
+        postLocationUpdate(true);
+}
+
+void SensorCoordinator::replaceZones(const QVariantList &states)
+{
+    QList<HassZoneFence> next;
+    for (int i = 0; i < states.size(); ++i) {
+        HassZoneFence fence;
+        if (zoneFenceFromState(states.at(i).toMap(), &fence))
+            next.append(fence);
+    }
+    std::sort(next.begin(), next.end(), zoneIdLess);
+    applyZoneList(next);
+}
+
+void SensorCoordinator::applyZoneList(const QList<HassZoneFence> &zones)
+{
+    if (zoneListsEqual(m_zones, zones))
+        return;
+    m_zones = zones;
+    for (int i = 0; i < m_zones.size(); ++i) {
+        const HassZoneFence &zone = m_zones.at(i);
+        if (zone.entityId == QLatin1String("zone.home")) {
+            setHomeCoordinates(zone.latitude, zone.longitude, zone.radius);
+            break;
+        }
+    }
+    persistZones();
+}
+
+void SensorCoordinator::persistZones() const
+{
+    QSettings settings(AppSettings::filePath(), QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("sensors"));
+    QJsonArray arr;
+    for (int i = 0; i < m_zones.size(); ++i) {
+        const HassZoneFence &zone = m_zones.at(i);
+        QJsonObject obj;
+        obj.insert(QStringLiteral("entity_id"), zone.entityId);
+        obj.insert(QStringLiteral("name"), zone.locationName);
+        obj.insert(QStringLiteral("latitude"), zone.latitude);
+        obj.insert(QStringLiteral("longitude"), zone.longitude);
+        obj.insert(QStringLiteral("radius"), zone.radius);
+        obj.insert(QStringLiteral("passive"), zone.passive);
+        arr.append(obj);
+    }
+    settings.setValue(QStringLiteral("zones"),
+                      QString::fromUtf8(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
+    settings.endGroup();
+}
+
+void SensorCoordinator::loadPersistedZones()
+{
+    QSettings settings(AppSettings::filePath(), QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("sensors"));
+    const QByteArray json = settings.value(QStringLiteral("zones")).toString().toUtf8();
+    settings.endGroup();
+    if (json.isEmpty()) {
+        if (m_haveHomeCoordinates) {
+            HassZoneFence home;
+            home.entityId = QStringLiteral("zone.home");
+            home.locationName = QStringLiteral("home");
+            home.latitude = m_homeLat;
+            home.longitude = m_homeLon;
+            home.radius = m_homeRadius;
+            home.passive = false;
+            m_zones.append(home);
+        }
+        return;
+    }
+    const QJsonDocument doc = QJsonDocument::fromJson(json);
+    if (!doc.isArray())
+        return;
+    QList<HassZoneFence> next;
+    const QJsonArray arr = doc.array();
+    for (int i = 0; i < arr.size(); ++i) {
+        HassZoneFence fence;
+        if (zoneFenceFromState(arr.at(i).toObject().toVariantMap(), &fence))
+            next.append(fence);
+    }
+    std::sort(next.begin(), next.end(), zoneIdLess);
+    m_zones = next;
+    for (int i = 0; i < m_zones.size(); ++i) {
+        const HassZoneFence &zone = m_zones.at(i);
+        if (zone.entityId != QLatin1String("zone.home"))
+            continue;
+        m_homeLat = zone.latitude;
+        m_homeLon = zone.longitude;
+        m_homeRadius = zone.radius;
+        m_haveHomeCoordinates = true;
+        break;
+    }
+}
+
+void SensorCoordinator::fetchZones()
+{
+    if (m_zonesFetchPending || m_accessToken.isEmpty() || m_baseUrl.isEmpty())
+        return;
+
+    QString base = m_baseUrl;
+    if (base.endsWith(QLatin1Char('/')))
+        base.chop(1);
+    QNetworkRequest request(QUrl(base + QStringLiteral("/api/states")));
+    request.setRawHeader("Accept", "application/json");
+    request.setRawHeader("User-Agent", kClientName);
+    request.setRawHeader("Authorization",
+                         QByteArray("Bearer ") + m_accessToken.toUtf8());
+
+    QNetworkReply *reply = m_nam->get(request);
+    reply->setProperty("webhookKind", static_cast<int>(WebhookGetZones));
+    connect(reply, SIGNAL(finished()), this, SLOT(onWebhookFinished()));
+    m_zonesFetchPending = true;
+}
+
+void SensorCoordinator::handleZones(const QByteArray &data)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+    QVariantList states;
+    if (doc.isArray()) {
+        states = doc.array().toVariantList();
+    } else if (doc.isObject()) {
+        states.append(doc.object().toVariantMap());
+    } else {
+        return;
+    }
+    replaceZones(states);
 }
 
 void SensorCoordinator::handleUpdateLocation(const QByteArray &data, int status)

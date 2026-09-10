@@ -11,6 +11,7 @@ Page {
     property bool tokensInjected: false
     property bool bridgeInstalled: false
     property bool dashboardReady: false
+    property bool webViewFailed: false
     property bool readyCheckRunning: false
     property int readyCheckAttempts: 0
     property bool resumeProbeRunning: false
@@ -25,25 +26,47 @@ Page {
     // a parent so either Gecko stack can sit in the same Silica page.
     property int __sailfish_webviewpage
     readonly property var dashboardView: webViewLoader.item
-    readonly property bool useNext153WebView: !!(hassClient && hassClient.next153WebViewActive)
+    readonly property string webViewEngine: hassClient ? hassClient.webViewEngineActive : "stock"
     property color overlayBackgroundColor: page.fallbackOverlayBackground
     property color overlayTextColor: page.fallbackOverlayText
     readonly property color haDarkBackground: "#111111"
     readonly property color haDarkText: "#e1e1e1"
     readonly property color haLightBackground: "#fafafa"
     readonly property color haLightText: "#212121"
-    readonly property color fallbackOverlayBackground: Theme.colorScheme === Theme.LightOnDark
-            ? page.haDarkBackground
-            : page.haLightBackground
-    readonly property color fallbackOverlayText: Theme.colorScheme === Theme.LightOnDark
-            ? page.haDarkText
-            : page.haLightText
+    readonly property color fallbackOverlayBackground: {
+        // Atlantic has no Gecko chrome; the cutout strip must match Lovelace,
+        // which is dark here. Sailfish light ambience would otherwise leave a
+        // white band above the webview.
+        if (page.webViewEngine === "atlantic")
+            return page.haDarkBackground
+        return Theme.colorScheme === Theme.LightOnDark
+                ? page.haDarkBackground
+                : page.haLightBackground
+    }
+    readonly property color fallbackOverlayText: {
+        if (page.webViewEngine === "atlantic")
+            return page.haDarkText
+        return Theme.colorScheme === Theme.LightOnDark
+                ? page.haDarkText
+                : page.haLightText
+    }
     property string startUrl: (hassClient && hassClient.baseUrl.length > 0)
                               ? page.instancePath(page.startPath || "/lovelace")
                               : ""
     property string dashboardUrl: page.startUrl
     property int authHops: 0
+    // Gecko already lays out below the punch-hole. Only Atlantic's WPE view
+    // draws edge-to-edge in portrait.
+    readonly property int topCutoutHeight: {
+        if (page.webViewEngine !== "atlantic" || !page.isPortrait)
+            return 0
+        if (typeof Screen === "undefined" || !Screen.topCutout)
+            return 0
+        return Math.max(0, Screen.topCutout.height)
+    }
     property string loadStatusText: {
+        if (page.webViewFailed)
+            return "Browser engine failed to load."
         if (!page.tokensInjected)
             return "Preparing session..."
         if (dashboardView && dashboardView.loading && dashboardView.loadProgress > 0)
@@ -588,21 +611,34 @@ Page {
         }
     }
 
+    Rectangle {
+        id: cutoutFill
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: page.topCutoutHeight
+        visible: height > 0
+        color: page.overlayBackgroundColor
+        z: 3
+    }
+
     Loader {
         id: webViewLoader
         anchors.fill: parent
-        // Either Gecko stack pauses itself from app + page status the same way.
-        opacity: page.dashboardReady ? 1.0 : 0.0
-        source: page.useNext153WebView
+        anchors.topMargin: page.topCutoutHeight
+        // Keep the engine painted under the overlay. WPE WebKit only creates
+        // its view on a real scene-graph frame; opacity 0 left Atlantic stuck
+        // on "Preparing session...".
+        source: page.webViewEngine === "next153"
                 ? Qt.resolvedUrl("Next153DashboardWebView.qml")
-                : Qt.resolvedUrl("StockDashboardWebView.qml")
+                : (page.webViewEngine === "atlantic"
+                   ? Qt.resolvedUrl("AtlanticDashboardWebView.qml")
+                   : Qt.resolvedUrl("StockDashboardWebView.qml"))
         onStatusChanged: {
-            if (status === Loader.Error)
+            if (status === Loader.Error) {
+                page.webViewFailed = true
                 console.log("Helmsman: dashboard webview failed to load")
-        }
-
-        Behavior on opacity {
-            NumberAnimation { duration: 180 }
+            }
         }
     }
 
@@ -683,6 +719,16 @@ Page {
     }
 
     Timer {
+        id: injectRetryTimer
+        interval: 500
+        repeat: true
+        running: !!(dashboardView && dashboardView.loaded
+                    && hassClient && hassClient.loggedIn
+                    && !page.tokensInjected)
+        onTriggered: page.injectSessionAndBridge()
+    }
+
+    Timer {
         id: startWebViewTimer
         interval: 50
         repeat: false
@@ -722,6 +768,7 @@ Page {
     Rectangle {
         id: loadingOverlay
         anchors.fill: parent
+        anchors.topMargin: page.topCutoutHeight
         color: page.overlayBackgroundColor
         visible: !page.dashboardReady
         z: 2
@@ -751,7 +798,7 @@ Page {
 
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
-                running: loadingOverlay.visible
+                running: loadingOverlay.visible && !page.webViewFailed
                 size: BusyIndicatorSize.Large
             }
 
@@ -763,6 +810,13 @@ Page {
                 color: page.overlayTextColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.loadStatusText
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: page.webViewFailed
+                text: "Open settings"
+                onClicked: page.openSettings()
             }
         }
     }

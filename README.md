@@ -17,6 +17,7 @@ app/
   src/hassclient.{h,cpp}           HA HTTP auth + session
   src/hasswebsocket.{h,cpp}        shared HA websocket
   src/lovelacecoordinator.{h,cpp}  native Lovelace config + states
+  src/hasscamerastream.{h,cpp}     live camera MJPEG for native details
   src/sensorcoordinator.{h,cpp}    mobile_app sensor webhooks
   src/widgetcoordinator.{h,cpp}    cover + Events View favorites
   qml/pages/                       Connection, login, OTP, home, settings
@@ -36,23 +37,27 @@ app/
 4. **Session** — Refresh token is stored in the sandboxed app settings and
    restored on launch.
 5. **Dashboards** — The Home Assistant frontend in a WebView is the default
-   home screen. If [sailfish-browser-next153](https://openrepos.net/node/12532)
-   is installed, Settings → Dashboard can use that Gecko ESR153 engine
-   instead of the stock webview; it is off by default and needs a restart.
-   Settings → Dashboard can also enable an experimental native Silica
-   renderer of Lovelace JSON. Energy and the map still open in the web view,
-   as do custom cards other than the person-status, custom-calendar, and
-   ApexCharts ones that have native equivalents. Lovelace `confirmation` on
-   native scripts and taps shows an Allow/Deny prompt. The native renderer
-   is off by default.
+   home screen. Settings → Dashboard → Browser engine picks among the engines
+   installed on the device: stock Gecko, sailfish-browser-next153 (ESR153),
+   and Atlantic Browser's WPE WebKit view. Extra engines are off until you
+   choose them, and switching needs a restart. Settings → Dashboard can also
+   enable an experimental native Silica renderer of Lovelace JSON. Energy and
+   the HA Map panel still open in the web view, as do custom cards other than
+   the person-status, custom-calendar, and ApexCharts ones that have native
+   equivalents. Lovelace map cards and entity locations with coordinates
+   render natively (OpenStreetMap tiles, person pictures as markers). Camera
+   details play a live MJPEG stream. Lovelace `confirmation` on native
+   scripts and taps shows a full-screen swipe Allow/Deny prompt. The native
+   renderer is off by default.
 6. **Sensors** — After mobile_app registration, Helmsman reports battery level/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
    location. Native settings can disable individual sensors and select a
    battery-saving, balanced, or accurate location mode. GPS is not kept
    running: Helmsman reuses other apps’ location fixes and only requests its
    own when the last fix is older than a configurable stale time (default 15
-   minutes). On the internal URL, GPS stays off; Helmsman can optionally
-   report the device as `home` from the connection alone, and repeats that
+   minutes).    On the internal URL, GPS stays off; Helmsman can optionally
+   report the device as `home` from the connection alone, including the Home
+   zone coordinates so it still appears on the map, and repeats that
    report about once a minute so Home Assistant does not time out to away.
    Settings include **Update location now**. Sensors start a few
    seconds after the dashboard has loaded so their webhook calls cannot stall
@@ -103,9 +108,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.3.1-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.3.2-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.3.1-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.3.2-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`.

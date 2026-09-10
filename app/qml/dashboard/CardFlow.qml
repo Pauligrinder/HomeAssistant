@@ -7,6 +7,7 @@ Item {
     property var dashboard
     property var hassClient
     property var mdiIcons
+    property int fillHeight: 0
     property int columns: 12
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     property var rows: flow.packRows(flow.cards, flow.columns, flow.rev)

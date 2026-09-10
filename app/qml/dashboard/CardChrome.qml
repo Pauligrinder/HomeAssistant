@@ -15,14 +15,16 @@ Rectangle {
     property int statesRevision: dashboard ? dashboard.statesRevision : 0
     property bool tapEnabled: true
     property bool showBackground: true
+    property int fillHeight: 0
     property real contentTopMargin: Theme.paddingMedium
     property real contentBottomMargin: Theme.paddingMedium
+    property real contentHorizontalMargin: Theme.paddingMedium
     default property alias contents: body.data
 
     width: parent ? parent.width : Theme.itemSizeHuge
     implicitHeight: Math.max(Theme.itemSizeMedium,
                              body.height + contentTopMargin + contentBottomMargin)
-    height: implicitHeight
+    height: fillHeight > 0 ? fillHeight : implicitHeight
     color: chrome.showBackground
            ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
            : "transparent"
@@ -85,8 +87,8 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.leftMargin: Theme.paddingMedium
-        anchors.rightMargin: Theme.paddingMedium
+        anchors.leftMargin: chrome.contentHorizontalMargin
+        anchors.rightMargin: chrome.contentHorizontalMargin
         anchors.topMargin: chrome.contentTopMargin
         spacing: Theme.paddingSmall
     }

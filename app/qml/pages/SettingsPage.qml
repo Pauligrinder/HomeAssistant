@@ -9,9 +9,30 @@ Page {
     property string internalTestResult: ""
     property string externalTestResult: ""
 
+    function engineNameFor(id) {
+        var list = hassClient ? hassClient.availableWebViewEngines : []
+        for (var i = 0; i < list.length; ++i) {
+            if (list[i].id === id)
+                return list[i].name
+        }
+        return id
+    }
+
+    function bindEngineCombo() {
+        engineBox.engineReady = false
+        var idx = 0
+        var list = hassClient ? hassClient.availableWebViewEngines : []
+        for (var i = 0; i < list.length; ++i) {
+            if (list[i].id === hassClient.webViewEngine)
+                idx = i
+        }
+        engineBox.currentIndex = idx
+        engineBox.engineReady = true
+    }
+
     onStatusChanged: {
         if (status === PageStatus.Active && hassClient)
-            hassClient.refreshNext153WebViewAvailable()
+            hassClient.refreshWebViewEngines()
     }
 
     function save() {
@@ -46,6 +67,8 @@ Page {
             }
             page.pendingTestUrl = ""
         }
+        onAvailableWebViewEnginesChanged: page.bindEngineCombo()
+        onWebViewEngineChanged: page.bindEngineCombo()
     }
 
     SilicaFlickable {
@@ -230,20 +253,56 @@ Page {
                 text: "Native dashboard"
                 automaticCheck: false
                 checked: hassClient.nativeDashboardEnabled
-                description: "Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards, energy, and the map still open in the web view."
+                description: "Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards and energy still open in the web view."
                 onClicked: hassClient.nativeDashboardEnabled = !checked
             }
 
-            TextSwitch {
-                id: next153WebViewSwitch
-                visible: hassClient.next153WebViewAvailable
-                text: "Use Gecko ESR153 webview"
-                automaticCheck: false
-                checked: hassClient.next153WebViewEnabled
-                description: hassClient.next153WebViewEnabled !== hassClient.next153WebViewActive
-                             ? "Load the Home Assistant web UI with sailfish-browser-next153's Gecko ESR153 engine instead of the Sailfish stock webview. Off by default. Experimental. Restart Helmsman to apply."
-                             : "Load the Home Assistant web UI with sailfish-browser-next153's Gecko ESR153 engine instead of the Sailfish stock webview. Off by default. Experimental. Restart Helmsman after changing this."
-                onClicked: hassClient.next153WebViewEnabled = !checked
+            ComboBox {
+                id: engineBox
+                width: parent.width
+                label: "Browser engine"
+                property bool engineReady: false
+                menu: ContextMenu {
+                    Repeater {
+                        model: hassClient.availableWebViewEngines
+                        MenuItem { text: modelData.name }
+                    }
+                }
+                onCurrentIndexChanged: {
+                    if (!engineReady || !hassClient)
+                        return
+                    var list = hassClient.availableWebViewEngines
+                    if (currentIndex < 0 || currentIndex >= list.length)
+                        return
+                    var id = list[currentIndex].id
+                    if (id === hassClient.webViewEngine)
+                        return
+                    hassClient.webViewEngine = id
+                    if (id === hassClient.webViewEngineActive)
+                        return
+                    var dlg = pageStack.push(Qt.resolvedUrl("../components/ActionConfirmDialog.qml"), {
+                                                 prompt: {
+                                                     "title": "Restart Helmsman?",
+                                                     "text": "Switch the Home Assistant web UI to "
+                                                             + page.engineNameFor(id) + ".",
+                                                     "confirmText": "Restart now",
+                                                     "dismissText": "Later"
+                                                 }
+                                             })
+                    dlg.accepted.connect(function() { hassClient.restartApp() })
+                }
+            }
+
+            Label {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: Theme.horizontalPageMargin
+                wrapMode: Text.Wrap
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeExtraSmall
+                text: hassClient.webViewEngine !== hassClient.webViewEngineActive
+                      ? "Restart Helmsman to apply the selected engine."
+                      : "Used for the Home Assistant web UI. ESR153 appears when sailfish-browser-next153 is installed; Atlantic when Atlantic Browser is installed."
             }
 
             SectionHeader { text: "Cover favorites" }
@@ -462,7 +521,7 @@ Page {
                 text: "Mark home on internal connection"
                 checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
                 automaticCheck: false
-                description: "Report home without using GPS while connected through the internal URL. Helmsman repeats that home update so Home Assistant does not time out to away. When disabled, no location is sent on that connection."
+                description: "Report home without using GPS while connected through the internal URL. Helmsman includes the Home zone coordinates so the device shows on the map, and repeats that update so Home Assistant does not time out to away. When disabled, no location is sent on that connection."
                 onClicked: {
                     if (hassClient.sensors)
                         hassClient.sensors.homeOnInternal = !checked
@@ -522,5 +581,8 @@ Page {
         }
     }
 
-    Component.onCompleted: hassClient.refreshNext153WebViewAvailable()
+    Component.onCompleted: {
+        hassClient.refreshWebViewEngines()
+        page.bindEngineCombo()
+    }
 }
