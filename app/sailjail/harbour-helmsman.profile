@@ -16,5 +16,9 @@ noblacklist /dev/dri
 mkdir     ${HOME}/.cache/wpe
 whitelist ${HOME}/.cache/wpe
 
+# Daily diagnostics for lockups and connection faults.
+mkdir     ${HOME}/Documents/Helmsman
+whitelist ${HOME}/Documents/Helmsman
+
 env LD_LIBRARY_PATH=/usr/lib64/wpe-compat:/usr/lib/wpe-compat:/usr/lib64:/usr/lib:/opt/wpe-sfos/lib
 env WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1

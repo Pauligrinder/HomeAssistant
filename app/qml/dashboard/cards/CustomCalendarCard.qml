@@ -111,15 +111,41 @@ CardChrome {
         dashboard.fetchCalendarRange(entityId, weekStart.toISOString(), end.toISOString())
     }
 
+    function syncWeek() {
+        var next = weekStartFor(new Date())
+        if (next.getTime() !== weekStart.getTime())
+            weekStart = next
+        fetchEvents()
+    }
+
     Connections {
         target: dashboard
         onCalendarReady: {
             if (entityId === root.entityId)
                 root.events = dashboard.calendarEvents(root.entityId)
         }
+        onEntityChanged: {
+            if (entityId === root.entityId)
+                root.fetchEvents()
+        }
     }
 
-    Component.onCompleted: root.fetchEvents()
+    Connections {
+        target: Qt.application
+        onStateChanged: {
+            if (Qt.application.state === Qt.ApplicationActive)
+                root.syncWeek()
+        }
+    }
+
+    Timer {
+        interval: 5 * 60 * 1000
+        running: true
+        repeat: true
+        onTriggered: root.syncWeek()
+    }
+
+    Component.onCompleted: root.syncWeek()
 
     Row {
         width: parent.width
@@ -127,7 +153,9 @@ CardChrome {
 
         MdiIcon {
             mdiIcons: root.mdiIcons
-            name: "mdi:book-open-variant"
+            name: (dashboard && root.statesRevision >= 0)
+                  ? dashboard.entityIcon(root.entityId, card && card.icon ? card.icon : "")
+                  : "mdi:calendar"
             width: Theme.iconSizeSmall
             height: width
             iconColor: Theme.highlightColor

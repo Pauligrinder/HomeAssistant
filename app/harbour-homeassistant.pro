@@ -1,15 +1,16 @@
 TARGET = harbour-helmsman
 
 CONFIG += sailfishapp
-QT += network websockets gui positioning dbus
+QT += network websockets gui positioning dbus qml
 LIBS += -ldl
 
-VERSION = 0.3.2
+VERSION = 0.3.3
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
     src/appsettings.cpp \
     src/harbour-homeassistant.cpp \
+    src/helmsmanlog.cpp \
     src/hasscamerastream.cpp \
     src/hassclient.cpp \
     src/hasspushchannel.cpp \
@@ -21,6 +22,7 @@ SOURCES += \
 
 HEADERS += \
     src/appsettings.h \
+    src/helmsmanlog.h \
     src/hasscamerastream.h \
     src/hassclient.h \
     src/hasspushchannel.h \

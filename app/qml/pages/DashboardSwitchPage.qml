@@ -24,6 +24,26 @@ Page {
         return path.length ? path : "Overview"
     }
 
+    function kindOf(entry) {
+        return (entry && entry.kind) ? String(entry.kind) : "lovelace"
+    }
+
+    function iconOf(entry) {
+        if (entry && entry.icon && String(entry.icon).length)
+            return String(entry.icon)
+        return page.kindOf(entry) === "lovelace" ? "mdi:view-dashboard" : "mdi:puzzle"
+    }
+
+    function activate(entry) {
+        if (!page.dashboard)
+            return
+        var path = page.pathOf(entry)
+        // Pop first so a WebView fallback is pushed on the home page, not
+        // onto this picker (which would then be popped away).
+        pageStack.pop()
+        page.dashboard.selectSwitcherPath(path)
+    }
+
     SilicaFlickable {
         anchors.fill: parent
         contentHeight: content.height + Theme.paddingLarge
@@ -43,7 +63,7 @@ Page {
                 spacing: Theme.horizontalPageMargin
 
                 Repeater {
-                    model: page.dashboard ? page.dashboard.dashboards : []
+                    model: page.dashboard ? page.dashboard.switcherItems : []
 
                     BackgroundItem {
                         id: tile
@@ -53,11 +73,7 @@ Page {
                         readonly property bool current: page.dashboard
                                 && dashboardPath === (page.dashboard.currentUrlPath || "")
 
-                        onClicked: {
-                            if (page.dashboard)
-                                page.dashboard.setCurrentUrlPath(tile.dashboardPath)
-                            pageStack.pop()
-                        }
+                        onClicked: page.activate(modelData)
 
                         Rectangle {
                             anchors.fill: parent
@@ -80,8 +96,7 @@ Page {
                                 width: Theme.iconSizeLarge
                                 height: width
                                 mdiIcons: page.mdiIcons
-                                name: (modelData && modelData.icon)
-                                      ? String(modelData.icon) : "mdi:view-dashboard"
+                                name: page.iconOf(modelData)
                                 iconColor: tile.current ? Theme.highlightColor
                                                         : Theme.primaryColor
                             }

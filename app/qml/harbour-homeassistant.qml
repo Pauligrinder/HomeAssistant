@@ -406,6 +406,7 @@ ApplicationWindow
     }
 
     onApplicationActiveChanged: {
+        console.log("Helmsman: applicationActive=", applicationActive)
         if (applicationActive) {
             appWindow.clearCoverNotification()
             appWindow.clearWidgetNotifications()

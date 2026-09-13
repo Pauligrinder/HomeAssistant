@@ -209,6 +209,7 @@ private slots:
     void onEndpointDebounceTimeout();
     void onSensorStartTimeout();
     void onWidgetStartTimeout();
+    void onDiagHeartbeatTimeout();
     void configureWidget();
     void configureRealtime();
     void configureSensors();
@@ -302,6 +303,7 @@ private:
     QTimer m_tokenRefreshTimer;
     QTimer m_sensorStartTimer;
     QTimer m_widgetStartTimer;
+    QTimer m_diagTimer;
 
     bool m_busy;
     bool m_connected;

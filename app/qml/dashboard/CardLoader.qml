@@ -8,8 +8,18 @@ Loader {
     property var hassClient
     property var mdiIcons
     property int fillHeight: 0
+    property int rowHeight: 0
     property int columns: 12
     property int unitWidth: parent ? parent.width : width
+    readonly property int rowUnit: Theme.itemSizeSmall
+    readonly property int minHeight: {
+        var rows = (card && card._rows) ? Number(card._rows) : 0
+        if (rows <= 0)
+            return 0
+        return Math.round(rows * loader.rowUnit + Math.max(0, rows - 1) * Theme.paddingMedium)
+    }
+    readonly property int contentHeight: item && item.implicitHeight ? item.implicitHeight : 0
+    readonly property int naturalHeight: Math.max(loader.contentHeight, loader.minHeight)
     readonly property int statesRevision: dashboard ? dashboard.statesRevision : 0
     readonly property bool cardIsVisible: !dashboard || !card
                                                    || (statesRevision >= 0
@@ -19,6 +29,7 @@ Loader {
     property bool sourceReady: false
 
     visible: cardIsVisible
+    height: Math.max(loader.naturalHeight, loader.rowHeight, loader.fillHeight)
     width: {
         var cols = (card && card._columns) ? card._columns : 12
         var span = Math.min(loader.columns, Math.max(1, cols))
@@ -38,7 +49,8 @@ Loader {
                              "dashboard": loader.dashboard,
                              "hassClient": loader.hassClient,
                              "mdiIcons": loader.mdiIcons,
-                             "fillHeight": loader.fillHeight
+                             "fillHeight": loader.fillHeight,
+                             "minContentHeight": Math.max(loader.minHeight, loader.rowHeight)
                          })
     }
 
@@ -58,11 +70,15 @@ Loader {
         item.mdiIcons = Qt.binding(function() { return loader.mdiIcons })
         item.width = Qt.binding(function() { return loader.width })
         item.fillHeight = Qt.binding(function() { return loader.fillHeight })
+        if (item.minContentHeight !== undefined)
+            item.minContentHeight = Qt.binding(function() {
+                return Math.max(loader.minHeight, loader.rowHeight)
+            })
     }
 
     function sourceForType(type) {
         var t = String(type || "")
-        if (t === "custom:person-status-card")
+        if (t === "custom:person-status-card" || t === "custom:person-info-card")
             return Qt.resolvedUrl("cards/PersonStatusCard.qml")
         if (t === "custom:custom-calendar-card")
             return Qt.resolvedUrl("cards/CustomCalendarCard.qml")

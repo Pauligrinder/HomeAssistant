@@ -6,6 +6,7 @@
 #include <QJsonValue>
 #include <QUrl>
 #include <QDebug>
+#include <QStringList>
 
 namespace {
 
@@ -223,7 +224,11 @@ void HassWebsocket::onError(QAbstractSocket::SocketError error)
 
 void HassWebsocket::onSslErrors(const QList<QSslError> &errors)
 {
-    Q_UNUSED(errors);
+    QStringList texts;
+    for (int i = 0; i < errors.size(); ++i)
+        texts.append(errors.at(i).errorString());
+    qWarning() << "Helmsman ws: TLS error" << texts.join(QStringLiteral("; "))
+               << "ignore=" << m_ignoreSslErrors;
     if (m_ignoreSslErrors)
         m_socket->ignoreSslErrors();
 }
@@ -270,6 +275,7 @@ void HassWebsocket::sendPing()
     msg.insert(QStringLiteral("type"), QStringLiteral("ping"));
     sendJson(msg);
     m_pongTimer.start();
+    qWarning() << "Helmsman ws: ping id=" << m_pendingPingId;
 }
 
 void HassWebsocket::onPongTimeout()
@@ -330,6 +336,7 @@ void HassWebsocket::onTextMessageReceived(const QString &message)
         if (m_pendingPingId != 0 && id == m_pendingPingId) {
             m_pendingPingId = 0;
             m_pongTimer.stop();
+            qWarning() << "Helmsman ws: pong id=" << id;
         }
         return;
     }
