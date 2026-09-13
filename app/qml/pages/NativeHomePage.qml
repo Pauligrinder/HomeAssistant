@@ -70,6 +70,16 @@ Page {
                        })
     }
 
+    function consumePendingWebPath() {
+        if (!dashboard || !dashboard.pendingWebPath.length)
+            return
+        if (page.status !== PageStatus.Active || pageStack.busy)
+            return
+        var path = dashboard.pendingWebPath
+        dashboard.clearPendingWebPath()
+        page.openWeb(path)
+    }
+
     function openMoreInfo(entityId) {
         if (!entityId)
             return
@@ -141,6 +151,19 @@ Page {
     }
 
     Connections {
+        target: pageStack
+        onBusyChanged: {
+            if (!pageStack.busy)
+                page.consumePendingWebPath()
+        }
+    }
+
+    onStatusChanged: {
+        if (status === PageStatus.Active)
+            page.consumePendingWebPath()
+    }
+
+    Connections {
         target: hassClient
         onLoggedInChanged: {
             if (!hassClient.loggedIn)
@@ -181,13 +204,7 @@ Page {
             dashboard.clearPendingMoreInfo()
             page.openMoreInfo(id)
         }
-        onPendingWebPathChanged: {
-            if (!dashboard || !dashboard.pendingWebPath.length)
-                return
-            var path = dashboard.pendingWebPath
-            dashboard.clearPendingWebPath()
-            page.openWeb(path)
-        }
+        onPendingWebPathChanged: page.consumePendingWebPath()
         onPendingConfirmationChanged: {
             var prompt = dashboard ? dashboard.pendingConfirmation : null
             if (!(prompt && prompt.active))

@@ -1,6 +1,7 @@
 #include "lovelacecoordinator.h"
 #include "hasscamerastream.h"
 #include "hasswebsocket.h"
+#include "helmsmanlog.h"
 
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -224,6 +225,24 @@ QString panelUrlPath(const QString &key, const QVariantMap &panel)
 {
     const QString path = panel.value(QStringLiteral("url_path")).toString();
     return path.isEmpty() ? key : path;
+}
+
+QString panelComponentName(const QString &path, const QVariantMap &panels)
+{
+    if (panels.contains(path))
+        return panels.value(path).toMap().value(QStringLiteral("component_name")).toString();
+    QVariantMap::const_iterator it = panels.constBegin();
+    for (; it != panels.constEnd(); ++it) {
+        const QVariantMap panel = it.value().toMap();
+        if (panelUrlPath(it.key(), panel) == path)
+            return panel.value(QStringLiteral("component_name")).toString();
+    }
+    return QString();
+}
+
+bool isLovelacePanelComponent(const QString &component)
+{
+    return component.isEmpty() || component == QLatin1String("lovelace");
 }
 
 QString normalizeDashboardPath(const QString &path)
@@ -484,9 +503,26 @@ void LovelaceCoordinator::selectSwitcherPath(const QString &path)
 {
     const QString next = normalizeDashboardPath(path);
     if (isKnownDashboardPath(next)) {
+        HelmsmanLog::info(QStringLiteral("ui"),
+                          QStringLiteral("switcher native dashboard %1").arg(next));
         setCurrentUrlPath(next);
         return;
     }
+    const QString component = panelComponentName(next, m_panels);
+    // Ingress and iframe add-ons are not Lovelace. Probing lovelace/config
+    // either fails or, worse, can return the default dashboard so the tap
+    // looks like a no-op.
+    if (!isLovelacePanelComponent(component)) {
+        const QString webPath = next.isEmpty() ? QStringLiteral("/lovelace")
+                                               : (QLatin1Char('/') + next);
+        HelmsmanLog::info(QStringLiteral("ui"),
+                          QStringLiteral("switcher web panel %1 (%2)")
+                          .arg(webPath, component));
+        openWebPath(webPath);
+        return;
+    }
+    HelmsmanLog::info(QStringLiteral("ui"),
+                      QStringLiteral("switcher probe lovelace %1").arg(next));
     requestPanelConfig(next);
 }
 

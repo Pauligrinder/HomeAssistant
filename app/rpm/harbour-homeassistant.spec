@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.3
+Version:    0.3.4
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,10 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Sun Sep 13 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.4-1
+- Open sidebar add-on pages in the web view and stay on that path
+  instead of bouncing back to the default dashboard.
+
 * Sun Sep 13 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.3-1
 - Include sidebar add-ons next to Lovelace dashboards in the Change
   dashboard picker. Lovelace-like panels stay native; ingress panels
