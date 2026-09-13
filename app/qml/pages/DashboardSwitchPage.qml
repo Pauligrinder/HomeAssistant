@@ -37,11 +37,11 @@ Page {
     function activate(entry) {
         if (!page.dashboard)
             return
-        var path = page.pathOf(entry)
-        // Pop first so a WebView fallback is pushed on the home page, not
-        // onto this picker (which would then be popped away).
+        // Queue the destination first. NativeHomePage only pushes a WebView
+        // once it is the current page and the stack is idle, so a pop cannot
+        // swallow the add-on page.
+        page.dashboard.selectSwitcherPath(page.pathOf(entry))
         pageStack.pop()
-        page.dashboard.selectSwitcherPath(path)
     }
 
     SilicaFlickable {

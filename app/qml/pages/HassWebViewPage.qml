@@ -141,7 +141,7 @@ Page {
         page.resumeDeadCount = 0
         resumeProbeTimer.stop()
         resumeProbeStartTimer.stop()
-        defaultPanelTimer.stop()
+        openedPathTimer.stop()
         snapshotDelayTimer.stop()
         page.overlayBackgroundColor = page.fallbackOverlayBackground
         page.overlayTextColor = page.fallbackOverlayText
@@ -314,7 +314,32 @@ Page {
             hassClient.notifyDashboardReady()
         // Navigate only after the dashboard is on screen. Doing this during
         // the ready-check hangs Gecko on external/reverse-proxy origins.
-        defaultPanelTimer.restart()
+        openedPathTimer.restart()
+    }
+
+    function navigateOpenedPathOnce() {
+        if (page.isHome) {
+            page.navigateDefaultPanelOnce()
+            return
+        }
+        var want = page.startPath || ""
+        if (!want.length)
+            return
+        var script = "return (function(){"
+                + "try{"
+                + "  var want=" + page.jsString(want) + ";"
+                + "  if(want.charAt(0)!=='/')want='/'+want;"
+                + "  var cur=location.pathname||'/';"
+                + "  if(cur.length>1&&cur.charAt(cur.length-1)==='/')cur=cur.slice(0,-1);"
+                + "  var dest=want;"
+                + "  if(dest.length>1&&dest.charAt(dest.length-1)==='/')dest=dest.slice(0,-1);"
+                + "  if(cur===dest||cur.indexOf(dest+'/')===0)return 'ok';"
+                + "  history.replaceState(history.state,'',want);"
+                + "  window.dispatchEvent(new CustomEvent('location-changed',{detail:{replace:true},bubbles:true,composed:true}));"
+                + "  return 'moved';"
+                + "}catch(e){return 'skip';}"
+                + "})();"
+        page.runViewJavaScript(script)
     }
 
     function navigateDefaultPanelOnce() {
@@ -688,10 +713,10 @@ Page {
     }
 
     Timer {
-        id: defaultPanelTimer
+        id: openedPathTimer
         interval: 800
         repeat: false
-        onTriggered: page.navigateDefaultPanelOnce()
+        onTriggered: page.navigateOpenedPathOnce()
     }
 
     Timer {
