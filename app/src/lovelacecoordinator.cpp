@@ -137,7 +137,29 @@ int gridRowsOf(const QVariantMap &card)
         if (n > 0)
             return n;
     }
+    if (options.contains(QStringLiteral("min_rows"))) {
+        const int n = options.value(QStringLiteral("min_rows")).toInt();
+        if (n > 0)
+            return n;
+    }
+    const QVariantMap legacy = card.value(QStringLiteral("layout_options")).toMap();
+    if (legacy.contains(QStringLiteral("grid_rows"))) {
+        const int n = legacy.value(QStringLiteral("grid_rows")).toInt();
+        if (n > 0)
+            return n;
+    }
     return 0;
+}
+
+QString iconEntryDefault(const QVariantMap &entry, const QString &state)
+{
+    if (!state.isEmpty()) {
+        const QVariantMap states = entry.value(QStringLiteral("state")).toMap();
+        const QString byState = states.value(state).toString();
+        if (!byState.isEmpty())
+            return byState;
+    }
+    return entry.value(QStringLiteral("default")).toString();
 }
 
 QVariantList variantListOf(const QVariant &value)
@@ -166,6 +188,51 @@ QString dashboardUrlPath(const QVariantMap &dashboard)
     return path;
 }
 
+// Built-in Home Assistant pages that already have another entry point. The
+// switcher only appends add-ons and custom sidebar panels from get_panels.
+bool isBuiltInPanelPath(const QString &path)
+{
+    return path == QLatin1String("lovelace")
+            || path == QLatin1String("home")
+            || path == QLatin1String("energy")
+            || path == QLatin1String("map")
+            || path == QLatin1String("logbook")
+            || path == QLatin1String("history")
+            || path == QLatin1String("media-browser")
+            || path == QLatin1String("todo")
+            || path == QLatin1String("config")
+            || path == QLatin1String("developer-tools")
+            || path == QLatin1String("profile")
+            || path == QLatin1String("hassio")
+            || path == QLatin1String("app")
+            || path == QLatin1String("my")
+            || path == QLatin1String("notfound")
+            || path == QLatin1String("light")
+            || path == QLatin1String("climate")
+            || path == QLatin1String("security");
+}
+
+bool panelShowsInSidebar(const QVariantMap &panel)
+{
+    if (panel.contains(QStringLiteral("show_in_sidebar"))
+            && !panel.value(QStringLiteral("show_in_sidebar")).toBool())
+        return false;
+    return true;
+}
+
+QString panelUrlPath(const QString &key, const QVariantMap &panel)
+{
+    const QString path = panel.value(QStringLiteral("url_path")).toString();
+    return path.isEmpty() ? key : path;
+}
+
+QString normalizeDashboardPath(const QString &path)
+{
+    if (path == QLatin1String("lovelace") || path == QLatin1String("null"))
+        return QString();
+    return path;
+}
+
 QVariantMap configMapFromResult(const QVariant &result)
 {
     QVariantMap map = result.toMap();
@@ -180,6 +247,15 @@ QVariantMap configMapFromResult(const QVariant &result)
         }
     }
     return map;
+}
+
+bool configHasRenderableViews(const QVariant &result)
+{
+    QVariantMap map = configMapFromResult(result);
+    QVariantList views = variantListOf(map.value(QStringLiteral("views")));
+    if (views.isEmpty() && result.type() == QVariant::List)
+        views = result.toList();
+    return !views.isEmpty();
 }
 
 bool isConfigNotFound(const QVariantMap &error)
@@ -312,12 +388,19 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_getStatesId(0)
     , m_subscribeStatesId(0)
     , m_subscribeLovelaceId(0)
+    , m_subscribePanelsId(0)
     , m_dashboardsId(0)
+    , m_panelsId(0)
+    , m_panelConfigId(0)
     , m_configId(0)
     , m_userIdReq(0)
     , m_frontendUserDataId(0)
     , m_frontendSystemDataId(0)
     , m_areasId(0)
+    , m_entityRegistryId(0)
+    , m_entityComponentIconsId(0)
+    , m_entityIconsId(0)
+    , m_subscribeRegistryId(0)
     , m_energyId(0)
     , m_initialDashboardSelected(false)
 {
@@ -360,6 +443,7 @@ bool LovelaceCoordinator::busy() const { return m_busy; }
 bool LovelaceCoordinator::connected() const { return m_socket && m_socket->connected(); }
 QString LovelaceCoordinator::lastError() const { return m_lastError; }
 QVariantList LovelaceCoordinator::dashboards() const { return m_dashboards; }
+QVariantList LovelaceCoordinator::switcherItems() const { return m_switcherItems; }
 QString LovelaceCoordinator::currentUrlPath() const { return m_currentUrlPath; }
 QVariantMap LovelaceCoordinator::currentConfig() const { return m_currentConfig; }
 QVariantList LovelaceCoordinator::views() const { return m_views; }
@@ -385,9 +469,7 @@ HassCameraStream *LovelaceCoordinator::cameraStream() const { return m_cameraStr
 
 void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
 {
-    QString next = path;
-    if (next == QLatin1String("lovelace") || next == QLatin1String("null"))
-        next.clear();
+    QString next = normalizeDashboardPath(path);
     if (m_currentUrlPath == next && m_configLoaded)
         return;
     m_configFallbackTried = true;
@@ -396,6 +478,62 @@ void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
     emit currentUrlPathChanged();
     if (m_wantRunning && m_socket && m_socket->authenticated())
         requestConfig();
+}
+
+void LovelaceCoordinator::selectSwitcherPath(const QString &path)
+{
+    const QString next = normalizeDashboardPath(path);
+    if (isKnownDashboardPath(next)) {
+        setCurrentUrlPath(next);
+        return;
+    }
+    requestPanelConfig(next);
+}
+
+bool LovelaceCoordinator::isKnownDashboardPath(const QString &path) const
+{
+    if (m_nativePanelPaths.contains(path))
+        return true;
+    for (int i = 0; i < m_dashboards.size(); ++i) {
+        if (dashboardUrlPath(m_dashboards.at(i).toMap()) == path)
+            return true;
+    }
+    return false;
+}
+
+void LovelaceCoordinator::requestPanelConfig(const QString &path)
+{
+    if (!m_socket || !m_socket->authenticated()) {
+        openWebPath(path.isEmpty() ? QStringLiteral("/lovelace") : (QLatin1Char('/') + path));
+        return;
+    }
+    m_pendingPanelPath = path;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("lovelace/config"));
+    if (!path.isEmpty())
+        msg.insert(QStringLiteral("url_path"), path);
+    m_panelConfigId = m_socket->sendCommand(msg);
+}
+
+void LovelaceCoordinator::applyProbedPanelConfig(const QString &path, bool success, const QVariant &result)
+{
+    if (success && configHasRenderableViews(result)) {
+        m_nativePanelPaths.insert(path);
+        QVariantMap map = configMapFromResult(result);
+        if (map.isEmpty() && result.type() == QVariant::List)
+            map.insert(QStringLiteral("views"), result.toList());
+        m_configFallbackTried = true;
+        m_pendingGenerated = false;
+        if (m_currentUrlPath != path) {
+            m_currentUrlPath = path;
+            emit currentUrlPathChanged();
+        }
+        setError(QString());
+        commitConfig(map);
+        setBusy(false);
+        return;
+    }
+    openWebPath(path.isEmpty() ? QStringLiteral("/lovelace") : (QLatin1Char('/') + path));
 }
 
 void LovelaceCoordinator::setCurrentViewIndex(int index)
@@ -429,7 +567,16 @@ void LovelaceCoordinator::stop()
     m_getStatesId = 0;
     m_subscribeStatesId = 0;
     m_subscribeLovelaceId = 0;
+    m_subscribePanelsId = 0;
+    m_subscribeRegistryId = 0;
     m_dashboardsId = 0;
+    m_entityRegistryId = 0;
+    m_entityComponentIconsId = 0;
+    m_entityIconsId = 0;
+    m_panelsId = 0;
+    m_panelConfigId = 0;
+    m_pendingPanelPath.clear();
+    m_nativePanelPaths.clear();
     m_configId = 0;
     m_frontendUserDataId = 0;
     m_frontendSystemDataId = 0;
@@ -488,6 +635,8 @@ void LovelaceCoordinator::subscribeAll()
 {
     if (!m_socket || !m_socket->authenticated())
         return;
+    qWarning() << kClientName << "lovelace: subscribeAll path="
+               << (m_currentUrlPath.isEmpty() ? QStringLiteral("(default)") : m_currentUrlPath);
     m_configLoaded = false;
     m_configFallbackTried = false;
     m_pendingGenerated = false;
@@ -496,8 +645,11 @@ void LovelaceCoordinator::subscribeAll()
     requestUser();
     requestStates();
     requestDashboards();
+    requestPanels();
     requestFrontendDefaults();
     requestAreas();
+    requestEntityRegistry();
+    requestEntityIcons();
     fetchEnergyPrefs();
 
     QJsonObject subStates;
@@ -509,6 +661,16 @@ void LovelaceCoordinator::subscribeAll()
     subLovelace.insert(QStringLiteral("type"), QStringLiteral("subscribe_events"));
     subLovelace.insert(QStringLiteral("event_type"), QStringLiteral("lovelace_updated"));
     m_subscribeLovelaceId = m_socket->sendCommand(subLovelace);
+
+    QJsonObject subPanels;
+    subPanels.insert(QStringLiteral("type"), QStringLiteral("subscribe_events"));
+    subPanels.insert(QStringLiteral("event_type"), QStringLiteral("panels_updated"));
+    m_subscribePanelsId = m_socket->sendCommand(subPanels);
+
+    QJsonObject subRegistry;
+    subRegistry.insert(QStringLiteral("type"), QStringLiteral("subscribe_events"));
+    subRegistry.insert(QStringLiteral("event_type"), QStringLiteral("entity_registry_updated"));
+    m_subscribeRegistryId = m_socket->sendCommand(subRegistry);
 }
 
 void LovelaceCoordinator::requestDashboards()
@@ -516,6 +678,15 @@ void LovelaceCoordinator::requestDashboards()
     QJsonObject msg;
     msg.insert(QStringLiteral("type"), QStringLiteral("lovelace/dashboards/list"));
     m_dashboardsId = m_socket->sendCommand(msg);
+}
+
+void LovelaceCoordinator::requestPanels()
+{
+    if (!m_socket || !m_socket->authenticated())
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("get_panels"));
+    m_panelsId = m_socket->sendCommand(msg);
 }
 
 void LovelaceCoordinator::requestConfig()
@@ -592,6 +763,30 @@ void LovelaceCoordinator::requestAreas()
     QJsonObject msg;
     msg.insert(QStringLiteral("type"), QStringLiteral("config/area_registry/list"));
     m_areasId = m_socket->sendCommand(msg);
+}
+
+void LovelaceCoordinator::requestEntityRegistry()
+{
+    if (!m_socket || !m_socket->authenticated())
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("config/entity_registry/list"));
+    m_entityRegistryId = m_socket->sendCommand(msg);
+}
+
+void LovelaceCoordinator::requestEntityIcons()
+{
+    if (!m_socket || !m_socket->authenticated())
+        return;
+    QJsonObject component;
+    component.insert(QStringLiteral("type"), QStringLiteral("frontend/get_icons"));
+    component.insert(QStringLiteral("category"), QStringLiteral("entity_component"));
+    m_entityComponentIconsId = m_socket->sendCommand(component);
+
+    QJsonObject entity;
+    entity.insert(QStringLiteral("type"), QStringLiteral("frontend/get_icons"));
+    entity.insert(QStringLiteral("category"), QStringLiteral("entity"));
+    m_entityIconsId = m_socket->sendCommand(entity);
 }
 
 void LovelaceCoordinator::fetchEnergyPrefs()
@@ -677,6 +872,21 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         maybeRequestInitialConfig();
         return;
     }
+    if (id == m_panelsId) {
+        m_panelsId = 0;
+        if (success)
+            applyPanels(result);
+        else
+            applyPanels(QVariantMap());
+        return;
+    }
+    if (id == m_panelConfigId) {
+        m_panelConfigId = 0;
+        const QString path = m_pendingPanelPath;
+        m_pendingPanelPath.clear();
+        applyProbedPanelConfig(path, success, result);
+        return;
+    }
     if (id == m_configId) {
         m_configId = 0;
         if (success)
@@ -695,6 +905,24 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         m_areasId = 0;
         if (success)
             applyAreas(result);
+        return;
+    }
+    if (id == m_entityRegistryId) {
+        m_entityRegistryId = 0;
+        if (success)
+            applyEntityRegistry(result);
+        return;
+    }
+    if (id == m_entityComponentIconsId) {
+        m_entityComponentIconsId = 0;
+        if (success)
+            applyIconResources(QStringLiteral("entity_component"), result);
+        return;
+    }
+    if (id == m_entityIconsId) {
+        m_entityIconsId = 0;
+        if (success)
+            applyIconResources(QStringLiteral("entity"), result);
         return;
     }
     if (id == m_energyId) {
@@ -720,6 +948,14 @@ void LovelaceCoordinator::onEventReceived(int id, const QVariantMap &event)
                 || (path == QLatin1String("lovelace") && m_currentUrlPath.isEmpty()))
             requestConfig();
         requestDashboards();
+        return;
+    }
+    if (id == m_subscribePanelsId) {
+        requestPanels();
+        return;
+    }
+    if (id == m_subscribeRegistryId) {
+        requestEntityRegistry();
         return;
     }
     if (m_templateKeys.contains(id)) {
@@ -792,6 +1028,69 @@ void LovelaceCoordinator::applyDashboards(const QVariant &result)
     }
     m_dashboards = withDefault;
     emit dashboardsChanged();
+    rebuildSwitcherItems();
+}
+
+void LovelaceCoordinator::applyPanels(const QVariant &result)
+{
+    m_panels = result.toMap();
+    rebuildSwitcherItems();
+}
+
+void LovelaceCoordinator::rebuildSwitcherItems()
+{
+    QVariantList items;
+    QSet<QString> seen;
+
+    for (int i = 0; i < m_dashboards.size(); ++i) {
+        QVariantMap dash = m_dashboards.at(i).toMap();
+        dash.insert(QStringLiteral("kind"), QStringLiteral("lovelace"));
+        items.append(dash);
+        seen.insert(dashboardUrlPath(dash));
+    }
+
+    QVariantList webItems;
+    QVariantMap::const_iterator it = m_panels.constBegin();
+    for (; it != m_panels.constEnd(); ++it) {
+        const QVariantMap panel = it.value().toMap();
+        const QString component = panel.value(QStringLiteral("component_name")).toString();
+        const QString path = panelUrlPath(it.key(), panel);
+        if (path.isEmpty() || isBuiltInPanelPath(path) || seen.contains(path))
+            continue;
+        if (!panelShowsInSidebar(panel))
+            continue;
+
+        const QString title = panel.value(QStringLiteral("title")).toString();
+        if (title.isEmpty())
+            continue;
+
+        QString icon = panel.value(QStringLiteral("icon")).toString();
+        if (icon.isEmpty())
+            icon = (component == QLatin1String("lovelace"))
+                    ? QStringLiteral("mdi:view-dashboard")
+                    : QStringLiteral("mdi:puzzle");
+
+        QVariantMap item;
+        item.insert(QStringLiteral("url_path"), path);
+        item.insert(QStringLiteral("title"), title);
+        item.insert(QStringLiteral("icon"), icon);
+        item.insert(QStringLiteral("kind"),
+                    component == QLatin1String("lovelace")
+                    ? QStringLiteral("lovelace")
+                    : QStringLiteral("panel"));
+        webItems.append(item);
+        seen.insert(path);
+    }
+    std::sort(webItems.begin(), webItems.end(), [](const QVariant &left, const QVariant &right) {
+        return left.toMap().value(QStringLiteral("title")).toString()
+                .localeAwareCompare(right.toMap().value(QStringLiteral("title")).toString()) < 0;
+    });
+    items += webItems;
+
+    if (m_switcherItems == items)
+        return;
+    m_switcherItems = items;
+    emit switcherItemsChanged();
 }
 
 void LovelaceCoordinator::applyConfig(const QVariant &result)
@@ -957,6 +1256,107 @@ void LovelaceCoordinator::applyAreas(const QVariant &result)
     emit areasChanged();
 }
 
+void LovelaceCoordinator::bumpStatesRevision()
+{
+    ++m_statesRevision;
+    emit statesRevisionChanged();
+}
+
+void LovelaceCoordinator::applyEntityRegistry(const QVariant &result)
+{
+    m_entityRegistry.clear();
+    const QVariantList list = variantListOf(result);
+    for (int i = 0; i < list.size(); ++i) {
+        const QVariantMap entry = list.at(i).toMap();
+        const QString entityId = entry.value(QStringLiteral("entity_id")).toString();
+        if (!entityId.isEmpty())
+            m_entityRegistry.insert(entityId, entry);
+    }
+    bumpStatesRevision();
+}
+
+void LovelaceCoordinator::applyIconResources(const QString &category, const QVariant &result)
+{
+    const QVariantMap root = result.toMap();
+    const QVariantMap resources = root.contains(QStringLiteral("resources"))
+            ? root.value(QStringLiteral("resources")).toMap()
+            : root;
+    if (category == QLatin1String("entity_component"))
+        m_entityComponentIcons = resources;
+    else
+        m_entityIcons = resources;
+    bumpStatesRevision();
+}
+
+QString LovelaceCoordinator::iconFromComponentResources(const QString &domain,
+                                                         const QString &deviceClass,
+                                                         const QString &state) const
+{
+    const QVariantMap domainMap = m_entityComponentIcons.value(domain).toMap();
+    if (domainMap.isEmpty())
+        return QString();
+    if (!deviceClass.isEmpty()) {
+        const QString specific = iconEntryDefault(domainMap.value(deviceClass).toMap(), state);
+        if (!specific.isEmpty())
+            return specific;
+    }
+    QString fallback = iconEntryDefault(domainMap.value(QStringLiteral("_")).toMap(), state);
+    if (fallback.isEmpty())
+        fallback = iconEntryDefault(domainMap, state);
+    return fallback;
+}
+
+QString LovelaceCoordinator::iconFromEntityResources(const QString &platform,
+                                                      const QString &translationKey,
+                                                      const QString &state) const
+{
+    if (platform.isEmpty() || translationKey.isEmpty())
+        return QString();
+    const QVariantMap integration = m_entityIcons.value(platform).toMap();
+    if (integration.isEmpty())
+        return QString();
+    return iconEntryDefault(integration.value(translationKey).toMap(), state);
+}
+
+QString LovelaceCoordinator::resolvedEntityIcon(const QString &entityId) const
+{
+    const QVariantMap state = m_entities.value(entityId);
+    const QVariantMap attrs = state.value(QStringLiteral("attributes")).toMap();
+    const QVariantMap registry = m_entityRegistry.value(entityId);
+    const QString domain = domainOfEntity(entityId);
+    const QString current = state.value(QStringLiteral("state")).toString();
+    QString deviceClass = attrs.value(QStringLiteral("device_class")).toString();
+    if (deviceClass.isEmpty())
+        deviceClass = registry.value(QStringLiteral("device_class")).toString();
+    if (deviceClass.isEmpty())
+        deviceClass = registry.value(QStringLiteral("original_device_class")).toString();
+
+    const QString registryIcon = registry.value(QStringLiteral("icon")).toString();
+    if (!registryIcon.isEmpty())
+        return registryIcon;
+
+    const QString attrIcon = attrs.value(QStringLiteral("icon")).toString();
+    if (!attrIcon.isEmpty())
+        return attrIcon;
+
+    const QString originalIcon = registry.value(QStringLiteral("original_icon")).toString();
+    if (!originalIcon.isEmpty())
+        return originalIcon;
+
+    const QString translated = iconFromEntityResources(
+                registry.value(QStringLiteral("platform")).toString(),
+                registry.value(QStringLiteral("translation_key")).toString(),
+                current);
+    if (!translated.isEmpty())
+        return translated;
+
+    const QString component = iconFromComponentResources(domain, deviceClass, current);
+    if (!component.isEmpty())
+        return component;
+
+    return defaultIconForDomain(domain);
+}
+
 QVariantList LovelaceCoordinator::normalizeViews(const QVariantMap &config) const
 {
     QVariantList views = variantListOf(config.value(QStringLiteral("views")));
@@ -1049,11 +1449,7 @@ QString LovelaceCoordinator::entityIcon(const QString &entityId, const QString &
 {
     if (!fallback.isEmpty())
         return fallback;
-    const QVariantMap attrs = m_entities.value(entityId).value(QStringLiteral("attributes")).toMap();
-    const QString icon = attrs.value(QStringLiteral("icon")).toString();
-    if (!icon.isEmpty())
-        return icon;
-    return defaultIconForDomain(domainOfEntity(entityId));
+    return resolvedEntityIcon(entityId);
 }
 
 QString LovelaceCoordinator::domainOf(const QString &entityId) const
@@ -1815,6 +2211,8 @@ void LovelaceCoordinator::setReady(bool ready)
     if (m_ready == ready)
         return;
     m_ready = ready;
+    qWarning() << kClientName << "lovelace: ready=" << ready
+               << "path=" << (m_currentUrlPath.isEmpty() ? QStringLiteral("(default)") : m_currentUrlPath);
     emit readyChanged();
 }
 
@@ -1823,6 +2221,8 @@ void LovelaceCoordinator::setError(const QString &message)
     if (m_lastError == message)
         return;
     m_lastError = message;
+    if (!message.isEmpty())
+        qWarning() << kClientName << "lovelace: error" << message;
     emit lastErrorChanged();
 }
 

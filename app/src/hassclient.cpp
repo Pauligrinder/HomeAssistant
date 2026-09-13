@@ -1,5 +1,6 @@
 #include "hassclient.h"
 #include "appsettings.h"
+#include "helmsmanlog.h"
 #include "hasspushchannel.h"
 #include "hasswebsocket.h"
 #include "lovelacecoordinator.h"
@@ -23,6 +24,7 @@
 #include <QSysInfo>
 #include <QHostInfo>
 #include <QTimer>
+#include <QStringList>
 #include <QLibraryInfo>
 #include <QCoreApplication>
 #include <QProcess>
@@ -368,6 +370,11 @@ HassClient::HassClient(QObject *parent)
     connect(&m_widgetStartTimer, SIGNAL(timeout()),
             this, SLOT(onWidgetStartTimeout()));
 
+    m_diagTimer.setInterval(60 * 1000);
+    connect(&m_diagTimer, SIGNAL(timeout()),
+            this, SLOT(onDiagHeartbeatTimeout()));
+    m_diagTimer.start();
+
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
 
@@ -700,6 +707,11 @@ void HassClient::setLoggedIn(bool loggedIn)
     if (m_loggedIn == loggedIn)
         return;
     m_loggedIn = loggedIn;
+    HelmsmanLog::info(QStringLiteral("auth"),
+                      QStringLiteral("loggedIn=%1 url=%2 native=%3")
+                      .arg(loggedIn)
+                      .arg(m_baseUrl)
+                      .arg(m_nativeDashboardEnabled));
     emit loggedInChanged();
     if (loggedIn)
         scheduleTokenRefresh();
@@ -939,7 +951,12 @@ void HassClient::postForm(const QString &path, const QUrlQuery &form, RequestKin
 
 void HassClient::onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors)
 {
-    Q_UNUSED(errors);
+    QStringList texts;
+    for (int i = 0; i < errors.size(); ++i)
+        texts.append(errors.at(i).errorString());
+    qWarning() << "Helmsman: TLS error" << (reply ? reply->url().toString() : QString())
+               << texts.join(QStringLiteral("; "))
+               << "ignore=" << m_ignoreSslErrors;
     if (reply == m_testReply && m_testIgnoreSslErrors)
         reply->ignoreSslErrors();
     else if (m_ignoreSslErrors)
@@ -1035,6 +1052,10 @@ void HassClient::onTestReplyFinished()
 
 void HassClient::restoreSession()
 {
+    HelmsmanLog::info(QStringLiteral("auth"),
+                      QStringLiteral("restoreSession host=%1 token=%2")
+                      .arg(m_host)
+                      .arg(!m_refreshToken.isEmpty()));
     clearError();
     // Pick http vs https endpoint from the configured URLs before refreshing,
     // skipping the Wi‑Fi debounce. Without this, a previous external https
@@ -1188,6 +1209,7 @@ void HassClient::submitOtp(const QString &code)
 
 void HassClient::logout()
 {
+    HelmsmanLog::info(QStringLiteral("auth"), QStringLiteral("logout"));
     if (!m_refreshToken.isEmpty() && !m_baseUrl.isEmpty()) {
         QUrlQuery form;
         form.addQueryItem(QStringLiteral("token"), m_refreshToken);
@@ -1450,11 +1472,15 @@ void HassClient::onTokenRefreshTimeout()
 
 void HassClient::onAccessTokenStale()
 {
+    qWarning() << "Helmsman: access token stale; refreshing";
     startQuietTokenRefresh();
 }
 
 void HassClient::reconnectPushAfterEndpointChange()
 {
+    HelmsmanLog::info(QStringLiteral("ws"),
+                      QStringLiteral("reconnect after endpoint change url=%1")
+                      .arg(m_baseUrl));
     // Always stop first so we do not authenticate against the previous URL
     // (or with a soon-to-expire token) — that shows up in HA as login failures.
     stopPushChannel();
@@ -2155,6 +2181,10 @@ void HassClient::onSensorStartTimeout()
 
 void HassClient::notifyDashboardReady()
 {
+    HelmsmanLog::info(QStringLiteral("ui"),
+                      QStringLiteral("dashboard ready native=%1 engine=%2")
+                      .arg(m_nativeDashboardEnabled)
+                      .arg(m_webViewEngineActive));
     scheduleSensorStart(kSensorStartAfterDashboardMs);
     scheduleWidgetStart(kWidgetStartAfterDashboardMs);
 }
@@ -2258,8 +2288,32 @@ void HassClient::onWidgetStartTimeout()
     startWidget();
 }
 
+void HassClient::onDiagHeartbeatTimeout()
+{
+    const qint64 tokenLeft = m_accessExpiresAt.isValid()
+            ? QDateTime::currentDateTimeUtc().msecsTo(m_accessExpiresAt.toUTC())
+            : -1;
+    HelmsmanLog::info(QStringLiteral("status"),
+                      QStringLiteral("loggedIn=%1 ws=%2 auth=%3 push=%4 tokenLeft=%5ms "
+                                     "native=%6 ready=%7 busy=%8 url=%9")
+                      .arg(m_loggedIn)
+                      .arg(m_websocket && m_websocket->connected())
+                      .arg(m_websocket && m_websocket->authenticated())
+                      .arg(m_pushChannel && m_pushChannel->connected())
+                      .arg(tokenLeft)
+                      .arg(m_nativeDashboardEnabled)
+                      .arg(m_lovelace && m_lovelace->ready())
+                      .arg(m_lovelace && m_lovelace->busy())
+                      .arg(m_baseUrl));
+}
+
 void HassClient::notifyAppForegrounded()
 {
+    HelmsmanLog::info(QStringLiteral("ui"),
+                      QStringLiteral("foreground loggedIn=%1 tokenFresh=%2 ws=%3")
+                      .arg(m_loggedIn)
+                      .arg(accessTokenStillFresh(120))
+                      .arg(m_websocket && m_websocket->connected()));
     if (m_sensors)
         m_sensors->onAppForegrounded();
     if (!m_loggedIn)
@@ -2276,6 +2330,10 @@ void HassClient::notifyAppForegrounded()
 
 void HassClient::startPushChannel()
 {
+    HelmsmanLog::info(QStringLiteral("ws"),
+                      QStringLiteral("startPushChannel url=%1 webhook=%2")
+                      .arg(m_baseUrl)
+                      .arg(!m_webhookId.isEmpty()));
     if (m_accessToken.isEmpty() || m_baseUrl.isEmpty())
         return;
     configureRealtime();
@@ -2292,6 +2350,7 @@ void HassClient::startPushChannel()
 
 void HassClient::stopPushChannel()
 {
+    HelmsmanLog::info(QStringLiteral("ws"), QStringLiteral("stopPushChannel"));
     // Keep the refresh watchdog running while logged in: the cover poller
     // still needs a live token even if the push socket is down.
     if (m_lovelace)

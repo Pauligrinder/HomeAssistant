@@ -29,6 +29,7 @@ class LovelaceCoordinator : public QObject
     Q_PROPERTY(bool connected READ connected NOTIFY connectedChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
+    Q_PROPERTY(QVariantList switcherItems READ switcherItems NOTIFY switcherItemsChanged)
     Q_PROPERTY(QString currentUrlPath READ currentUrlPath WRITE setCurrentUrlPath NOTIFY currentUrlPathChanged)
     Q_PROPERTY(QVariantMap currentConfig READ currentConfig NOTIFY currentConfigChanged)
     Q_PROPERTY(QVariantList views READ views NOTIFY viewsChanged)
@@ -61,6 +62,7 @@ public:
     bool connected() const;
     QString lastError() const;
     QVariantList dashboards() const;
+    QVariantList switcherItems() const;
     QString currentUrlPath() const;
     QVariantMap currentConfig() const;
     QVariantList views() const;
@@ -84,6 +86,7 @@ public slots:
     // through the property write.
     void setCurrentUrlPath(const QString &path);
     void setCurrentViewIndex(int index);
+    void selectSwitcherPath(const QString &path);
 
     void start();
     void stop();
@@ -151,6 +154,7 @@ signals:
     void connectedChanged();
     void lastErrorChanged();
     void dashboardsChanged();
+    void switcherItemsChanged();
     void currentUrlPathChanged();
     void currentConfigChanged();
     void viewsChanged();
@@ -187,16 +191,24 @@ private:
     void setError(const QString &message);
     void subscribeAll();
     void requestDashboards();
+    void requestPanels();
     void requestConfig();
+    void requestPanelConfig(const QString &path);
+    void applyProbedPanelConfig(const QString &path, bool success, const QVariant &result);
+    bool isKnownDashboardPath(const QString &path) const;
     void requestStates();
     void requestUser();
     void requestFrontendDefaults();
     void requestAreas();
+    void requestEntityRegistry();
+    void requestEntityIcons();
     void maybeRequestInitialConfig();
     void applyStates(const QVariant &result);
     void applyStateObject(const QVariantMap &state);
     void applyStateChanged(const QVariantMap &event);
     void applyDashboards(const QVariant &result);
+    void applyPanels(const QVariant &result);
+    void rebuildSwitcherItems();
     void applyConfig(const QVariant &result);
     void commitConfig(const QVariantMap &config);
     void applyGeneratedConfig();
@@ -204,6 +216,16 @@ private:
     void handleConfigFailure(const QVariantMap &error);
     void applyUser(const QVariant &result);
     void applyAreas(const QVariant &result);
+    void applyEntityRegistry(const QVariant &result);
+    void applyIconResources(const QString &category, const QVariant &result);
+    void bumpStatesRevision();
+    QString resolvedEntityIcon(const QString &entityId) const;
+    QString iconFromComponentResources(const QString &domain,
+                                       const QString &deviceClass,
+                                       const QString &state) const;
+    QString iconFromEntityResources(const QString &platform,
+                                    const QString &translationKey,
+                                    const QString &state) const;
     QVariantList normalizeViews(const QVariantMap &config) const;
     QVariantMap decorateCard(const QVariantMap &card) const;
     QVariantList decorateCards(const QVariantList &cards) const;
@@ -242,12 +264,19 @@ private:
     int m_getStatesId;
     int m_subscribeStatesId;
     int m_subscribeLovelaceId;
+    int m_subscribePanelsId;
     int m_dashboardsId;
+    int m_panelsId;
+    int m_panelConfigId;
     int m_configId;
     int m_userIdReq;
     int m_frontendUserDataId;
     int m_frontendSystemDataId;
     int m_areasId;
+    int m_entityRegistryId;
+    int m_entityComponentIconsId;
+    int m_entityIconsId;
+    int m_subscribeRegistryId;
     int m_energyId;
     QString m_lastError;
     QString m_currentUrlPath;
@@ -264,11 +293,18 @@ private:
     QVariantMap m_pendingConfirmedAction;
     QString m_pendingActionEntityId;
     QVariantList m_dashboards;
+    QVariantMap m_panels;
+    QVariantList m_switcherItems;
+    QString m_pendingPanelPath;
+    QSet<QString> m_nativePanelPaths;
     QVariantMap m_currentConfig;
     QVariantList m_views;
     QVariantList m_areas;
     QVariantMap m_energyPrefs;
     QHash<QString, QVariantMap> m_entities;
+    QHash<QString, QVariantMap> m_entityRegistry;
+    QVariantMap m_entityComponentIcons;
+    QVariantMap m_entityIcons;
     QHash<QString, QString> m_mediaCache;
     QSet<QString> m_mediaPending;
     QHash<int, QString> m_mediaSourceById;

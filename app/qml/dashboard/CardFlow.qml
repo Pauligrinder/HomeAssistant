@@ -62,6 +62,7 @@ Item {
                 spacing: Theme.paddingMedium
 
                 Repeater {
+                    id: rowRepeater
                     model: modelData
                     CardLoader {
                         card: modelData
@@ -70,6 +71,16 @@ Item {
                         mdiIcons: flow.mdiIcons
                         columns: flow.columns
                         unitWidth: column.width
+                        rowHeight: {
+                            var h = 0
+                            var n = rowRepeater.count
+                            for (var i = 0; i < n; ++i) {
+                                var child = rowRepeater.itemAt(i)
+                                if (child && child.naturalHeight)
+                                    h = Math.max(h, child.naturalHeight)
+                            }
+                            return h
+                        }
                     }
                 }
             }

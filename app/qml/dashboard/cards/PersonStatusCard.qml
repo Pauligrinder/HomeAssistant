@@ -160,12 +160,12 @@ CardChrome {
             spacing: Theme.paddingSmall
 
             MdiIcon {
-                visible: root.calendarVisible()
+                visible: root.rev >= 0 && root.calendarVisible()
                 width: visible ? Theme.iconSizeSmall : 0
                 height: width
                 mdiIcons: root.mdiIcons
                 name: card && card.calendar_icon ? String(card.calendar_icon) : ""
-                iconColor: root.calendarColor()
+                iconColor: root.rev >= 0 ? root.calendarColor() : "grey"
             }
 
             MdiIcon {
@@ -173,8 +173,8 @@ CardChrome {
                 width: visible ? Theme.iconSizeSmall : 0
                 height: width
                 mdiIcons: root.mdiIcons
-                name: root.batteryIcon()
-                iconColor: root.batteryColor()
+                name: root.rev >= 0 ? root.batteryIcon() : "mdi:battery"
+                iconColor: root.rev >= 0 ? root.batteryColor() : Theme.primaryColor
 
                 MouseArea {
                     anchors.fill: parent
@@ -189,8 +189,8 @@ CardChrome {
                 width: Theme.iconSizeSmall
                 height: width
                 mdiIcons: root.mdiIcons
-                name: root.locationIcon()
-                iconColor: root.locationColor()
+                name: root.rev >= 0 ? root.locationIcon() : "mdi:home-off"
+                iconColor: root.rev >= 0 ? root.locationColor() : "red"
             }
         }
 

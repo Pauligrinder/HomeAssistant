@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.2
+Version:    0.3.3
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,19 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Sun Sep 13 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.3-1
+- Include sidebar add-ons next to Lovelace dashboards in the Change
+  dashboard picker. Lovelace-like panels stay native; ingress panels
+  open in the web view.
+- Keep person-status, person-info, ApexCharts, and calendar cards
+  updating after the first paint.
+- Honour Lovelace grid rows so cards fill the reserved height, and
+  show light favorite-color swatches and color-temperature sliders.
+- Resolve entity icons from the registry and Home Assistant icon packs,
+  not only state attributes.
+- Write daily diagnostic logs to Documents/Helmsman for lockups and
+  connection faults.
+
 * Thu Sep 10 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.2-1
 - Play live camera streams on the native details page from Home Assistant
   MJPEG, instead of a still snapshot.

@@ -51,6 +51,18 @@ Page {
                        })
     }
 
+    function isSwitcherWebPanel(path) {
+        if (!dashboard || !dashboard.switcherItems)
+            return false
+        var items = dashboard.switcherItems
+        for (var i = 0; i < items.length; i++) {
+            if (items[i] && items[i].kind !== "lovelace"
+                    && String(items[i].url_path || "") === path)
+                return true
+        }
+        return false
+    }
+
     function openWeb(path) {
         pageStack.push(Qt.resolvedUrl("HassWebViewPage.qml"), {
                            hassClient: hassClient,
@@ -106,6 +118,10 @@ Page {
                 || parts[0] === "history" || parts[0] === "config"
                 || parts[0] === "developer-tools" || parts[0] === "assist") {
             page.openWeb("/" + p)
+            return
+        }
+        if (page.isSwitcherWebPanel(parts[0])) {
+            dashboard.selectSwitcherPath(parts[0])
             return
         }
         if (parts[0] === "lovelace" || parts[0] === "home") {
@@ -195,8 +211,8 @@ Page {
         PullDownMenu {
             MenuItem {
                 text: "Change dashboard"
-                visible: !!(dashboard && dashboard.dashboards
-                            && dashboard.dashboards.length > 1)
+                visible: !!(dashboard && dashboard.switcherItems
+                            && dashboard.switcherItems.length > 1)
                 onClicked: page.openDashboardSwitcher()
             }
             MenuItem {

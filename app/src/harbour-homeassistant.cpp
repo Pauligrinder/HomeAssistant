@@ -4,6 +4,7 @@
 #include <QtQml>
 
 #include "appsettings.h"
+#include "helmsmanlog.h"
 #include "hasscamerastream.h"
 #include "hassclient.h"
 #include "lovelacecoordinator.h"
@@ -17,6 +18,7 @@ int main(int argc, char *argv[])
     app->setOrganizationName(QStringLiteral("org.helmsman"));
     app->setApplicationName(QStringLiteral("harbour-helmsman"));
 
+    HelmsmanLog::install();
     AppSettings::migrateLegacyFile();
     // Prepare exactly one web engine before any QML import. Gecko stacks
     // share libxul.so; Atlantic is WPE WebKit. Mixing them in-process crashes.
@@ -38,6 +40,7 @@ int main(int argc, char *argv[])
                 QStringLiteral("Use HassClient.lovelace.cameraStream"));
 
     QQuickView *view = SailfishApp::createView();
+    HelmsmanLog::watchEngine(view->engine());
     view->setSource(SailfishApp::pathTo(QStringLiteral("qml/harbour-homeassistant.qml")));
     view->show();
 

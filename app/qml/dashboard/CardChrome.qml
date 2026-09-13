@@ -16,6 +16,7 @@ Rectangle {
     property bool tapEnabled: true
     property bool showBackground: true
     property int fillHeight: 0
+    property int minContentHeight: 0
     property real contentTopMargin: Theme.paddingMedium
     property real contentBottomMargin: Theme.paddingMedium
     property real contentHorizontalMargin: Theme.paddingMedium
@@ -23,7 +24,8 @@ Rectangle {
 
     width: parent ? parent.width : Theme.itemSizeHuge
     implicitHeight: Math.max(Theme.itemSizeMedium,
-                             body.height + contentTopMargin + contentBottomMargin)
+                             body.height + contentTopMargin + contentBottomMargin,
+                             minContentHeight)
     height: fillHeight > 0 ? fillHeight : implicitHeight
     color: chrome.showBackground
            ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)

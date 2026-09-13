@@ -9,6 +9,6 @@ Comment=Semi-native Home Assistant client
 Comment[en]=Semi-native Home Assistant client
 
 [X-Sailjail]
-Permissions=Internet;Notifications;Location;
+Permissions=Internet;Notifications;Location;Documents;
 OrganizationName=org.helmsman
 ApplicationName=harbour-helmsman

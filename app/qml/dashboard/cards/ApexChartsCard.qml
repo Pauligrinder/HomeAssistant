@@ -9,6 +9,7 @@ CardChrome {
     tapEnabled: false
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property var series: (card && card.series) ? card.series : []
+    property date now: new Date()
     readonly property date rangeStart: chartStart()
     readonly property date rangeEnd: new Date(rangeStart.getTime() + graphHours() * 3600000)
     readonly property real plotLeft: Theme.itemSizeSmall
@@ -32,7 +33,7 @@ CardChrome {
     }
 
     function chartStart() {
-        var d = new Date()
+        var d = new Date(root.now.getTime())
         var start = card && card.span && card.span.start
                     ? String(card.span.start) : ""
         if (start === "hour")
@@ -51,7 +52,9 @@ CardChrome {
 
     function isToday(date) {
         // This intentionally mirrors the supplied data_generator.
-        return date.getDate() === new Date().getDate()
+        return date.getDate() === root.now.getDate()
+               && date.getMonth() === root.now.getMonth()
+               && date.getFullYear() === root.now.getFullYear()
     }
 
     function pointsFor(index) {
@@ -145,7 +148,7 @@ CardChrome {
         var points = pointsFor(index)
         if (!points.length)
             return NaN
-        var now = Date.now()
+        var now = root.now.getTime()
         var best = points[0]
         var distance = Math.abs(best.time - now)
         for (var i = 1; i < points.length; ++i) {
@@ -175,10 +178,14 @@ CardChrome {
             truncationMode: TruncationMode.Fade
         }
 
-        Repeater {
+            Repeater {
             model: (card && card.header && card.header.show_states) ? root.series : []
             Label {
-                readonly property real value: root.currentValue(index)
+                readonly property real value: {
+                    var _ = root.rev
+                    var __ = root.now
+                    return root.currentValue(index)
+                }
                 width: parent.width
                 visible: !modelData.show || modelData.show.in_header !== false
                 text: isNaN(value) ? "—" : value.toFixed(1) + " " + root.unitFor(modelData)
@@ -199,6 +206,7 @@ CardChrome {
         onPaint: {
             // Reading rev makes state attribute changes repaint the chart.
             var revision = root.rev
+            var clock = root.now
             var ctx = getContext("2d")
             ctx.clearRect(0, 0, width, height)
             var left = root.plotLeft
@@ -282,7 +290,7 @@ CardChrome {
             }
 
             if (root.card && root.card.now && root.card.now.show) {
-                var now = Date.now()
+                var now = root.now.getTime()
                 if (now >= start && now <= end) {
                     var nx = left + (now - start) / (end - start) * plotWidth
                     ctx.strokeStyle = root.card.now.color
@@ -302,18 +310,30 @@ CardChrome {
         Connections {
             target: root
             onRevChanged: chart.requestPaint()
+            onNowChanged: chart.requestPaint()
         }
         Component.onCompleted: requestPaint()
+    }
+
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        onTriggered: root.now = new Date()
     }
 
     Flow {
         width: parent.width
         spacing: Theme.paddingMedium
 
-        Repeater {
+            Repeater {
             model: root.series
             Label {
-                readonly property var limits: root.extrema(index)
+                readonly property var limits: {
+                    var _ = root.rev
+                    var __ = root.now
+                    return root.extrema(index)
+                }
                 visible: !modelData.show || modelData.show.in_legend !== false
                 text: (modelData.name ? String(modelData.name) : String(modelData.entity))
                       + ": " + limits.min.toFixed(1) + "–" + limits.max.toFixed(1)
