@@ -9,6 +9,7 @@
 #include <QGuiApplication>
 #include <QMutex>
 #include <QMutexLocker>
+#include <QObject>
 #include <QQmlEngine>
 #include <QQmlError>
 #include <QStandardPaths>
@@ -293,7 +294,7 @@ void HelmsmanLog::watchEngine(QQmlEngine *engine)
 {
     if (!g_logger || !engine)
         return;
-    connect(engine, &QQmlEngine::warnings, g_logger,
+    QObject::connect(engine, &QQmlEngine::warnings, g_logger,
             [engine](const QList<QQmlError> &errors) {
         Q_UNUSED(engine);
         if (g_logger)
