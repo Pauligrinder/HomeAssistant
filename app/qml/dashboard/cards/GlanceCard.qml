@@ -5,9 +5,27 @@ import ".."
 CardChrome {
     id: root
     tapEnabled: false
+    contentTopMargin: Theme.paddingSmall
+    contentBottomMargin: Theme.paddingSmall
 
     readonly property var entities: (card && card.entities) ? card.entities : []
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property bool showName: !card || card.show_name !== false
+    readonly property bool showIcon: !card || card.show_icon !== false
+    readonly property bool showState: !card || card.show_state !== false
+    // HA: columns, or min(entities, 5) so a short list fills the row.
+    // A set columns value keeps empty space on the right when the row is short.
+    readonly property int columnCount: {
+        var configured = 0
+        if (card && card.columns !== undefined && card.columns !== null && card.columns !== "")
+            configured = Number(card.columns)
+        if (configured > 0)
+            return Math.max(1, Math.round(configured))
+        var n = root.entities.length
+        if (n < 1)
+            return 1
+        return Math.min(n, 5)
+    }
 
     Label {
         width: parent.width
@@ -15,20 +33,27 @@ CardChrome {
         text: card && card.title ? card.title : ""
         color: Theme.highlightColor
         font.pixelSize: Theme.fontSizeSmall
+        elide: Text.ElideRight
+        truncationMode: TruncationMode.Fade
     }
 
-    Flow {
+    Grid {
+        id: grid
         width: parent.width
-        spacing: Theme.paddingMedium
+        columns: root.columnCount
+        rowSpacing: Theme.paddingSmall
+        columnSpacing: 0
 
         Repeater {
             model: root.entities
             MouseArea {
-                width: Theme.itemSizeLarge
-                height: col.height
+                width: Math.floor(grid.width / Math.max(1, grid.columns))
+                height: cell.height
                 property string entityId: typeof modelData === "string"
                                           ? modelData
                                           : (modelData.entity ? String(modelData.entity) : "")
+                property bool entityShowState: root.showState
+                        && !(modelData && modelData.show_state === false)
                 onClicked: {
                     if (dashboard && entityId.length) {
                         var card = { "entity": entityId }
@@ -47,30 +72,42 @@ CardChrome {
                 }
 
                 Column {
-                    id: col
+                    id: cell
                     width: parent.width
-                    spacing: Theme.paddingSmall / 2
+                    spacing: 0
 
-                    MdiIcon {
-                        x: (parent.width - width) / 2
-                        mdiIcons: root.mdiIcons
-                        name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId, modelData.icon || "") : ""
-                        iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
-                                   ? Theme.highlightColor : Theme.primaryColor
-                    }
                     Label {
                         width: parent.width
+                        visible: root.showName
                         horizontalAlignment: Text.AlignHCenter
-                        wrapMode: Text.Wrap
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
+                        wrapMode: Text.NoWrap
                         font.pixelSize: Theme.fontSizeTiny
                         color: Theme.secondaryColor
                         text: (modelData && modelData.name) ? modelData.name
                               : ((dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId)
                     }
+
+                    MdiIcon {
+                        visible: root.showIcon
+                        x: Math.round((parent.width - width) / 2)
+                        width: Theme.iconSizeSmall
+                        height: Theme.iconSizeSmall
+                        mdiIcons: root.mdiIcons
+                        name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId, modelData.icon || "") : ""
+                        iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
+                                   ? Theme.highlightColor : Theme.primaryColor
+                    }
+
                     Label {
                         width: parent.width
+                        visible: entityShowState
                         horizontalAlignment: Text.AlignHCenter
-                        font.pixelSize: Theme.fontSizeExtraSmall
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
+                        wrapMode: Text.NoWrap
+                        font.pixelSize: Theme.fontSizeTiny
                         color: Theme.primaryColor
                         text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
                     }
