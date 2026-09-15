@@ -58,6 +58,7 @@ private slots:
     void openSocket();
     void sendPing();
     void onPongTimeout();
+    void onConnectTimeout();
 
 private:
     void setConnected(bool connected);
@@ -66,12 +67,15 @@ private:
     void startKeepalive();
     void stopKeepalive();
     void scheduleReconnect();
+    void bindSocket();
+    void resetSocket();
     bool accessTokenFresh() const;
     QUrl websocketUrl() const;
     int nextMessageId();
 
     QWebSocket *m_socket;
     QTimer m_reconnectTimer;
+    QTimer m_connectTimer;
     QTimer m_pingTimer;
     QTimer m_pongTimer;
     QString m_baseUrl;

@@ -240,6 +240,58 @@ QString panelComponentName(const QString &path, const QVariantMap &panels)
     return QString();
 }
 
+QVariantMap panelByPath(const QString &path, const QVariantMap &panels)
+{
+    if (panels.contains(path))
+        return panels.value(path).toMap();
+    QVariantMap::const_iterator it = panels.constBegin();
+    for (; it != panels.constEnd(); ++it) {
+        const QVariantMap panel = it.value().toMap();
+        if (panelUrlPath(it.key(), panel) == path)
+            return panel;
+    }
+    return QVariantMap();
+}
+
+QString iframeUrlFromPanel(const QVariantMap &panel)
+{
+    if (panel.value(QStringLiteral("component_name")).toString() != QLatin1String("iframe"))
+        return QString();
+    return panel.value(QStringLiteral("config")).toMap().value(QStringLiteral("url")).toString().trimmed();
+}
+
+QString addonSlugFromPanel(const QVariantMap &panel, const QString &path)
+{
+    const QString component = panel.value(QStringLiteral("component_name")).toString();
+    const QVariantMap config = panel.value(QStringLiteral("config")).toMap();
+    if (component == QLatin1String("app")) {
+        const QString addon = config.value(QStringLiteral("addon")).toString().trimmed();
+        return addon.isEmpty() ? path : addon;
+    }
+    if (component == QLatin1String("hassio")) {
+        const QString ingress = config.value(QStringLiteral("ingress")).toString().trimmed();
+        return ingress.isEmpty() ? path : ingress;
+    }
+    return QString();
+}
+
+QString supervisorDataString(const QVariant &result, const QString &key)
+{
+    const QVariantMap map = result.toMap();
+    const QString direct = map.value(key).toString().trimmed();
+    if (!direct.isEmpty())
+        return direct;
+    return map.value(QStringLiteral("data")).toMap().value(key).toString().trimmed();
+}
+
+QString normalizeOpenedWebPath(const QString &url)
+{
+    const QString trimmed = url.trimmed();
+    if (trimmed.startsWith(QLatin1String("homeassistant://")))
+        return QLatin1Char('/') + trimmed.mid(16);
+    return trimmed;
+}
+
 bool isLovelacePanelComponent(const QString &component)
 {
     return component.isEmpty() || component == QLatin1String("lovelace");
@@ -421,7 +473,11 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_entityIconsId(0)
     , m_subscribeRegistryId(0)
     , m_energyId(0)
+    , m_ingressAddonInfoId(0)
+    , m_ingressSessionId(0)
+    , m_ingressValidateId(0)
     , m_initialDashboardSelected(false)
+    , m_pendingWebChromeless(false)
 {
 }
 
@@ -483,6 +539,8 @@ QString LovelaceCoordinator::pendingNavigate() const { return m_pendingNavigate;
 QString LovelaceCoordinator::pendingUrl() const { return m_pendingUrl; }
 QString LovelaceCoordinator::pendingMoreInfo() const { return m_pendingMoreInfo; }
 QString LovelaceCoordinator::pendingWebPath() const { return m_pendingWebPath; }
+bool LovelaceCoordinator::pendingWebChromeless() const { return m_pendingWebChromeless; }
+QString LovelaceCoordinator::ingressSession() const { return m_ingressSession; }
 QVariantMap LovelaceCoordinator::pendingConfirmation() const { return m_pendingConfirmation; }
 HassCameraStream *LovelaceCoordinator::cameraStream() const { return m_cameraStream; }
 
@@ -513,12 +571,7 @@ void LovelaceCoordinator::selectSwitcherPath(const QString &path)
     // either fails or, worse, can return the default dashboard so the tap
     // looks like a no-op.
     if (!isLovelacePanelComponent(component)) {
-        const QString webPath = next.isEmpty() ? QStringLiteral("/lovelace")
-                                               : (QLatin1Char('/') + next);
-        HelmsmanLog::info(QStringLiteral("ui"),
-                          QStringLiteral("switcher web panel %1 (%2)")
-                          .arg(webPath, component));
-        openWebPath(webPath);
+        openPanelInWebView(next, component);
         return;
     }
     HelmsmanLog::info(QStringLiteral("ui"),
@@ -572,6 +625,115 @@ void LovelaceCoordinator::applyProbedPanelConfig(const QString &path, bool succe
     openWebPath(path.isEmpty() ? QStringLiteral("/lovelace") : (QLatin1Char('/') + path));
 }
 
+void LovelaceCoordinator::openPanelInWebView(const QString &path, const QString &component)
+{
+    const QVariantMap panel = panelByPath(path, m_panels);
+    const QString iframeUrl = normalizeOpenedWebPath(iframeUrlFromPanel(panel));
+    if (!iframeUrl.isEmpty()) {
+        HelmsmanLog::info(QStringLiteral("ui"),
+                          QStringLiteral("switcher iframe panel %1 (%2)")
+                          .arg(iframeUrl, component));
+        openWebPath(iframeUrl, true);
+        return;
+    }
+    const QString slug = addonSlugFromPanel(panel, path);
+    if (!slug.isEmpty()) {
+        const QString fallback = path.isEmpty() ? QStringLiteral("/lovelace")
+                                                : (QLatin1Char('/') + path);
+        HelmsmanLog::info(QStringLiteral("ui"),
+                          QStringLiteral("switcher ingress panel %1 (%2)")
+                          .arg(slug, component));
+        requestIngressOpen(slug, fallback);
+        return;
+    }
+    const QString webPath = path.isEmpty() ? QStringLiteral("/lovelace")
+                                           : (QLatin1Char('/') + path);
+    HelmsmanLog::info(QStringLiteral("ui"),
+                      QStringLiteral("switcher web panel %1 (%2)")
+                      .arg(webPath, component));
+    openWebPath(webPath);
+}
+
+void LovelaceCoordinator::requestIngressOpen(const QString &slug, const QString &fallbackPath)
+{
+    m_pendingIngressSlug = slug;
+    m_pendingIngressFallback = fallbackPath;
+    m_pendingIngressUrl.clear();
+    if (!m_socket || !m_socket->authenticated()) {
+        openWebPath(fallbackPath);
+        return;
+    }
+
+    QJsonObject info;
+    info.insert(QStringLiteral("type"), QStringLiteral("supervisor/api"));
+    info.insert(QStringLiteral("endpoint"),
+                QStringLiteral("/addons/%1/info").arg(slug));
+    info.insert(QStringLiteral("method"), QStringLiteral("get"));
+    m_ingressAddonInfoId = m_socket->sendCommand(info);
+    if (m_ingressAddonInfoId == 0) {
+        openWebPath(fallbackPath);
+        return;
+    }
+    requestIngressSession();
+}
+
+void LovelaceCoordinator::requestIngressSession()
+{
+    if (!m_socket || !m_socket->authenticated() || m_ingressSessionId != 0)
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("supervisor/api"));
+    msg.insert(QStringLiteral("endpoint"), QStringLiteral("/ingress/session"));
+    msg.insert(QStringLiteral("method"), QStringLiteral("post"));
+    m_ingressSessionId = m_socket->sendCommand(msg);
+}
+
+void LovelaceCoordinator::setIngressSession(const QString &session)
+{
+    if (m_ingressSession == session)
+        return;
+    m_ingressSession = session;
+    emit ingressSessionChanged();
+}
+
+void LovelaceCoordinator::finishIngressOpenIfReady()
+{
+    if (m_ingressAddonInfoId != 0 || m_ingressSessionId != 0)
+        return;
+    if (m_pendingIngressFallback.isEmpty() && m_pendingIngressUrl.isEmpty())
+        return;
+    const QString fallback = m_pendingIngressFallback;
+    const QString ingressUrl = normalizeOpenedWebPath(m_pendingIngressUrl);
+    m_pendingIngressSlug.clear();
+    m_pendingIngressFallback.clear();
+    m_pendingIngressUrl.clear();
+    if (!ingressUrl.isEmpty() && !m_ingressSession.isEmpty()) {
+        HelmsmanLog::info(QStringLiteral("ui"),
+                          QStringLiteral("switcher ingress url %1").arg(ingressUrl));
+        openWebPath(ingressUrl, true);
+        return;
+    }
+    HelmsmanLog::info(QStringLiteral("ui"),
+                      QStringLiteral("switcher ingress fallback %1").arg(fallback));
+    openWebPath(fallback);
+}
+
+void LovelaceCoordinator::keepIngressSessionAlive()
+{
+    if (m_ingressSession.isEmpty() || m_ingressValidateId != 0)
+        return;
+    if (!m_socket || !m_socket->authenticated())
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("supervisor/api"));
+    msg.insert(QStringLiteral("endpoint"), QStringLiteral("/ingress/validate_session"));
+    msg.insert(QStringLiteral("method"), QStringLiteral("post"));
+    QJsonObject data;
+    data.insert(QStringLiteral("session"), m_ingressSession);
+    msg.insert(QStringLiteral("data"), data);
+    m_ingressValidateId = m_socket->sendCommand(msg);
+}
+
 void LovelaceCoordinator::setCurrentViewIndex(int index)
 {
     if (m_views.isEmpty()) {
@@ -592,6 +754,8 @@ void LovelaceCoordinator::setCurrentViewIndex(int index)
 
 void LovelaceCoordinator::start()
 {
+    if (m_wantRunning)
+        return;
     m_wantRunning = true;
     if (m_socket && m_socket->authenticated())
         subscribeAll();
@@ -611,6 +775,12 @@ void LovelaceCoordinator::stop()
     m_entityIconsId = 0;
     m_panelsId = 0;
     m_panelConfigId = 0;
+    m_ingressAddonInfoId = 0;
+    m_ingressSessionId = 0;
+    m_ingressValidateId = 0;
+    m_pendingIngressSlug.clear();
+    m_pendingIngressFallback.clear();
+    m_pendingIngressUrl.clear();
     m_pendingPanelPath.clear();
     m_nativePanelPaths.clear();
     m_configId = 0;
@@ -653,8 +823,15 @@ void LovelaceCoordinator::selectViewByPath(const QString &path)
 void LovelaceCoordinator::onConnectionReady()
 {
     emit connectedChanged();
+    const QString ingressSlug = m_pendingIngressSlug;
+    const QString ingressFallback = m_pendingIngressFallback;
+    m_ingressAddonInfoId = 0;
+    m_ingressSessionId = 0;
+    m_ingressValidateId = 0;
     if (m_wantRunning)
         subscribeAll();
+    if (!ingressSlug.isEmpty())
+        requestIngressOpen(ingressSlug, ingressFallback);
 }
 
 void LovelaceCoordinator::onAuthenticatedChanged()
@@ -921,6 +1098,42 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         const QString path = m_pendingPanelPath;
         m_pendingPanelPath.clear();
         applyProbedPanelConfig(path, success, result);
+        return;
+    }
+    if (id == m_ingressAddonInfoId) {
+        m_ingressAddonInfoId = 0;
+        if (success)
+            m_pendingIngressUrl = supervisorDataString(result, QStringLiteral("ingress_url"));
+        else
+            m_pendingIngressUrl.clear();
+        if (m_pendingIngressUrl.isEmpty()) {
+            HelmsmanLog::info(QStringLiteral("ui"),
+                              QStringLiteral("switcher ingress info failed for %1")
+                              .arg(m_pendingIngressSlug));
+        }
+        finishIngressOpenIfReady();
+        return;
+    }
+    if (id == m_ingressSessionId) {
+        m_ingressSessionId = 0;
+        const QString session = success
+                ? supervisorDataString(result, QStringLiteral("session"))
+                : QString();
+        if (!session.isEmpty())
+            setIngressSession(session);
+        else
+            HelmsmanLog::info(QStringLiteral("ui"),
+                              QStringLiteral("switcher ingress session failed"));
+        finishIngressOpenIfReady();
+        return;
+    }
+    if (id == m_ingressValidateId) {
+        m_ingressValidateId = 0;
+        if (success)
+            return;
+        HelmsmanLog::info(QStringLiteral("ui"),
+                          QStringLiteral("ingress session expired; creating another"));
+        requestIngressSession();
         return;
     }
     if (id == m_configId) {
@@ -1900,9 +2113,10 @@ void LovelaceCoordinator::openMoreInfo(const QString &entityId)
     emit pendingMoreInfoChanged();
 }
 
-void LovelaceCoordinator::openWebPath(const QString &path)
+void LovelaceCoordinator::openWebPath(const QString &path, bool chromeless)
 {
     m_pendingWebPath = path;
+    m_pendingWebChromeless = chromeless;
     emit pendingWebPathChanged();
 }
 
@@ -1932,9 +2146,10 @@ void LovelaceCoordinator::clearPendingMoreInfo()
 
 void LovelaceCoordinator::clearPendingWebPath()
 {
-    if (m_pendingWebPath.isEmpty())
+    if (m_pendingWebPath.isEmpty() && !m_pendingWebChromeless)
         return;
     m_pendingWebPath.clear();
+    m_pendingWebChromeless = false;
     emit pendingWebPathChanged();
 }
 

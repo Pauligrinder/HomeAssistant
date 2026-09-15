@@ -45,6 +45,8 @@ class LovelaceCoordinator : public QObject
     Q_PROPERTY(QString pendingUrl READ pendingUrl NOTIFY pendingUrlChanged)
     Q_PROPERTY(QString pendingMoreInfo READ pendingMoreInfo NOTIFY pendingMoreInfoChanged)
     Q_PROPERTY(QString pendingWebPath READ pendingWebPath NOTIFY pendingWebPathChanged)
+    Q_PROPERTY(bool pendingWebChromeless READ pendingWebChromeless NOTIFY pendingWebPathChanged)
+    Q_PROPERTY(QString ingressSession READ ingressSession NOTIFY ingressSessionChanged)
     Q_PROPERTY(QVariantMap pendingConfirmation READ pendingConfirmation NOTIFY pendingConfirmationChanged)
     Q_PROPERTY(HassCameraStream *cameraStream READ cameraStream CONSTANT)
 
@@ -78,6 +80,8 @@ public:
     QString pendingUrl() const;
     QString pendingMoreInfo() const;
     QString pendingWebPath() const;
+    bool pendingWebChromeless() const;
+    QString ingressSession() const;
     QVariantMap pendingConfirmation() const;
     HassCameraStream *cameraStream() const;
 
@@ -136,7 +140,8 @@ public slots:
     void clearPendingUrl();
     void clearPendingMoreInfo();
     void clearPendingWebPath();
-    void openWebPath(const QString &path);
+    void openWebPath(const QString &path, bool chromeless = false);
+    void keepIngressSessionAlive();
     void openMoreInfo(const QString &entityId);
     void fetchEnergyPrefs();
     void fetchCalendar(const QString &entityId);
@@ -169,6 +174,7 @@ signals:
     void pendingUrlChanged();
     void pendingMoreInfoChanged();
     void pendingWebPathChanged();
+    void ingressSessionChanged();
     void pendingConfirmationChanged();
     void historyReady(const QString &entityId, const QVariantList &points);
     void statisticsReady(const QString &entityId, const QVariantList &points);
@@ -196,6 +202,11 @@ private:
     void requestPanelConfig(const QString &path);
     void applyProbedPanelConfig(const QString &path, bool success, const QVariant &result);
     bool isKnownDashboardPath(const QString &path) const;
+    void openPanelInWebView(const QString &path, const QString &component);
+    void requestIngressOpen(const QString &slug, const QString &fallbackPath);
+    void finishIngressOpenIfReady();
+    void requestIngressSession();
+    void setIngressSession(const QString &session);
     void requestStates();
     void requestUser();
     void requestFrontendDefaults();
@@ -278,6 +289,9 @@ private:
     int m_entityIconsId;
     int m_subscribeRegistryId;
     int m_energyId;
+    int m_ingressAddonInfoId;
+    int m_ingressSessionId;
+    int m_ingressValidateId;
     QString m_lastError;
     QString m_currentUrlPath;
     QString m_userId;
@@ -289,6 +303,11 @@ private:
     QString m_pendingUrl;
     QString m_pendingMoreInfo;
     QString m_pendingWebPath;
+    bool m_pendingWebChromeless;
+    QString m_ingressSession;
+    QString m_pendingIngressSlug;
+    QString m_pendingIngressFallback;
+    QString m_pendingIngressUrl;
     QVariantMap m_pendingConfirmation;
     QVariantMap m_pendingConfirmedAction;
     QString m_pendingActionEntityId;

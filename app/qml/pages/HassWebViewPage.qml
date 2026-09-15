@@ -7,6 +7,9 @@ Page {
     objectName: page.isHome ? "HomePage" : "HassWebViewPage"
     property var hassClient
     property string startPath: "/lovelace"
+    property string ingressSession: ""
+    property bool ingressCookieSet: false
+    property bool chromeless: false
     property bool isHome: false
     property bool tokensInjected: false
     property bool bridgeInstalled: false
@@ -50,9 +53,21 @@ Page {
                 ? page.haDarkText
                 : page.haLightText
     }
-    property string startUrl: (hassClient && hassClient.baseUrl.length > 0)
-                              ? page.instancePath(page.startPath || "/lovelace")
-                              : ""
+    readonly property bool needsIngressCookie: page.ingressSession.length > 0
+            && String(page.startPath || "").indexOf("/api/hassio_ingress/") >= 0
+    readonly property bool skipFrontendChrome: {
+        if (page.chromeless || page.needsIngressCookie)
+            return true
+        var path = String(page.startPath || "")
+        return path.indexOf("http://") === 0 || path.indexOf("https://") === 0
+    }
+    property string startUrl: {
+        if (!hassClient || hassClient.baseUrl.length === 0)
+            return ""
+        if (page.needsIngressCookie && !page.ingressCookieSet)
+            return page.instancePath("/")
+        return page.instancePath(page.startPath || "/lovelace")
+    }
     property string dashboardUrl: page.startUrl
     property int authHops: 0
     // Gecko already lays out below the punch-hole. Only Atlantic's WPE view
@@ -67,6 +82,8 @@ Page {
     property string loadStatusText: {
         if (page.webViewFailed)
             return "Browser engine failed to load."
+        if (page.skipFrontendChrome)
+            return "Loading…"
         if (!page.tokensInjected)
             return "Preparing session..."
         if (dashboardView && dashboardView.loading && dashboardView.loadProgress > 0)
@@ -93,14 +110,56 @@ Page {
     }
 
     function instancePath(path) {
+        var value = String(path || "")
+        if (value.indexOf("http://") === 0 || value.indexOf("https://") === 0)
+            return value
+        if (value.indexOf("homeassistant://") === 0)
+            value = "/" + value.substring(16)
         var base = hassClient.baseUrl
         if (!base || base.length === 0)
             return ""
         if (base.charAt(base.length - 1) === "/")
             base = base.substring(0, base.length - 1)
-        if (!path || path.charAt(0) !== "/")
-            path = "/" + (path || "")
-        return base + path
+        if (!value.length || value.charAt(0) !== "/")
+            value = "/" + value
+        return base + value
+    }
+
+    function applyIngressCookie(done) {
+        var session = page.ingressSession || ""
+        if (!session.length) {
+            if (typeof done === "function")
+                done(false)
+            return
+        }
+        var secure = String(hassClient.baseUrl).indexOf("https://") === 0
+                ? ";Secure" : ""
+        var script = "return (function(){"
+                + "try{"
+                + "  document.cookie='ingress_session='+" + page.jsString(session)
+                + "+';path=/api/hassio_ingress/;SameSite=Strict" + secure + "';"
+                + "  return 'ok';"
+                + "}catch(e){return 'fail';}"
+                + "})();"
+        page.runViewJavaScript(
+                    script,
+                    function(result) {
+                        if (typeof done === "function")
+                            done(result === "ok")
+                    },
+                    function() {
+                        if (typeof done === "function")
+                            done(false)
+                    })
+    }
+
+    function openChromelessTarget() {
+        if (!dashboardView)
+            return
+        var target = page.instancePath(page.startPath)
+        if (!target.length)
+            return
+        dashboardView.url = target
     }
 
     function isHassFrontendUrl(value) {
@@ -147,6 +206,7 @@ Page {
         page.overlayTextColor = page.fallbackOverlayText
         readyCheckTimer.stop()
         page.lastLoadedBase = ""
+        page.ingressCookieSet = false
     }
 
     function applyLoadingTheme(raw) {
@@ -210,6 +270,12 @@ Page {
             return
         if (page.status !== PageStatus.Active || !Qt.application.active)
             return
+
+        if (page.skipFrontendChrome) {
+            if (page.needsIngressCookie)
+                page.applyIngressCookie()
+            return
+        }
 
         page.ensureSessionFresh()
 
@@ -318,6 +384,8 @@ Page {
     }
 
     function navigateOpenedPathOnce() {
+        if (page.skipFrontendChrome)
+            return
         if (page.isHome) {
             page.navigateDefaultPanelOnce()
             return
@@ -636,6 +704,33 @@ Page {
         }
     }
 
+    Connections {
+        target: hassClient && hassClient.lovelace ? hassClient.lovelace : null
+        onIngressSessionChanged: {
+            if (!hassClient || !hassClient.lovelace)
+                return
+            var next = hassClient.lovelace.ingressSession || ""
+            if (next === page.ingressSession)
+                return
+            page.ingressSession = next
+            if (page.ingressCookieSet && next.length)
+                page.applyIngressCookie()
+        }
+    }
+
+    Timer {
+        id: ingressKeepAliveTimer
+        interval: 60000
+        repeat: true
+        running: page.status === PageStatus.Active
+                 && page.needsIngressCookie
+                 && hassClient && hassClient.loggedIn
+        onTriggered: {
+            if (hassClient && hassClient.lovelace)
+                hassClient.lovelace.keepIngressSessionAlive()
+        }
+    }
+
     Rectangle {
         id: cutoutFill
         anchors.top: parent.top
@@ -673,6 +768,17 @@ Page {
             if (!dashboardView || !dashboardView.loaded)
                 return
             page.lastLoadedBase = hassClient.baseUrl
+            if (page.skipFrontendChrome) {
+                if (page.needsIngressCookie && !page.ingressCookieSet) {
+                    page.applyIngressCookie(function() {
+                        page.ingressCookieSet = true
+                        page.openChromelessTarget()
+                    })
+                    return
+                }
+                page.finishDashboardLoad()
+                return
+            }
             page.injectSessionAndBridge()
         }
         onUrlChanged: {
@@ -747,9 +853,10 @@ Page {
         id: injectRetryTimer
         interval: 500
         repeat: true
-        running: !!(dashboardView && dashboardView.loaded
-                    && hassClient && hassClient.loggedIn
-                    && !page.tokensInjected)
+        running: !page.skipFrontendChrome
+                 && !!(dashboardView && dashboardView.loaded
+                       && hassClient && hassClient.loggedIn
+                       && !page.tokensInjected)
         onTriggered: page.injectSessionAndBridge()
     }
 

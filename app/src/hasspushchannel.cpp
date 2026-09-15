@@ -57,16 +57,21 @@ void HassPushChannel::configure(const QString &baseUrl,
     Q_UNUSED(accessToken);
     Q_UNUSED(accessExpiresAt);
     Q_UNUSED(ignoreSslErrors);
+    const bool webhookChanged = m_webhookId != webhookId;
     m_webhookId = webhookId;
-    m_subscribed = false;
-    m_pushSubscriptionId = 0;
-    if (m_wantRunning && m_socket && m_socket->authenticated())
+    if (webhookChanged) {
+        m_subscribed = false;
+        m_pushSubscriptionId = 0;
+    }
+    if (m_wantRunning && m_socket && m_socket->authenticated() && !m_subscribed)
         subscribePushChannel();
 }
 
 void HassPushChannel::start()
 {
     m_wantRunning = true;
+    if (m_subscribed)
+        return;
     if (m_socket && m_socket->authenticated())
         subscribePushChannel();
 }
