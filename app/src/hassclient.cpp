@@ -886,10 +886,23 @@ bool HassClient::parseEndpoint(const QString &endpoint, QString *error)
     if (!parseEndpointSpec(endpoint, m_useSsl, &ssl, &host, &port, error))
         return false;
 
-    setUseSsl(ssl);
-    setHost(host);
-    setPort(port);
+    // Assign all three fields before rebuilding the URL. The setters each
+    // emit baseUrlChanged, which used to reconnect the websocket three times
+    // (wss://old-host, wss://new-host:old-port, then the real URL) and hang
+    // Qt 5.6's SSL socket.
+    const bool sslChanged = m_useSsl != ssl;
+    const bool hostUpdated = m_host != host;
+    const bool portUpdated = m_port != port;
+    m_useSsl = ssl;
+    m_host = host;
+    m_port = port;
     rebuildBaseUrl();
+    if (sslChanged)
+        emit useSslChanged();
+    if (hostUpdated)
+        emit hostChanged();
+    if (portUpdated)
+        emit portChanged();
     return true;
 }
 
@@ -1133,7 +1146,9 @@ void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ig
     }
 
     setIgnoreSslErrors(ignoreSslErrors);
-    setUseSsl(useSsl);
+    // Seed the scheme-less default without rebuilding the previous host as
+    // https/http. parseEndpoint applies host/port/scheme together.
+    m_useSsl = useSsl;
 
     const QString previousHost = m_host;
 
@@ -2010,7 +2025,13 @@ void HassClient::handleToken(const QByteArray &data, bool fromRefresh)
         setConnected(true);
         persistSession();
         qWarning() << "Helmsman: access token refreshed for" << m_baseUrl;
-        startPushChannel();
+        if (m_websocket && m_websocket->authenticated()) {
+            // Keep the live socket. A full startPushChannel would resubscribe
+            // Lovelace and freeze the dashboard on get_states.
+            configureRealtime();
+        } else {
+            startPushChannel();
+        }
         return;
     }
 

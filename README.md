@@ -43,7 +43,9 @@ app/
    choose them, and switching needs a restart. Settings → Dashboard can also
    enable an experimental native Silica renderer of Lovelace JSON. Change
    dashboard lists Lovelace views and sidebar add-ons; Lovelace-like panels
-   stay native, while ingress add-ons open in the web view. Energy and the
+   stay native, while ingress add-ons open in the web view at the add-on
+   URL (no Home Assistant header or sidebar) when Supervisor allows it.
+   Energy and the
    HA Map panel still open in the web view, as do custom cards other than
    the person-status / person-info, custom-calendar, and ApexCharts ones
    that have native equivalents (those keep updating after the first paint).
@@ -113,9 +115,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.3.4-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.3.5-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.3.4-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.3.5-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`,

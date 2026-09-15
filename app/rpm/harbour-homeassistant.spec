@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.4
+Version:    0.3.5
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,12 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Tue Sep 15 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.5-1
+- Open sidebar add-ons at their ingress or iframe URL so the Home
+  Assistant header and sidebar never load.
+- Keep the UI alive when Wi-Fi drops and Helmsman switches to the
+  external URL instead of freezing on a reused Qt 5.6 SSL websocket.
+
 * Sun Sep 13 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.4-1
 - Open sidebar add-on pages in the web view and stay on that path
   instead of bouncing back to the default dashboard.

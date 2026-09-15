@@ -63,10 +63,12 @@ Page {
         return false
     }
 
-    function openWeb(path) {
+    function openWeb(path, session, chromeless) {
         pageStack.push(Qt.resolvedUrl("HassWebViewPage.qml"), {
                            hassClient: hassClient,
-                           startPath: path || "/lovelace"
+                           startPath: path || "/lovelace",
+                           ingressSession: session || "",
+                           chromeless: !!chromeless
                        })
     }
 
@@ -76,8 +78,10 @@ Page {
         if (page.status !== PageStatus.Active || pageStack.busy)
             return
         var path = dashboard.pendingWebPath
+        var session = dashboard.ingressSession || ""
+        var chromeless = !!dashboard.pendingWebChromeless
         dashboard.clearPendingWebPath()
-        page.openWeb(path)
+        page.openWeb(path, session, chromeless)
     }
 
     function openMoreInfo(entityId) {
