@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.6
+Version:    0.3.7
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,9 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Tue Sep 15 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.7-1
+- Do not reserve a title row on glance cards that have no title.
+
 * Tue Sep 15 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.6-1
 - Lay out glance cards in a compact column grid: five columns by
   default, or the configured count, wrapping with empty space on the

@@ -9,6 +9,7 @@ CardChrome {
     contentBottomMargin: Theme.paddingSmall
 
     readonly property var entities: (card && card.entities) ? card.entities : []
+    readonly property bool hasTitle: !!(card && card.title && String(card.title).length > 0)
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property bool showName: !card || card.show_name !== false
     readonly property bool showIcon: !card || card.show_icon !== false
@@ -29,8 +30,9 @@ CardChrome {
 
     Label {
         width: parent.width
-        visible: card && card.title && String(card.title).length > 0
-        text: card && card.title ? card.title : ""
+        visible: root.hasTitle
+        height: visible ? implicitHeight : 0
+        text: root.hasTitle ? String(card.title) : ""
         color: Theme.highlightColor
         font.pixelSize: Theme.fontSizeSmall
         elide: Text.ElideRight
