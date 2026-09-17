@@ -43,8 +43,7 @@ Page {
             return true
         return dashboard.isDefaultDashboardPath(dashboard.currentUrlPath || "")
     }
-    backNavigation: false
-    showNavigationIndicator: !page.showingDefaultDashboard
+    backNavigation: !page.showingDefaultDashboard
 
     function openHassSettings() {
         page.openWeb("/config")
@@ -438,25 +437,6 @@ Page {
         if (dashboard && dashboard.ready && hassClient && !page.notifiedReady) {
             page.notifiedReady = true
             hassClient.notifyDashboardReady()
-        }
-    }
-
-    // Root home cannot pop, so a second NativeHomePage for swipe-back
-    // doubled every navigation. Steal the left-edge gesture instead.
-    MouseArea {
-        z: 8
-        anchors.left: parent.left
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        width: Theme.itemSizeSmall
-        enabled: !page.showingDefaultDashboard && page.status === PageStatus.Active
-        property real startX: 0
-        onPressed: startX = mouse.x
-        onReleased: {
-            if (mouse.x - startX >= Theme.paddingLarge)
-                page.goToDefaultDashboard()
-            else if (Math.abs(mouse.x - startX) < Theme.paddingSmall)
-                page.goToDefaultDashboard()
         }
     }
 }
