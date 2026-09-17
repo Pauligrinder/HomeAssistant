@@ -513,6 +513,7 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_userIsAdmin(false)
     , m_statesRevision(0)
     , m_currentViewIndex(0)
+    , m_configsRevision(0)
     , m_getStatesId(0)
     , m_subscribeStatesId(0)
     , m_subscribeLovelaceId(0)
@@ -598,7 +599,31 @@ QVariantMap LovelaceCoordinator::currentView() const
         return QVariantMap();
     return m_views.at(m_currentViewIndex).toMap();
 }
+int LovelaceCoordinator::configsRevision() const { return m_configsRevision; }
 int LovelaceCoordinator::statesRevision() const { return m_statesRevision; }
+
+QString LovelaceCoordinator::normalizedUrlPath(const QString &path) const
+{
+    return normalizeDashboardPath(path);
+}
+
+QVariantList LovelaceCoordinator::viewsForPath(const QString &path) const
+{
+    const QString key = normalizeDashboardPath(path);
+    if (m_viewsByPath.contains(key))
+        return m_viewsByPath.value(key);
+    if (key == m_currentUrlPath)
+        return m_views;
+    return QVariantList();
+}
+
+bool LovelaceCoordinator::pathConfigReady(const QString &path) const
+{
+    const QString key = normalizeDashboardPath(path);
+    if (m_viewsByPath.contains(key))
+        return !m_viewsByPath.value(key).isEmpty() || m_configByPath.contains(key);
+    return key == m_currentUrlPath && m_configLoaded;
+}
 QString LovelaceCoordinator::userId() const { return m_userId; }
 bool LovelaceCoordinator::userIsAdmin() const { return m_userIsAdmin; }
 QString LovelaceCoordinator::userName() const { return m_userName; }
@@ -620,8 +645,24 @@ void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
         return;
     m_configFallbackTried = true;
     m_pendingGenerated = false;
+    const bool same = m_currentUrlPath == next;
     m_currentUrlPath = next;
-    emit currentUrlPathChanged();
+    if (!same)
+        emit currentUrlPathChanged();
+    if (m_viewsByPath.contains(next)) {
+        m_currentConfig = m_configByPath.value(next);
+        m_views = m_viewsByPath.value(next);
+        if (m_currentViewIndex >= m_views.size())
+            m_currentViewIndex = 0;
+        m_configLoaded = true;
+        emit currentConfigChanged();
+        emit viewsChanged();
+        emit currentViewIndexChanged();
+        emit currentViewChanged();
+        if (m_statesLoaded)
+            setReady(true);
+        return;
+    }
     if (m_wantRunning && m_socket && m_socket->authenticated())
         requestConfig();
 }
@@ -991,7 +1032,8 @@ void LovelaceCoordinator::requestConfig()
     if (!m_socket || !m_socket->authenticated())
         return;
     setError(QString());
-    setReady(false);
+    if (m_viewsByPath.isEmpty())
+        setReady(false);
     m_configLoaded = false;
     m_pendingGenerated = false;
     setBusy(true);
@@ -1457,9 +1499,13 @@ void LovelaceCoordinator::commitConfig(const QVariantMap &config)
         m_currentViewIndex = 0;
     m_configLoaded = true;
     m_pendingGenerated = false;
+    m_configByPath.insert(m_currentUrlPath, m_currentConfig);
+    m_viewsByPath.insert(m_currentUrlPath, m_views);
+    ++m_configsRevision;
     emit currentConfigChanged();
     emit viewsChanged();
     emit currentViewChanged();
+    emit configsRevisionChanged();
     if (m_statesLoaded)
         setReady(true);
 }

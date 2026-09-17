@@ -19,7 +19,7 @@ Page {
         page.decided = true
         if (loggedIn) {
             if (hassClient.nativeDashboardEnabled) {
-                pageStack.replaceAbove(null, Qt.resolvedUrl("NativeHomeAnchor.qml"),
+                pageStack.replaceAbove(null, Qt.resolvedUrl("NativeHomePage.qml"),
                                        { hassClient: hassClient, mdiIcons: mdiIcons })
             } else {
                 pageStack.replaceAbove(null, Qt.resolvedUrl("HassWebViewPage.qml"),

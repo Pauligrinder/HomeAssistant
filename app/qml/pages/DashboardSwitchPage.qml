@@ -37,11 +37,27 @@ Page {
     function activate(entry) {
         if (!page.dashboard)
             return
-        // Queue the destination first. NativeHomePage only pushes a WebView
-        // once it is the current page and the stack is idle, so a pop cannot
-        // swallow the add-on page.
-        page.dashboard.selectSwitcherPath(page.pathOf(entry))
-        pageStack.pop()
+        var path = page.pathOf(entry)
+        if (page.kindOf(entry) !== "lovelace") {
+            page.dashboard.selectSwitcherPath(path)
+            pageStack.pop()
+            return
+        }
+        var norm = page.dashboard.normalizedUrlPath(path)
+        var existing = pageStack.find(function(p) {
+            return p && p.objectName === "HomePage" && p.boundPath === norm
+        })
+        if (existing) {
+            pageStack.pop(existing)
+            return
+        }
+        page.dashboard.setCurrentUrlPath(norm)
+        pageStack.replace(Qt.resolvedUrl("NativeHomePage.qml"), {
+                              hassClient: page.hassClient,
+                              mdiIcons: page.mdiIcons,
+                              followDefault: false,
+                              urlPath: norm
+                          })
     }
 
     SilicaFlickable {
@@ -70,8 +86,15 @@ Page {
                         width: page.tileWidth
                         height: page.tileHeight
                         readonly property string dashboardPath: page.pathOf(modelData)
-                        readonly property bool current: page.dashboard
-                                && dashboardPath === (page.dashboard.currentUrlPath || "")
+                        readonly property bool current: {
+                            var home = pageStack.find(function(p) {
+                                return p && p.objectName === "HomePage"
+                            })
+                            var activePath = home && home.boundPath !== undefined
+                                    ? home.boundPath
+                                    : (page.dashboard ? page.dashboard.currentUrlPath : "")
+                            return dashboardPath === activePath
+                        }
 
                         onClicked: page.activate(modelData)
 

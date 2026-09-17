@@ -21,7 +21,7 @@ ApplicationWindow
 
     function homePageUrl() {
         return hassClientInstance.nativeDashboardEnabled
-                ? Qt.resolvedUrl("pages/NativeHomeAnchor.qml")
+                ? Qt.resolvedUrl("pages/NativeHomePage.qml")
                 : Qt.resolvedUrl("pages/HassWebViewPage.qml")
     }
 
@@ -41,10 +41,9 @@ ApplicationWindow
     function goHomeIfLoggedIn() {
         if (!hassClientInstance.loggedIn)
             return
-        if (pageStack.currentPage
-                && (pageStack.currentPage.objectName === "HomePage"
-                    || pageStack.currentPage.objectName === "HomeAnchor"
-                    || pageStack.currentPage.objectName === "SplashPage"))
+                if (pageStack.currentPage
+                        && (pageStack.currentPage.objectName === "HomePage"
+                            || pageStack.currentPage.objectName === "SplashPage"))
             return
         appWindow.replaceHomePage()
     }
