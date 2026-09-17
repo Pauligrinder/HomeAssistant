@@ -40,6 +40,10 @@ Page {
     property var confirmDialogPage: null
     backNavigation: false
 
+    function openHassSettings() {
+        page.openWeb("/config")
+    }
+
     function openSettings() {
         pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { hassClient: hassClient })
     }
@@ -237,7 +241,11 @@ Page {
                 onClicked: page.openDashboardSwitcher()
             }
             MenuItem {
-                text: "Settings"
+                text: "Home Assistant settings"
+                onClicked: page.openHassSettings()
+            }
+            MenuItem {
+                text: "Helmsman settings"
                 onClicked: page.openSettings()
             }
             MenuItem {
