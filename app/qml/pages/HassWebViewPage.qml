@@ -96,12 +96,44 @@ Page {
     // own (settings subpages, add-on history). Pop the page only at the URL
     // this webview was opened with.
     property bool spaCanGoBack: false
-    backNavigation: !page.isHome && !(page.dashboardReady && page.webHasHistory)
+    property bool holdBackOff: false
+    readonly property bool startedAtConfig: page.isConfigHomePath(page.startPath)
+    readonly property bool onConfigRoot: page.isConfigHomePath(dashboardView ? dashboardView.url : "")
+    backNavigation: !page.isHome && !page.blockSilicaBack
     readonly property bool webHasHistory: page.spaCanGoBack || page.pathLeftStart
     readonly property bool pathLeftStart: {
         if (!dashboardView)
             return false
         return page.webPath(dashboardView.url) !== page.webPath(page.startPath)
+    }
+    readonly property bool blockSilicaBack: {
+        if (!page.dashboardReady)
+            return false
+        if (page.startedAtConfig)
+            return !page.onConfigRoot || page.holdBackOff
+        return page.webHasHistory || page.holdBackOff
+    }
+
+    onOnConfigRootChanged: {
+        if (!page.startedAtConfig)
+            return
+        if (!page.onConfigRoot) {
+            page.holdBackOff = true
+            historyReleaseTimer.stop()
+            return
+        }
+        historyReleaseTimer.restart()
+    }
+
+    onWebHasHistoryChanged: {
+        if (page.startedAtConfig)
+            return
+        if (page.webHasHistory) {
+            page.holdBackOff = true
+            historyReleaseTimer.stop()
+            return
+        }
+        historyReleaseTimer.restart()
     }
 
     function jsString(value) {
@@ -127,6 +159,11 @@ Page {
         if (s.length > 1 && s.charAt(s.length - 1) === "/")
             s = s.substring(0, s.length - 1)
         return s
+    }
+
+    function isConfigHomePath(value) {
+        var p = page.webPath(value)
+        return p === "/config" || p === "/config/dashboard"
     }
 
     function runViewJavaScript(script, ok, fail) {
@@ -571,7 +608,10 @@ Page {
                 + "        var href='';"
                 + "        if(n&&n.getAttribute)href=n.getAttribute('href')||'';"
                 + "        if(!href&&n&&n.href)href=String(n.href);"
-                + "        if(String(href).indexOf('helmsman-back-dashboard')>=0){"
+                + "        var txt=n&&n.textContent?String(n.textContent):'';"
+                + "        if(String(href).indexOf('helmsman-back-dashboard')>=0"
+                + "            ||(txt.indexOf('Back to dashboard')>=0&&n.tagName"
+                + "               &&String(n.tagName).toLowerCase().indexOf('list-item')>=0)){"
                 + "          ev.preventDefault();ev.stopPropagation();fire();return;"
                 + "        }"
                 + "      }"
@@ -582,9 +622,17 @@ Page {
                 + "    window.addEventListener('hashchange',onLoc);"
                 + "    window.addEventListener('location-changed',onLoc);"
                 + "  }"
+                + "  if(String(location.hash).indexOf('helmsman-back-dashboard')>=0){"
+                + "    window.__helmsmanQueue=window.__helmsmanQueue||[];"
+                + "    var now=Date.now();"
+                + "    if(!(window.__helmsmanBackAt&&now-window.__helmsmanBackAt<1000)){"
+                + "      window.__helmsmanBackAt=now;"
+                + "      window.__helmsmanQueue.push({type:'externalBus',opts:JSON.stringify({type:'helmsman/back_dashboard'})});"
+                + "    }"
+                + "  }"
                 + "  var loc=String(location.pathname||'');"
                 + "  if(loc.length>1&&loc.charAt(loc.length-1)==='/')loc=loc.slice(0,-1);"
-                + "  if(loc!=='/config')return;"
+                + "  if(loc!=='/config'&&loc!=='/config/dashboard')return;"
                 + "  var backPage={path:'#helmsman-back-dashboard',name:'Back to dashboard',"
                 + "    description:'Leave Home Assistant settings',"
                 + "    iconPath:'M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z',"
@@ -1022,6 +1070,13 @@ Page {
     onAppActiveChanged: {
         if (!page.appActive)
             page.lastBackgroundedAt = Date.now()
+    }
+
+    Timer {
+        id: historyReleaseTimer
+        interval: 500
+        repeat: false
+        onTriggered: page.holdBackOff = false
     }
 
     Timer {

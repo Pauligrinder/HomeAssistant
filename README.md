@@ -42,15 +42,16 @@ app/
    and Atlantic Browser's WPE WebKit view. Extra engines are off until you
    choose them, and switching needs a restart. Settings → Dashboard can also
    enable an experimental native Silica renderer of Lovelace JSON. The native
-   dashboard pulley opens Home Assistant settings in the web view (`/config`)
-   and Helmsman settings for connection and engine options. The Silica
+   dashboard pulley opens Home Assistant settings in the web view (`/config`).
+   Helmsman connection and engine options are under Settings → Companion app
+   in that web view. The Silica
    page-back swipe pops to the native dashboard when the web view has no
    in-page history; otherwise HA keeps that edge. Settings root also offers
    **Back to dashboard** under Companion app when the native renderer is on.
    Change
    dashboard lists Lovelace views and sidebar add-ons; Lovelace-like panels
-   stay native (a dashboard other than the default is swipe-back to that
-   default), while ingress add-ons open in the web view at the add-on
+   stay native (swipe from the left edge on a dashboard other than the
+   default returns to that default), while ingress add-ons open in the web view at the add-on
    URL (no Home Assistant header or sidebar) when Supervisor allows it.
    Energy and the
    HA Map panel still open in the web view, as do custom cards other than
@@ -122,9 +123,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.3.11-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.3.12-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.3.11-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.3.12-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`,
