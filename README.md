@@ -49,7 +49,8 @@ app/
    **Back to dashboard** under Companion app when the native renderer is on.
    Change
    dashboard lists Lovelace views and sidebar add-ons; Lovelace-like panels
-   stay native, while ingress add-ons open in the web view at the add-on
+   stay native (a dashboard other than the default is swipe-back to that
+   default), while ingress add-ons open in the web view at the add-on
    URL (no Home Assistant header or sidebar) when Supervisor allows it.
    Energy and the
    HA Map panel still open in the web view, as do custom cards other than

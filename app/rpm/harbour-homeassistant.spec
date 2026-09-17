@@ -68,6 +68,8 @@ desktop-file-install --delete-original \
   has in-page history, and restore it at the entry URL.
 - When the native dashboard is on, offer Back to dashboard under
   Companion app on the Home Assistant settings root.
+- A native dashboard other than the default is swipe-back to the
+  default dashboard.
 
 * Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.10-1
 - Restore the page-back swipe on Home Assistant settings and drop
