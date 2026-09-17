@@ -1378,9 +1378,11 @@ void HassClient::updateNetworkState(bool wifiReady, bool wifiConnected, const QS
 
     m_pendingNetworkState = state;
     m_pendingWifiSsid = nextSsid;
-    // Debounce endpoint switches — ConnMan can flap briefly when joining Wi‑Fi
-    // or falling back to mobile data.
-    m_endpointDebounceTimer.start();
+    // Debounce endpoint switches. Joining home Wi-Fi needs DHCP before the
+    // LAN address works; leaving it should fail over to the external URL
+    // sooner so we are not stuck on a dead 192.168 address.
+    const int delayMs = (state == NetworkWifi) ? 3500 : 800;
+    m_endpointDebounceTimer.start(delayMs);
 }
 
 void HassClient::applyEndpointNow()

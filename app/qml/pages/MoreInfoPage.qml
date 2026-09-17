@@ -19,6 +19,23 @@ Page {
                                         && Math.abs(page.latitude) <= 90
                                         && Math.abs(page.longitude) <= 180
                                         && !(page.latitude === 0 && page.longitude === 0)
+    readonly property var relatedIds: {
+        if (!dashboard || page.rev < 0 || !page.entityId.length)
+            return []
+        return dashboard.relatedEntities(page.entityId) || []
+    }
+    readonly property var relatedControls: {
+        var ids = page.relatedIds
+        return page.relatedBucket("controls", ids)
+    }
+    readonly property var relatedSensors: {
+        var ids = page.relatedIds
+        return page.relatedBucket("sensors", ids)
+    }
+    readonly property var relatedOther: {
+        var ids = page.relatedIds
+        return page.relatedBucket("other", ids)
+    }
 
     SilicaFlickable {
         id: flick
@@ -76,6 +93,12 @@ Page {
                 font.pixelSize: Theme.fontSizeLarge
                 wrapMode: Text.Wrap
                 text: (dashboard && page.rev >= 0) ? dashboard.formatState(page.entityId) : ""
+            }
+
+            HistoryGraph {
+                width: parent.width
+                dashboard: page.dashboard
+                entityId: page.entityId
             }
 
             Loader {
@@ -178,6 +201,50 @@ Page {
                                                   { "position": Math.round(value) }, page.entityId)
             }
 
+            Slider {
+                width: parent.width
+                visible: (page.domain === "number" || page.domain === "input_number")
+                         && dashboard && page.rev >= 0
+                minimumValue: page.numberBound("min", 0)
+                maximumValue: page.numberBound("max", 100)
+                stepSize: page.numberBound("step", 1)
+                value: (dashboard && page.rev >= 0)
+                       ? Number(dashboard.entityState(page.entityId)) : 0
+                label: "Value"
+                onReleased: dashboard.callService(page.domain, "set_value",
+                                                  { "value": value }, page.entityId)
+            }
+
+            SectionHeader {
+                text: "Controls"
+                visible: page.relatedControls.length > 0
+            }
+
+            Repeater {
+                model: page.relatedControls
+                delegate: relatedRow
+            }
+
+            SectionHeader {
+                text: "Sensors"
+                visible: page.relatedSensors.length > 0
+            }
+
+            Repeater {
+                model: page.relatedSensors
+                delegate: relatedRow
+            }
+
+            SectionHeader {
+                text: "Related"
+                visible: page.relatedOther.length > 0
+            }
+
+            Repeater {
+                model: page.relatedOther
+                delegate: relatedRow
+            }
+
             SectionHeader {
                 text: "Attributes"
                 visible: true
@@ -201,6 +268,112 @@ Page {
             entityId: page.entityId
             active: page.status === PageStatus.Active
         }
+    }
+
+    Component {
+        id: relatedRow
+        BackgroundItem {
+            id: row
+            width: column.width
+            height: Theme.itemSizeSmall
+            property string relatedId: String(modelData || "")
+            readonly property bool toggleable: dashboard && page.rev >= 0 && row.relatedId.length
+                                               ? dashboard.isToggleable(row.relatedId) : false
+
+            onClicked: {
+                if (!row.relatedId.length)
+                    return
+                pageStack.push(Qt.resolvedUrl("MoreInfoPage.qml"), {
+                                   hassClient: page.hassClient,
+                                   mdiIcons: page.mdiIcons,
+                                   entityId: row.relatedId
+                               })
+            }
+
+            Row {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.horizontalPageMargin
+                anchors.rightMargin: Theme.horizontalPageMargin
+                spacing: Theme.paddingSmall
+
+                MdiIcon {
+                    id: relatedIcon
+                    y: (parent.height - height) / 2
+                    mdiIcons: page.mdiIcons
+                    name: (dashboard && page.rev >= 0 && row.relatedId.length)
+                          ? dashboard.entityIcon(row.relatedId) : ""
+                    iconColor: (dashboard && page.rev >= 0 && row.relatedId.length
+                                && dashboard.isOn(row.relatedId))
+                               ? Theme.highlightColor : Theme.primaryColor
+                    width: Theme.iconSizeSmall
+                }
+
+                Label {
+                    y: (parent.height - height) / 2
+                    width: Math.max(0, parent.width - relatedIcon.width - Theme.paddingSmall
+                                    - (relatedState.visible
+                                       ? relatedState.width + Theme.paddingSmall : 0)
+                                    - (relatedToggle.visible
+                                       ? relatedToggle.width + Theme.paddingSmall : 0))
+                    text: (dashboard && page.rev >= 0 && row.relatedId.length)
+                          ? dashboard.friendlyName(row.relatedId) : row.relatedId
+                    truncationMode: TruncationMode.Fade
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.primaryColor
+                }
+
+                Label {
+                    id: relatedState
+                    y: (parent.height - height) / 2
+                    visible: row.relatedId.length > 0 && !row.toggleable
+                    width: Math.min(implicitWidth, row.width * 0.45)
+                    horizontalAlignment: Text.AlignRight
+                    text: (dashboard && page.rev >= 0 && row.relatedId.length)
+                          ? dashboard.formatState(row.relatedId) : ""
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    color: Theme.secondaryColor
+                    truncationMode: TruncationMode.Fade
+                }
+
+                Switch {
+                    id: relatedToggle
+                    y: (parent.height - height) / 2
+                    visible: row.toggleable
+                    automaticCheck: false
+                    checked: (row.toggleable && page.rev >= 0)
+                             ? dashboard.isOn(row.relatedId) : false
+                    onClicked: dashboard.toggle(row.relatedId)
+                }
+            }
+        }
+    }
+
+    function relatedBucket(kind, all) {
+        var out = []
+        if (!all || !dashboard || page.rev < 0)
+            return out
+        for (var i = 0; i < all.length; ++i) {
+            var id = String(all[i])
+            var domain = dashboard.domainOf(id)
+            var control = dashboard.isToggleable(id)
+                          || domain === "number" || domain === "input_number"
+                          || domain === "select" || domain === "input_select"
+            var sensor = domain === "sensor" || domain === "binary_sensor"
+            if (kind === "controls" && control)
+                out.push(id)
+            else if (kind === "sensors" && sensor)
+                out.push(id)
+            else if (kind === "other" && !control && !sensor)
+                out.push(id)
+        }
+        return out
+    }
+
+    function numberBound(key, fallback) {
+        if (!dashboard || page.rev < 0)
+            return fallback
+        var n = Number(dashboard.attribute(page.entityId, key))
+        return isFinite(n) && (key !== "step" || n > 0) ? n : fallback
     }
 
     function cameraPowerSupported() {

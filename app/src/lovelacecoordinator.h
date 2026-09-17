@@ -109,6 +109,7 @@ public slots:
     QString formatState(const QString &entityId) const;
     QString areaName(const QString &areaId) const;
     QVariantList areaEntities(const QString &areaId) const;
+    QVariantList relatedEntities(const QString &entityId) const;
     QVariantList zones() const;
 
     bool isVisible(const QVariant &visibility) const;
@@ -150,6 +151,11 @@ public slots:
                             const QString &end);
     void fetchTodo(const QString &entityId);
     void setTodoItem(const QString &entityId, const QString &item, bool checked);
+    void addTodoItem(const QString &entityId, const QString &summary);
+    void removeTodoItem(const QString &entityId, const QString &item);
+    void moveTodoItem(const QString &entityId,
+                      const QString &uid,
+                      const QString &previousUid = QString());
     QVariantList calendarEvents(const QString &entityId) const;
     QVariantList todoItems(const QString &entityId) const;
 
@@ -332,6 +338,7 @@ private:
     QHash<QString, QVariantList> m_calendarEvents;
     QHash<QString, QVariantList> m_todoItems;
     QHash<int, QString> m_todoById;
+    QHash<int, QString> m_todoRefreshById;
 };
 
 #endif

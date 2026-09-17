@@ -58,8 +58,21 @@ Item {
         Repeater {
             model: flow.rows
             Row {
+                id: cardRow
                 width: column.width
                 spacing: Theme.paddingMedium
+                property int maxNatural: 0
+
+                function refreshRowHeight() {
+                    var h = 0
+                    for (var i = 0; i < rowRepeater.count; ++i) {
+                        var child = rowRepeater.itemAt(i)
+                        if (child && child.naturalHeight)
+                            h = Math.max(h, child.naturalHeight)
+                    }
+                    if (cardRow.maxNatural !== h)
+                        cardRow.maxNatural = h
+                }
 
                 Repeater {
                     id: rowRepeater
@@ -71,16 +84,10 @@ Item {
                         mdiIcons: flow.mdiIcons
                         columns: flow.columns
                         unitWidth: column.width
-                        rowHeight: {
-                            var h = 0
-                            var n = rowRepeater.count
-                            for (var i = 0; i < n; ++i) {
-                                var child = rowRepeater.itemAt(i)
-                                if (child && child.naturalHeight)
-                                    h = Math.max(h, child.naturalHeight)
-                            }
-                            return h
-                        }
+                        rowHeight: cardRow.maxNatural
+                        onNaturalHeightChanged: cardRow.refreshRowHeight()
+                        Component.onCompleted: cardRow.refreshRowHeight()
+                        Component.onDestruction: cardRow.refreshRowHeight()
                     }
                 }
             }
