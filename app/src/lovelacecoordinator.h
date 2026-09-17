@@ -31,6 +31,7 @@ class LovelaceCoordinator : public QObject
     Q_PROPERTY(QVariantList dashboards READ dashboards NOTIFY dashboardsChanged)
     Q_PROPERTY(QVariantList switcherItems READ switcherItems NOTIFY switcherItemsChanged)
     Q_PROPERTY(QString currentUrlPath READ currentUrlPath WRITE setCurrentUrlPath NOTIFY currentUrlPathChanged)
+    Q_PROPERTY(QString defaultUrlPath READ defaultUrlPath NOTIFY defaultUrlPathChanged)
     Q_PROPERTY(QVariantMap currentConfig READ currentConfig NOTIFY currentConfigChanged)
     Q_PROPERTY(QVariantList views READ views NOTIFY viewsChanged)
     Q_PROPERTY(int currentViewIndex READ currentViewIndex WRITE setCurrentViewIndex NOTIFY currentViewIndexChanged)
@@ -66,6 +67,8 @@ public:
     QVariantList dashboards() const;
     QVariantList switcherItems() const;
     QString currentUrlPath() const;
+    QString defaultUrlPath() const;
+    Q_INVOKABLE bool isDefaultDashboardPath(const QString &path) const;
     QVariantMap currentConfig() const;
     QVariantList views() const;
     int currentViewIndex() const;
@@ -167,6 +170,7 @@ signals:
     void dashboardsChanged();
     void switcherItemsChanged();
     void currentUrlPathChanged();
+    void defaultUrlPathChanged();
     void currentConfigChanged();
     void viewsChanged();
     void currentViewIndexChanged();

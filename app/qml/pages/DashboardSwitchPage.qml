@@ -37,10 +37,37 @@ Page {
     function activate(entry) {
         if (!page.dashboard)
             return
-        // Queue the destination first. NativeHomePage only pushes a WebView
-        // once it is the current page and the stack is idle, so a pop cannot
-        // swallow the add-on page.
-        page.dashboard.selectSwitcherPath(page.pathOf(entry))
+        var path = page.pathOf(entry)
+        var kind = page.kindOf(entry)
+        page.dashboard.selectSwitcherPath(path)
+
+        var below = pageStack.previousPage(page)
+        var belowSwipeable = !!(below && below.restoreDefaultOnPop)
+        var nativeOther = kind === "lovelace" && !page.dashboard.isDefaultDashboardPath(path)
+        var nativeDefault = kind === "lovelace" && page.dashboard.isDefaultDashboardPath(path)
+
+        if (nativeOther) {
+            if (belowSwipeable) {
+                pageStack.pop()
+                return
+            }
+            pageStack.replace(Qt.resolvedUrl("NativeHomePage.qml"), {
+                                  hassClient: hassClient,
+                                  mdiIcons: page.mdiIcons,
+                                  restoreDefaultOnPop: true
+                              })
+            return
+        }
+
+        if (nativeDefault && belowSwipeable) {
+            var root = pageStack.previousPage(below)
+            if (root)
+                pageStack.pop(root)
+            else
+                pageStack.pop()
+            return
+        }
+
         pageStack.pop()
     }
 

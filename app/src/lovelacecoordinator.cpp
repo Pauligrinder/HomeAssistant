@@ -577,6 +577,18 @@ QString LovelaceCoordinator::lastError() const { return m_lastError; }
 QVariantList LovelaceCoordinator::dashboards() const { return m_dashboards; }
 QVariantList LovelaceCoordinator::switcherItems() const { return m_switcherItems; }
 QString LovelaceCoordinator::currentUrlPath() const { return m_currentUrlPath; }
+
+QString LovelaceCoordinator::defaultUrlPath() const
+{
+    const QString path = !m_userDefaultPanel.isEmpty()
+            ? m_userDefaultPanel : m_systemDefaultPanel;
+    return normalizeDashboardPath(path);
+}
+
+bool LovelaceCoordinator::isDefaultDashboardPath(const QString &path) const
+{
+    return normalizeDashboardPath(path) == defaultUrlPath();
+}
 QVariantMap LovelaceCoordinator::currentConfig() const { return m_currentConfig; }
 QVariantList LovelaceCoordinator::views() const { return m_views; }
 int LovelaceCoordinator::currentViewIndex() const { return m_currentViewIndex; }
@@ -1027,10 +1039,7 @@ void LovelaceCoordinator::maybeRequestInitialConfig()
         return;
 
     if (!m_initialDashboardSelected) {
-        QString path = !m_userDefaultPanel.isEmpty()
-                ? m_userDefaultPanel : m_systemDefaultPanel;
-        if (path == QLatin1String("lovelace") || path == QLatin1String("null"))
-            path.clear();
+        const QString path = defaultUrlPath();
         if (m_currentUrlPath != path) {
             m_currentUrlPath = path;
             emit currentUrlPathChanged();
@@ -1134,6 +1143,7 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         if (success) {
             const QVariantMap core = result.toMap().value(QStringLiteral("value")).toMap();
             m_userDefaultPanel = core.value(QStringLiteral("default_panel")).toString();
+            emit defaultUrlPathChanged();
         }
         maybeRequestInitialConfig();
         return;
@@ -1143,6 +1153,7 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         if (success) {
             const QVariantMap core = result.toMap().value(QStringLiteral("value")).toMap();
             m_systemDefaultPanel = core.value(QStringLiteral("default_panel")).toString();
+            emit defaultUrlPathChanged();
         }
         maybeRequestInitialConfig();
         return;

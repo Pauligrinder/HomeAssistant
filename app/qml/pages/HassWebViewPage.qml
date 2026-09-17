@@ -92,10 +92,41 @@ Page {
             return "Loading dashboard…"
         return "Loading dashboard…"
     }
-    backNavigation: !page.isHome
+    // Leave the Silica edge-swipe free while the frontend can go back on its
+    // own (settings subpages, add-on history). Pop the page only at the URL
+    // this webview was opened with.
+    property bool spaCanGoBack: false
+    backNavigation: !page.isHome && !(page.dashboardReady && page.webHasHistory)
+    readonly property bool webHasHistory: page.spaCanGoBack || page.pathLeftStart
+    readonly property bool pathLeftStart: {
+        if (!dashboardView)
+            return false
+        return page.webPath(dashboardView.url) !== page.webPath(page.startPath)
+    }
 
     function jsString(value) {
         return JSON.stringify(value ? String(value) : "")
+    }
+
+    function webPath(value) {
+        var s = String(value || "")
+        if (s.indexOf("homeassistant://") === 0)
+            s = "/" + s.substring(16)
+        if (s.indexOf("http://") === 0 || s.indexOf("https://") === 0) {
+            var slash = s.indexOf("/", s.indexOf("://") + 3)
+            s = slash >= 0 ? s.substring(slash) : "/"
+        }
+        if (!s.length || s.charAt(0) !== "/")
+            s = "/" + s
+        var cut = s.indexOf("?")
+        if (cut >= 0)
+            s = s.substring(0, cut)
+        cut = s.indexOf("#")
+        if (cut >= 0)
+            s = s.substring(0, cut)
+        if (s.length > 1 && s.charAt(s.length - 1) === "/")
+            s = s.substring(0, s.length - 1)
+        return s
     }
 
     function runViewJavaScript(script, ok, fail) {
@@ -207,6 +238,7 @@ Page {
         readyCheckTimer.stop()
         page.lastLoadedBase = ""
         page.ingressCookieSet = false
+        page.spaCanGoBack = false
     }
 
     function applyLoadingTheme(raw) {
@@ -372,6 +404,7 @@ Page {
         page.readyCheckRunning = false
         page.dashboardReady = true
         page.pollBridge()
+        page.refreshWebHistory()
         // Sensor startup waits for this: its webhook calls must not compete
         // with the dashboard for the UI thread.
         // Overflow WebView is not the native home screen; sensors already
@@ -516,6 +549,77 @@ Page {
                     })
     }
 
+    function settingsExitJs() {
+        // Insert "Back to dashboard" under Companion app on ha-config-dashboard.
+        if (!hassClient || !hassClient.nativeDashboardEnabled || page.isHome)
+            return ""
+        return "window.__helmsmanInstallSettingsExit=function(){"
+                + "try{"
+                + "  if(!window.__helmsmanBackHook){"
+                + "    window.__helmsmanBackHook=true;"
+                + "    var fire=function(){"
+                + "      var now=Date.now();"
+                + "      if(window.__helmsmanBackAt&&now-window.__helmsmanBackAt<1000)return;"
+                + "      window.__helmsmanBackAt=now;"
+                + "      window.__helmsmanQueue=window.__helmsmanQueue||[];"
+                + "      window.__helmsmanQueue.push({type:'externalBus',opts:JSON.stringify({type:'helmsman/back_dashboard'})});"
+                + "    };"
+                + "    document.addEventListener('click',function(ev){"
+                + "      var path=ev.composedPath?ev.composedPath():[];"
+                + "      for(var i=0;i<path.length;i++){"
+                + "        var n=path[i];"
+                + "        var href='';"
+                + "        if(n&&n.getAttribute)href=n.getAttribute('href')||'';"
+                + "        if(!href&&n&&n.href)href=String(n.href);"
+                + "        if(String(href).indexOf('helmsman-back-dashboard')>=0){"
+                + "          ev.preventDefault();ev.stopPropagation();fire();return;"
+                + "        }"
+                + "      }"
+                + "    },true);"
+                + "    var onLoc=function(){"
+                + "      if(String(location.hash).indexOf('helmsman-back-dashboard')>=0)fire();"
+                + "    };"
+                + "    window.addEventListener('hashchange',onLoc);"
+                + "    window.addEventListener('location-changed',onLoc);"
+                + "  }"
+                + "  var loc=String(location.pathname||'');"
+                + "  if(loc.length>1&&loc.charAt(loc.length-1)==='/')loc=loc.slice(0,-1);"
+                + "  if(loc!=='/config')return;"
+                + "  var backPage={path:'#helmsman-back-dashboard',name:'Back to dashboard',"
+                + "    description:'Leave Home Assistant settings',"
+                + "    iconPath:'M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z',"
+                + "    iconColor:'#B1345C',core:true};"
+                + "  var found=[];"
+                + "  var walk=function(root){"
+                + "    if(!root||!root.querySelectorAll)return;"
+                + "    var navs=root.querySelectorAll('ha-config-navigation');"
+                + "    for(var i=0;i<navs.length;i++)found.push(navs[i]);"
+                + "    var all=root.querySelectorAll('*');"
+                + "    for(var j=0;j<all.length;j++){if(all[j].shadowRoot)walk(all[j].shadowRoot);}"
+                + "  };"
+                + "  walk(document);"
+                + "  var ha=document.querySelector('home-assistant');"
+                + "  if(ha&&ha.shadowRoot)walk(ha.shadowRoot);"
+                + "  for(var k=0;k<found.length;k++){"
+                + "    var pages=found[k].pages;"
+                + "    if(!pages||!pages.length)continue;"
+                + "    var idx=-1,hasB=false;"
+                + "    for(var p=0;p<pages.length;p++){"
+                + "      var path=pages[p]&&pages[p].path;"
+                + "      if(path==='#external-app-configuration')idx=p;"
+                + "      if(path==='#helmsman-back-dashboard')hasB=true;"
+                + "    }"
+                + "    if(idx>=0&&!hasB){"
+                + "      var next=pages.slice();"
+                + "      next.splice(idx+1,0,backPage);"
+                + "      found[k].pages=next;"
+                + "      try{found[k].requestUpdate();}catch(e1){}"
+                + "    }"
+                + "  }"
+                + "}catch(e){}"
+                + "};"
+    }
+
     function injectSessionAndBridge(silent) {
         if (!hassClient.accessToken || hassClient.accessToken.length === 0)
             return
@@ -568,6 +672,8 @@ Page {
                 + "  return true;"
                 + "};"
                 + "try{window.__helmsmanAttachExternal();}catch(e){}"
+                + page.settingsExitJs()
+                + "try{window.__helmsmanInstallSettingsExit&&window.__helmsmanInstallSettingsExit();}catch(e2){}"
                 + "window.__helmsmanBridge = true;"
                 + "return 'ok';"
                 + "})();"
@@ -601,6 +707,32 @@ Page {
                     })
     }
 
+    function refreshWebHistory() {
+        if (page.isHome || !page.dashboardReady)
+            return
+        page.runViewJavaScript(
+                    "return (function(){"
+                    + "try{"
+                    + "  if(!window.__helmsmanHistHook){"
+                    + "    window.__helmsmanHistHook=true;"
+                    + "    window.__helmsmanHistDepth=0;"
+                    + "    var push=history.pushState;"
+                    + "    history.pushState=function(){"
+                    + "      window.__helmsmanHistDepth=(window.__helmsmanHistDepth||0)+1;"
+                    + "      return push.apply(this,arguments);"
+                    + "    };"
+                    + "    window.addEventListener('popstate',function(){"
+                    + "      if(window.__helmsmanHistDepth>0)window.__helmsmanHistDepth-=1;"
+                    + "    });"
+                    + "  }"
+                    + "  return window.__helmsmanHistDepth>0?'1':'0';"
+                    + "}catch(e){return '0';}"
+                    + "})();",
+                    function(result) {
+                        page.spaCanGoBack = result === "1" || result === 1
+                    })
+    }
+
     function pollBridge() {
         if (!page.bridgeInstalled || !page.dashboardReady)
             return
@@ -608,6 +740,9 @@ Page {
         page.runViewJavaScript(
                     "return (function(){"
                     + "try{window.__helmsmanAttachExternal&&window.__helmsmanAttachExternal();}catch(e){}"
+                    + (hassClient && hassClient.nativeDashboardEnabled && !page.isHome
+                       ? "try{window.__helmsmanInstallSettingsExit&&window.__helmsmanInstallSettingsExit();}catch(e2){}"
+                       : "")
                     + "var q=window.__helmsmanQueue||[]; window.__helmsmanQueue=[]; return JSON.stringify(q);"
                     + "})();",
                     function(result) {
@@ -674,6 +809,11 @@ Page {
         }
         if (msg.type === "config_screen/show") {
             page.openSettings()
+            return
+        }
+        if (msg.type === "helmsman/back_dashboard") {
+            if (!page.isHome && hassClient && hassClient.nativeDashboardEnabled)
+                pageStack.pop()
         }
     }
 
@@ -882,6 +1022,17 @@ Page {
     onAppActiveChanged: {
         if (!page.appActive)
             page.lastBackgroundedAt = Date.now()
+    }
+
+    Timer {
+        id: historyPollTimer
+        interval: 250
+        repeat: true
+        running: page.status === PageStatus.Active
+                 && !page.isHome
+                 && page.dashboardReady
+                 && hassClient && hassClient.loggedIn
+        onTriggered: page.refreshWebHistory()
     }
 
     Timer {

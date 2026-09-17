@@ -38,7 +38,10 @@ Page {
     }
     property bool notifiedReady: false
     property var confirmDialogPage: null
-    backNavigation: false
+    // A second NativeHomePage is pushed for a non-default dashboard so the
+    // Silica edge swipe can pop back to the default one underneath.
+    property bool restoreDefaultOnPop: false
+    backNavigation: page.restoreDefaultOnPop
 
     function openHassSettings() {
         page.openWeb("/config")
@@ -53,6 +56,26 @@ Page {
                            hassClient: hassClient,
                            mdiIcons: page.mdiIcons
                        })
+    }
+
+    function pushSwipeableDashboard() {
+        pageStack.push(Qt.resolvedUrl("NativeHomePage.qml"), {
+                           hassClient: hassClient,
+                           mdiIcons: page.mdiIcons,
+                           restoreDefaultOnPop: true
+                       })
+    }
+
+    function ensureSwipeableDashboard() {
+        if (page.restoreDefaultOnPop)
+            return
+        if (!dashboard || dashboard.isDefaultDashboardPath(dashboard.currentUrlPath || ""))
+            return
+        if (page.status !== PageStatus.Active || pageStack.busy)
+            return
+        if (pageStack.currentPage !== page)
+            return
+        page.pushSwipeableDashboard()
     }
 
     function isSwitcherWebPanel(path) {
@@ -167,8 +190,16 @@ Page {
     }
 
     onStatusChanged: {
-        if (status === PageStatus.Active)
+        if (status === PageStatus.Active) {
             page.consumePendingWebPath()
+            page.ensureSwipeableDashboard()
+        }
+    }
+
+    Component.onDestruction: {
+        if (!page.restoreDefaultOnPop || !dashboard)
+            return
+        dashboard.setCurrentUrlPath(dashboard.defaultUrlPath || "")
     }
 
     Connections {
@@ -225,6 +256,7 @@ Page {
                     dashboard.cancelPendingAction()
             })
         }
+        onCurrentUrlPathChanged: page.ensureSwipeableDashboard()
     }
 
     SilicaFlickable {
