@@ -92,11 +92,7 @@ Page {
             return "Loading dashboard…"
         return "Loading dashboard…"
     }
-    backNavigation: !page.isHome && !page.blockBackGesture
-    readonly property bool blockBackGesture: {
-        var p = String(page.startPath || "")
-        return p === "/config" || p.indexOf("/config/") === 0 || p.indexOf("/config?") === 0
-    }
+    backNavigation: !page.isHome
 
     function jsString(value) {
         return JSON.stringify(value ? String(value) : "")
@@ -746,34 +742,10 @@ Page {
         z: 3
     }
 
-    SilicaFlickable {
-        id: settingsChrome
-        visible: page.blockBackGesture
-        anchors.top: cutoutFill.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: visible ? header.height : 0
-        contentHeight: height
-        flickableDirection: Flickable.VerticalFlick
-        z: 4
-
-        PullDownMenu {
-            MenuItem {
-                text: "Return to dashboard"
-                onClicked: pageStack.pop()
-            }
-        }
-
-        PageHeader {
-            id: header
-            title: "Home Assistant settings"
-        }
-    }
-
     Loader {
         id: webViewLoader
         anchors.fill: parent
-        anchors.topMargin: page.topCutoutHeight + settingsChrome.height
+        anchors.topMargin: page.topCutoutHeight
         // Keep the engine painted under the overlay. WPE WebKit only creates
         // its view on a real scene-graph frame; opacity 0 left Atlantic stuck
         // on "Preparing session...".
