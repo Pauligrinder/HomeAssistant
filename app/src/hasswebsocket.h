@@ -14,6 +14,7 @@
 
 class QWebSocket;
 class QUrl;
+class QThread;
 
 // General Home Assistant /api/websocket client. One authenticated socket is
 // shared by push notifications and the native Lovelace dashboard.
@@ -59,6 +60,7 @@ private slots:
     void sendPing();
     void onPongTimeout();
     void onConnectTimeout();
+    void reapSocket();
 
 private:
     void setConnected(bool connected);
@@ -74,6 +76,7 @@ private:
     int nextMessageId();
 
     QWebSocket *m_socket;
+    QThread *m_reaper;
     QTimer m_reconnectTimer;
     QTimer m_connectTimer;
     QTimer m_pingTimer;

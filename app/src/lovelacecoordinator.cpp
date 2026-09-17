@@ -33,6 +33,51 @@ QString domainOfEntity(const QString &entityId)
     return entityId.left(dot);
 }
 
+QString objectIdOf(const QString &entityId)
+{
+    const int dot = entityId.indexOf(QLatin1Char('.'));
+    if (dot < 0)
+        return entityId;
+    return entityId.mid(dot + 1);
+}
+
+bool registryDisabled(const QVariantMap &entry)
+{
+    const QVariant flagged = entry.value(QStringLiteral("disabled_by"));
+    if (!flagged.isValid() || flagged.isNull())
+        return false;
+    return !flagged.toString().isEmpty();
+}
+
+int relatedRank(const QString &domain)
+{
+    if (domain == QLatin1String("switch")
+            || domain == QLatin1String("light")
+            || domain == QLatin1String("lock")
+            || domain == QLatin1String("cover")
+            || domain == QLatin1String("fan")
+            || domain == QLatin1String("siren")
+            || domain == QLatin1String("button")
+            || domain == QLatin1String("input_boolean")
+            || domain == QLatin1String("input_button")
+            || domain == QLatin1String("number")
+            || domain == QLatin1String("input_number")
+            || domain == QLatin1String("select")
+            || domain == QLatin1String("input_select")
+            || domain == QLatin1String("valve")
+            || domain == QLatin1String("remote"))
+        return 0;
+    if (domain == QLatin1String("binary_sensor"))
+        return 1;
+    if (domain == QLatin1String("sensor"))
+        return 2;
+    if (domain == QLatin1String("camera")
+            || domain == QLatin1String("media_player")
+            || domain == QLatin1String("alarm_control_panel"))
+        return 3;
+    return 4;
+}
+
 bool domainIsToggleable(const QString &domain)
 {
     return domain == QLatin1String("light")
@@ -176,6 +221,18 @@ QVariantList variantListOf(const QVariant &value)
     }
     if (value.isValid() && !value.isNull())
         return QVariantList() << value;
+    return QVariantList();
+}
+
+QVariantList todoItemListOf(const QVariant &result)
+{
+    if (result.type() == QVariant::Map) {
+        const QVariant items = result.toMap().value(QStringLiteral("items"));
+        if (items.isValid())
+            return variantListOf(items);
+    }
+    if (result.type() == QVariant::List)
+        return result.toList();
     return QVariantList();
 }
 
@@ -793,11 +850,13 @@ void LovelaceCoordinator::stop()
     // to be forgotten or their pictures would never be requested again.
     m_mediaSourceById.clear();
     m_mediaPending.clear();
+    m_todoById.clear();
+    m_todoRefreshById.clear();
     if (m_cameraStream)
         m_cameraStream->stop();
     setReady(false);
-    m_statesLoaded = false;
-    m_configLoaded = false;
+    // Keep entities and Lovelace config. Wi-Fi bounces used to call get_states
+    // again and freeze the UI for 20s+ while parsing the full dump.
     m_configFallbackTried = false;
     m_pendingGenerated = false;
     clearPendingConfirmation();
@@ -805,6 +864,8 @@ void LovelaceCoordinator::stop()
 
 void LovelaceCoordinator::refresh()
 {
+    m_statesLoaded = false;
+    m_configLoaded = false;
     if (m_wantRunning && m_socket && m_socket->authenticated())
         subscribeAll();
 }
@@ -837,33 +898,44 @@ void LovelaceCoordinator::onConnectionReady()
 void LovelaceCoordinator::onAuthenticatedChanged()
 {
     emit connectedChanged();
-    if (!m_socket || !m_socket->authenticated()) {
+    if (!m_socket || !m_socket->authenticated())
         setReady(false);
-        m_statesLoaded = false;
-        m_configLoaded = false;
-    }
 }
 
 void LovelaceCoordinator::subscribeAll()
 {
     if (!m_socket || !m_socket->authenticated())
         return;
+    const bool keepStates = m_statesLoaded && !m_entities.isEmpty();
     qWarning() << kClientName << "lovelace: subscribeAll path="
-               << (m_currentUrlPath.isEmpty() ? QStringLiteral("(default)") : m_currentUrlPath);
-    m_configLoaded = false;
-    m_configFallbackTried = false;
-    m_pendingGenerated = false;
-    setReady(false);
-    setBusy(true);
-    requestUser();
-    requestStates();
-    requestDashboards();
-    requestPanels();
-    requestFrontendDefaults();
-    requestAreas();
-    requestEntityRegistry();
-    requestEntityIcons();
-    fetchEnergyPrefs();
+               << (m_currentUrlPath.isEmpty() ? QStringLiteral("(default)") : m_currentUrlPath)
+               << "keepStates=" << keepStates;
+
+    if (keepStates) {
+        setBusy(false);
+        if (m_configLoaded)
+            setReady(true);
+        else
+            requestConfig();
+        const QStringList todoIds = m_todoItems.keys();
+        for (int i = 0; i < todoIds.size(); ++i)
+            fetchTodo(todoIds.at(i));
+    } else {
+        m_configLoaded = false;
+        m_configFallbackTried = false;
+        m_pendingGenerated = false;
+        setReady(false);
+        setBusy(true);
+        requestUser();
+        requestStates();
+        requestDashboards();
+        requestPanels();
+        requestFrontendDefaults();
+        requestAreas();
+        requestEntityRegistry();
+        requestEntityIcons();
+        fetchEnergyPrefs();
+    }
 
     QJsonObject subStates;
     subStates.insert(QStringLiteral("type"), QStringLiteral("subscribe_events"));
@@ -1028,9 +1100,17 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
     if (m_todoById.contains(id)) {
         const QString entityId = m_todoById.take(id);
         if (success) {
-            m_todoItems.insert(entityId, variantListOf(result));
+            m_todoItems.insert(entityId, todoItemListOf(result));
             emit todoReady(entityId);
+        } else {
+            qWarning() << kClientName << "lovelace: todo list failed" << entityId << error;
         }
+        return;
+    }
+    if (m_todoRefreshById.contains(id)) {
+        const QString entityId = m_todoRefreshById.take(id);
+        if (success)
+            fetchTodo(entityId);
         return;
     }
     if (m_mediaSourceById.contains(id)) {
@@ -1787,6 +1867,59 @@ QVariantList LovelaceCoordinator::areaEntities(const QString &areaId) const
     return out;
 }
 
+QVariantList LovelaceCoordinator::relatedEntities(const QString &entityId) const
+{
+    QVariantList out;
+    if (entityId.isEmpty())
+        return out;
+
+    const QString deviceId = m_entityRegistry.value(entityId)
+            .value(QStringLiteral("device_id")).toString();
+    const QString objectId = objectIdOf(entityId);
+    const QString objectPrefix = objectId.isEmpty()
+            ? QString() : (objectId + QLatin1Char('_'));
+    QStringList ids;
+
+    if (!deviceId.isEmpty()) {
+        QHash<QString, QVariantMap>::const_iterator it = m_entityRegistry.constBegin();
+        for (; it != m_entityRegistry.constEnd(); ++it) {
+            const QString id = it.key();
+            if (id == entityId)
+                continue;
+            const QVariantMap entry = it.value();
+            if (entry.value(QStringLiteral("device_id")).toString() != deviceId)
+                continue;
+            if (registryDisabled(entry) || !m_entities.contains(id))
+                continue;
+            ids.append(id);
+        }
+    } else if (!objectPrefix.isEmpty()) {
+        QHash<QString, QVariantMap>::const_iterator it = m_entities.constBegin();
+        for (; it != m_entities.constEnd(); ++it) {
+            const QString id = it.key();
+            if (id == entityId)
+                continue;
+            if (!objectIdOf(id).startsWith(objectPrefix))
+                continue;
+            if (registryDisabled(m_entityRegistry.value(id)))
+                continue;
+            ids.append(id);
+        }
+    }
+
+    std::sort(ids.begin(), ids.end(), [this](const QString &a, const QString &b) {
+        const int rankA = relatedRank(domainOfEntity(a));
+        const int rankB = relatedRank(domainOfEntity(b));
+        if (rankA != rankB)
+            return rankA < rankB;
+        return friendlyName(a).localeAwareCompare(friendlyName(b)) < 0;
+    });
+
+    for (int i = 0; i < ids.size(); ++i)
+        out.append(ids.at(i));
+    return out;
+}
+
 QVariantList LovelaceCoordinator::zones() const
 {
     QVariantList out;
@@ -2432,11 +2565,49 @@ void LovelaceCoordinator::fetchTodo(const QString &entityId)
 
 void LovelaceCoordinator::setTodoItem(const QString &entityId, const QString &item, bool checked)
 {
+    if (entityId.isEmpty() || item.isEmpty())
+        return;
     QVariantMap data;
     data.insert(QStringLiteral("item"), item);
     data.insert(QStringLiteral("status"),
                 checked ? QStringLiteral("completed") : QStringLiteral("needs_action"));
     callService(QStringLiteral("todo"), QStringLiteral("update_item"), data, entityId);
+}
+
+void LovelaceCoordinator::addTodoItem(const QString &entityId, const QString &summary)
+{
+    const QString text = summary.trimmed();
+    if (entityId.isEmpty() || text.isEmpty())
+        return;
+    QVariantMap data;
+    data.insert(QStringLiteral("item"), text);
+    callService(QStringLiteral("todo"), QStringLiteral("add_item"), data, entityId);
+}
+
+void LovelaceCoordinator::removeTodoItem(const QString &entityId, const QString &item)
+{
+    if (entityId.isEmpty() || item.isEmpty())
+        return;
+    QVariantMap data;
+    data.insert(QStringLiteral("item"), item);
+    callService(QStringLiteral("todo"), QStringLiteral("remove_item"), data, entityId);
+}
+
+void LovelaceCoordinator::moveTodoItem(const QString &entityId,
+                                       const QString &uid,
+                                       const QString &previousUid)
+{
+    if (!m_socket || entityId.isEmpty() || uid.isEmpty())
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("todo/item/move"));
+    msg.insert(QStringLiteral("entity_id"), entityId);
+    msg.insert(QStringLiteral("uid"), uid);
+    if (!previousUid.isEmpty())
+        msg.insert(QStringLiteral("previous_uid"), previousUid);
+    const int id = m_socket->sendCommand(msg);
+    if (id)
+        m_todoRefreshById.insert(id, entityId);
 }
 
 QVariantList LovelaceCoordinator::calendarEvents(const QString &entityId) const

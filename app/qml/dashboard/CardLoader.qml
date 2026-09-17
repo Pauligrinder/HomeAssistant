@@ -49,8 +49,8 @@ Loader {
                              "dashboard": loader.dashboard,
                              "hassClient": loader.hassClient,
                              "mdiIcons": loader.mdiIcons,
-                             "fillHeight": loader.fillHeight,
-                             "minContentHeight": Math.max(loader.minHeight, loader.rowHeight)
+                             "fillHeight": Math.max(loader.fillHeight, loader.rowHeight),
+                             "minContentHeight": loader.minHeight
                          })
     }
 
@@ -69,11 +69,11 @@ Loader {
         item.hassClient = Qt.binding(function() { return loader.hassClient })
         item.mdiIcons = Qt.binding(function() { return loader.mdiIcons })
         item.width = Qt.binding(function() { return loader.width })
-        item.fillHeight = Qt.binding(function() { return loader.fillHeight })
+        item.fillHeight = Qt.binding(function() {
+            return Math.max(loader.fillHeight, loader.rowHeight)
+        })
         if (item.minContentHeight !== undefined)
-            item.minContentHeight = Qt.binding(function() {
-                return Math.max(loader.minHeight, loader.rowHeight)
-            })
+            item.minContentHeight = Qt.binding(function() { return loader.minHeight })
     }
 
     function sourceForType(type) {

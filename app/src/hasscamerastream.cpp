@@ -170,7 +170,8 @@ void HassCameraStream::abortReply()
     if (!m_reply)
         return;
     m_reply->disconnect(this);
-    m_reply->abort();
+    // Do not abort(): Qt 5.6 QSslSocket write on a dying camera stream can
+    // block the UI the same way the websocket close path did.
     m_reply->deleteLater();
     m_reply = 0;
 }

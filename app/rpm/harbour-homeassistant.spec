@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.7
+Version:    0.3.8
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,15 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.8-1
+- Show a 24h history graph on entity details when the state is
+  numeric, plus related device sensors and controls.
+- Keep the UI alive when leaving home Wi-Fi: close the old TLS
+  websocket off the GUI thread and keep dashboard state instead of
+  reloading every entity.
+- Native todo-list cards show items, honour a custom title, and
+  support add, reorder, and delete.
+
 * Tue Sep 15 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.7-1
 - Do not reserve a title row on glance cards that have no title.
 
