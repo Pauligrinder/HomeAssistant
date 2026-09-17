@@ -38,10 +38,13 @@ Page {
     }
     property bool notifiedReady: false
     property var confirmDialogPage: null
-    // A second NativeHomePage is pushed for a non-default dashboard so the
-    // Silica edge swipe can pop back to the default one underneath.
-    property bool restoreDefaultOnPop: false
-    backNavigation: page.restoreDefaultOnPop
+    readonly property bool showingDefaultDashboard: {
+        if (!dashboard)
+            return true
+        return dashboard.isDefaultDashboardPath(dashboard.currentUrlPath || "")
+    }
+    backNavigation: false
+    showNavigationIndicator: !page.showingDefaultDashboard
 
     function openHassSettings() {
         page.openWeb("/config")
@@ -58,24 +61,10 @@ Page {
                        })
     }
 
-    function pushSwipeableDashboard() {
-        pageStack.push(Qt.resolvedUrl("NativeHomePage.qml"), {
-                           hassClient: hassClient,
-                           mdiIcons: page.mdiIcons,
-                           restoreDefaultOnPop: true
-                       })
-    }
-
-    function ensureSwipeableDashboard() {
-        if (page.restoreDefaultOnPop)
+    function goToDefaultDashboard() {
+        if (!dashboard || page.showingDefaultDashboard)
             return
-        if (!dashboard || dashboard.isDefaultDashboardPath(dashboard.currentUrlPath || ""))
-            return
-        if (page.status !== PageStatus.Active || pageStack.busy)
-            return
-        if (pageStack.currentPage !== page)
-            return
-        page.pushSwipeableDashboard()
+        dashboard.setCurrentUrlPath(dashboard.defaultUrlPath || "")
     }
 
     function isSwitcherWebPanel(path) {
@@ -190,16 +179,8 @@ Page {
     }
 
     onStatusChanged: {
-        if (status === PageStatus.Active) {
+        if (status === PageStatus.Active)
             page.consumePendingWebPath()
-            page.ensureSwipeableDashboard()
-        }
-    }
-
-    Component.onDestruction: {
-        if (!page.restoreDefaultOnPop || !dashboard)
-            return
-        dashboard.setCurrentUrlPath(dashboard.defaultUrlPath || "")
     }
 
     Connections {
@@ -256,7 +237,6 @@ Page {
                     dashboard.cancelPendingAction()
             })
         }
-        onCurrentUrlPathChanged: page.ensureSwipeableDashboard()
     }
 
     SilicaFlickable {
@@ -275,10 +255,6 @@ Page {
             MenuItem {
                 text: "Home Assistant settings"
                 onClicked: page.openHassSettings()
-            }
-            MenuItem {
-                text: "Helmsman settings"
-                onClicked: page.openSettings()
             }
             MenuItem {
                 text: "Refresh"
@@ -462,6 +438,25 @@ Page {
         if (dashboard && dashboard.ready && hassClient && !page.notifiedReady) {
             page.notifiedReady = true
             hassClient.notifyDashboardReady()
+        }
+    }
+
+    // Root home cannot pop, so a second NativeHomePage for swipe-back
+    // doubled every navigation. Steal the left-edge gesture instead.
+    MouseArea {
+        z: 8
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: Theme.itemSizeSmall
+        enabled: !page.showingDefaultDashboard && page.status === PageStatus.Active
+        property real startX: 0
+        onPressed: startX = mouse.x
+        onReleased: {
+            if (mouse.x - startX >= Theme.paddingLarge)
+                page.goToDefaultDashboard()
+            else if (Math.abs(mouse.x - startX) < Theme.paddingSmall)
+                page.goToDefaultDashboard()
         }
     }
 }
