@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.8
+Version:    0.3.9
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,11 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.9-1
+- Open Home Assistant settings from the native dashboard pulley.
+- Disable the page-back swipe on /config so HA can navigate, and
+  offer Return to dashboard from the settings pulley instead.
+
 * Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.8-1
 - Show a 24h history graph on entity details when the state is
   numeric, plus related device sensors and controls.
