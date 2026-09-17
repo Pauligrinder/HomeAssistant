@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.10
+Version:    0.3.11
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,12 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.11-1
+- Keep the Silica page-back swipe off while the settings web view
+  has in-page history, and restore it at the entry URL.
+- When the native dashboard is on, offer Back to dashboard under
+  Companion app on the Home Assistant settings root.
+
 * Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.10-1
 - Restore the page-back swipe on Home Assistant settings and drop
   the extra header that covered the /config web view.
