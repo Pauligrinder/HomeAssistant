@@ -11,11 +11,11 @@ Page {
     property var dashboard: hassClient ? hassClient.lovelace : null
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     readonly property bool panelMapView: {
-        if (!dashboard || !dashboard.currentView)
+        if (!page.boundView || !page.boundView.type)
             return false
-        if (String(dashboard.currentView.type || "") !== "panel")
+        if (String(page.boundView.type || "") !== "panel")
             return false
-        var cards = dashboard.currentView.cards
+        var cards = page.boundView.cards
         if (!cards || cards.length < 1)
             return false
         return String(cards[0].type || "") === "map"
@@ -38,12 +38,80 @@ Page {
     }
     property bool notifiedReady: false
     property var confirmDialogPage: null
-    readonly property bool showingDefaultDashboard: {
+    // Root home follows the user default. Extra dashboards are stacked pages
+    // pinned to urlPath so the Silica back swipe can peel them off.
+    property bool followDefault: true
+    property string urlPath: ""
+    property int viewIndex: 0
+    property string pendingViewPath: ""
+    readonly property string boundPath: {
         if (!dashboard)
-            return true
-        return dashboard.isDefaultDashboardPath(dashboard.currentUrlPath || "")
+            return page.followDefault ? "" : page.urlPath
+        return dashboard.normalizedUrlPath(page.followDefault
+                                           ? (dashboard.defaultUrlPath || "")
+                                           : page.urlPath)
     }
-    backNavigation: !page.showingDefaultDashboard
+    readonly property var boundViews: {
+        var rev = dashboard ? dashboard.configsRevision : 0
+        if (!dashboard || rev < 0)
+            return []
+        return dashboard.viewsForPath(page.boundPath)
+    }
+    readonly property var boundView: {
+        var views = page.boundViews
+        if (!views || !views.length)
+            return ({})
+        var i = page.viewIndex
+        if (i < 0 || i >= views.length)
+            i = 0
+        return views[i] || ({})
+    }
+    readonly property bool boundReady: {
+        var rev = dashboard ? dashboard.configsRevision : 0
+        if (!dashboard || rev < 0)
+            return false
+        return dashboard.pathConfigReady(page.boundPath)
+    }
+    backNavigation: !page.followDefault
+
+    function selectLocalView(path) {
+        if (!path || !page.boundViews)
+            return
+        for (var i = 0; i < page.boundViews.length; i++) {
+            if (page.boundViews[i] && String(page.boundViews[i].path || "") === path) {
+                page.viewIndex = i
+                return
+            }
+        }
+    }
+
+    function openPinnedDashboard(path, viewPath) {
+        if (!dashboard)
+            return
+        var norm = dashboard.normalizedUrlPath(path || "")
+        if (page.boundPath === norm) {
+            if (viewPath)
+                page.selectLocalView(viewPath)
+            return
+        }
+        var existing = pageStack.find(function(p) {
+            return p && p.objectName === "HomePage" && p.boundPath === norm
+        })
+        if (existing) {
+            if (viewPath && typeof existing.selectLocalView === "function")
+                existing.selectLocalView(viewPath)
+            pageStack.pop(existing)
+            return
+        }
+        page.dashboard.setCurrentUrlPath(norm)
+        pageStack.push(Qt.resolvedUrl("NativeHomePage.qml"), {
+                           hassClient: hassClient,
+                           mdiIcons: page.mdiIcons,
+                           followDefault: false,
+                           urlPath: norm,
+                           pendingViewPath: viewPath || ""
+                       })
+    }
 
     function openHassSettings() {
         page.openWeb("/config")
@@ -58,12 +126,6 @@ Page {
                            hassClient: hassClient,
                            mdiIcons: page.mdiIcons
                        })
-    }
-
-    function goToDefaultDashboard() {
-        if (!dashboard || page.showingDefaultDashboard)
-            return
-        dashboard.setCurrentUrlPath(dashboard.defaultUrlPath || "")
     }
 
     function isSwitcherWebPanel(path) {
@@ -153,15 +215,7 @@ Page {
             dashboard.selectSwitcherPath(parts[0])
             return
         }
-        if (parts[0] === "lovelace" || parts[0] === "home") {
-            dashboard.setCurrentUrlPath("")
-            if (parts.length > 1 && parts[1].length)
-                dashboard.selectViewByPath(parts[1])
-            return
-        }
-        dashboard.setCurrentUrlPath(parts[0])
-        if (parts.length > 1 && parts[1].length)
-            dashboard.selectViewByPath(parts[1])
+        page.openPinnedDashboard(parts[0], parts.length > 1 ? parts[1] : "")
     }
 
     WifiChecker {
@@ -172,20 +226,32 @@ Page {
     Connections {
         target: pageStack
         onBusyChanged: {
-            if (!pageStack.busy)
+            if (!pageStack.busy && page.status === PageStatus.Active)
                 page.consumePendingWebPath()
         }
     }
 
     onStatusChanged: {
-        if (status === PageStatus.Active)
-            page.consumePendingWebPath()
+        if (status !== PageStatus.Active)
+            return
+        if (dashboard && dashboard.currentUrlPath !== page.boundPath)
+            dashboard.setCurrentUrlPath(page.boundPath)
+        page.consumePendingWebPath()
+    }
+
+    onBoundViewsChanged: {
+        if (page.pendingViewPath && page.boundViews && page.boundViews.length) {
+            page.selectLocalView(page.pendingViewPath)
+            page.pendingViewPath = ""
+        }
+        if (page.boundViews && page.viewIndex >= page.boundViews.length)
+            page.viewIndex = 0
     }
 
     Connections {
         target: hassClient
         onLoggedInChanged: {
-            if (!hassClient.loggedIn)
+            if (!hassClient.loggedIn && page.status === PageStatus.Active)
                 pageStack.replaceAbove(null, Qt.resolvedUrl("ConnectionPage.qml"), { hassClient: hassClient })
         }
     }
@@ -193,13 +259,16 @@ Page {
     Connections {
         target: dashboard
         onReadyChanged: {
-            if (dashboard && dashboard.ready && !page.notifiedReady) {
+            if (dashboard && dashboard.ready && !page.notifiedReady
+                    && page.followDefault) {
                 page.notifiedReady = true
                 if (hassClient)
                     hassClient.notifyDashboardReady()
             }
         }
         onPendingNavigateChanged: {
+            if (page.status !== PageStatus.Active)
+                return
             if (!dashboard || !dashboard.pendingNavigate.length)
                 return
             var path = dashboard.pendingNavigate
@@ -207,6 +276,8 @@ Page {
             page.handleNavigate(path)
         }
         onPendingUrlChanged: {
+            if (page.status !== PageStatus.Active)
+                return
             if (!dashboard || !dashboard.pendingUrl.length)
                 return
             var url = dashboard.pendingUrl
@@ -217,14 +288,21 @@ Page {
                 Qt.openUrlExternally(url)
         }
         onPendingMoreInfoChanged: {
+            if (page.status !== PageStatus.Active)
+                return
             if (!dashboard || !dashboard.pendingMoreInfo.length)
                 return
             var id = dashboard.pendingMoreInfo
             dashboard.clearPendingMoreInfo()
             page.openMoreInfo(id)
         }
-        onPendingWebPathChanged: page.consumePendingWebPath()
+        onPendingWebPathChanged: {
+            if (page.status === PageStatus.Active)
+                page.consumePendingWebPath()
+        }
         onPendingConfirmationChanged: {
+            if (page.status !== PageStatus.Active)
+                return
             var prompt = dashboard ? dashboard.pendingConfirmation : null
             if (!(prompt && prompt.active))
                 return
@@ -252,7 +330,7 @@ Page {
                 onClicked: page.openDashboardSwitcher()
             }
             MenuItem {
-                text: "Home Assistant settings"
+                text: "Settings"
                 onClicked: page.openHassSettings()
             }
             MenuItem {
@@ -276,7 +354,7 @@ Page {
 
             Flickable {
                 id: tabFlick
-                visible: !!(dashboard && dashboard.views && dashboard.views.length > 1)
+                visible: !!(page.boundViews && page.boundViews.length > 1)
                 width: parent.width
                 height: visible ? Theme.itemSizeSmall : 0
                 contentWidth: tabRow.width
@@ -288,7 +366,7 @@ Page {
                     spacing: Theme.paddingLarge
                     x: Theme.horizontalPageMargin
                     Repeater {
-                        model: dashboard ? dashboard.views : []
+                        model: page.boundViews
                         Item {
                             width: Theme.itemSizeSmall
                             height: Theme.itemSizeSmall
@@ -298,14 +376,14 @@ Page {
                                 mdiIcons: page.mdiIcons
                                 name: modelData && modelData.icon
                                       ? String(modelData.icon) : "mdi:view-dashboard"
-                                iconColor: index === (dashboard ? dashboard.currentViewIndex : -1)
+                                iconColor: index === page.viewIndex
                                            ? Theme.highlightColor : Theme.secondaryColor
                                 width: Theme.iconSizeSmall
                             }
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: dashboard.setCurrentViewIndex(index)
+                                onClicked: page.viewIndex = index
                             }
                         }
                     }
@@ -319,11 +397,10 @@ Page {
                 spacing: Theme.paddingMedium
                 // A chained && yields undefined for a view without badges, which
                 // QML refuses to assign and leaves the row taking up space.
-                visible: !!(dashboard && dashboard.currentView
-                            && dashboard.currentView.badges
-                            && dashboard.currentView.badges.length)
+                visible: !!(page.boundView && page.boundView.badges
+                            && page.boundView.badges.length)
                 Repeater {
-                    model: dashboard && dashboard.currentView ? dashboard.currentView.badges : []
+                    model: page.boundView ? page.boundView.badges : []
                     BadgeChip {
                         dashboard: page.dashboard
                         mdiIcons: page.mdiIcons
@@ -336,7 +413,7 @@ Page {
             Item {
                 width: parent.width
                 height: Theme.itemSizeSmall
-                visible: !dashboard || (!dashboard.ready && dashboard.busy)
+                visible: !page.boundReady && (!dashboard || dashboard.busy)
                 BusyIndicator {
                     anchors.centerIn: parent
                     running: parent.visible
@@ -345,7 +422,7 @@ Page {
             }
 
             Label {
-                visible: dashboard && dashboard.lastError.length > 0 && !dashboard.ready
+                visible: dashboard && dashboard.lastError.length > 0 && !page.boundReady
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.margins: Theme.horizontalPageMargin
@@ -360,9 +437,9 @@ Page {
                 width: page.panelMapView ? parent.width : parent.width - 2 * Theme.horizontalPageMargin
                 anchors.horizontalCenter: parent.horizontalCenter
                 sourceComponent: {
-                    if (!dashboard || !dashboard.currentView)
+                    if (!page.boundView || !page.boundView.type)
                         return emptyComp
-                    var t = dashboard.currentView.type || "masonry"
+                    var t = page.boundView.type || "masonry"
                     if (t === "sections")
                         return sectionsComp
                     if (t === "panel")
@@ -392,7 +469,7 @@ Page {
         id: sectionsComp
         SectionsLayout {
             width: viewLoader.width
-            view: dashboard ? dashboard.currentView : ({})
+            view: page.boundView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
@@ -403,7 +480,7 @@ Page {
         id: masonryComp
         MasonryLayout {
             width: viewLoader.width
-            view: dashboard ? dashboard.currentView : ({})
+            view: page.boundView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
@@ -415,7 +492,7 @@ Page {
         PanelLayout {
             width: viewLoader.width
             fillHeight: page.viewFillHeight
-            view: dashboard ? dashboard.currentView : ({})
+            view: page.boundView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
@@ -426,7 +503,7 @@ Page {
         id: sidebarComp
         SidebarLayout {
             width: viewLoader.width
-            view: dashboard ? dashboard.currentView : ({})
+            view: page.boundView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
@@ -434,7 +511,8 @@ Page {
     }
 
     Component.onCompleted: {
-        if (dashboard && dashboard.ready && hassClient && !page.notifiedReady) {
+        if (dashboard && dashboard.ready && hassClient && !page.notifiedReady
+                && page.followDefault) {
             page.notifiedReady = true
             hassClient.notifyDashboardReady()
         }

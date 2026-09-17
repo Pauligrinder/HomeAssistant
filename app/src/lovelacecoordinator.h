@@ -36,6 +36,7 @@ class LovelaceCoordinator : public QObject
     Q_PROPERTY(QVariantList views READ views NOTIFY viewsChanged)
     Q_PROPERTY(int currentViewIndex READ currentViewIndex WRITE setCurrentViewIndex NOTIFY currentViewIndexChanged)
     Q_PROPERTY(QVariantMap currentView READ currentView NOTIFY currentViewChanged)
+    Q_PROPERTY(int configsRevision READ configsRevision NOTIFY configsRevisionChanged)
     Q_PROPERTY(int statesRevision READ statesRevision NOTIFY statesRevisionChanged)
     Q_PROPERTY(QString userId READ userId NOTIFY userIdChanged)
     Q_PROPERTY(bool userIsAdmin READ userIsAdmin NOTIFY userIdChanged)
@@ -69,10 +70,14 @@ public:
     QString currentUrlPath() const;
     QString defaultUrlPath() const;
     Q_INVOKABLE bool isDefaultDashboardPath(const QString &path) const;
+    Q_INVOKABLE QString normalizedUrlPath(const QString &path) const;
+    Q_INVOKABLE QVariantList viewsForPath(const QString &path) const;
+    Q_INVOKABLE bool pathConfigReady(const QString &path) const;
     QVariantMap currentConfig() const;
     QVariantList views() const;
     int currentViewIndex() const;
     QVariantMap currentView() const;
+    int configsRevision() const;
     int statesRevision() const;
     QString userId() const;
     bool userIsAdmin() const;
@@ -175,6 +180,7 @@ signals:
     void viewsChanged();
     void currentViewIndexChanged();
     void currentViewChanged();
+    void configsRevisionChanged();
     void statesRevisionChanged();
     void entityChanged(const QString &entityId);
     void userIdChanged();
@@ -282,6 +288,7 @@ private:
     bool m_userIsAdmin;
     int m_statesRevision;
     int m_currentViewIndex;
+    int m_configsRevision;
     int m_getStatesId;
     int m_subscribeStatesId;
     int m_subscribeLovelaceId;
@@ -304,6 +311,8 @@ private:
     int m_ingressValidateId;
     QString m_lastError;
     QString m_currentUrlPath;
+    QHash<QString, QVariantMap> m_configByPath;
+    QHash<QString, QVariantList> m_viewsByPath;
     QString m_userId;
     QString m_userName;
     QString m_userDefaultPanel;

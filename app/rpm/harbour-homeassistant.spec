@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.13
+Version:    0.3.14
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,13 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.14-1
+- Stack extra native dashboards so the Silica back swipe reveals
+  the previous dashboard instead of an empty underlay.
+- Rename the native pulley item to Settings.
+- Stop Home Assistant settings from flashing a duplicate Back to
+  dashboard row while scrolling.
+
 * Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.13-1
 - Restore the Silica back swipe on a non-default native dashboard
   via an underlay page, without stacking a second live home.
