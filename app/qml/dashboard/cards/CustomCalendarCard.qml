@@ -73,28 +73,86 @@ CardChrome {
     }
 
     function subjectName(summary) {
-        var original = String(summary || "Event")
-        var token = original.toLowerCase().replace(/^[yxvz]\s*/, "")
-                            .split(/[.(\s]/)[0]
-        var names = {
-            "ena": "Englanti", "suk": "Äidinkieli", "ma": "Matematiikka",
-            "ym": "Ympäristöoppi", "ue": "Uskonto", "li": "Liikunta",
-            "ku": "Kuvataide", "ks": "Käsityö", "fy": "Fysiikka",
-            "hi": "Historia", "mu": "Musiikki", "op": "Oppilaanohjaus",
-            "bi": "Biologia", "ruokailu": "Ruokailu", "tunnetaidot": "Tunnetaidot",
-            "rub": "Ruotsi", "ke": "Kemia", "mt": "Maantieto",
-            "te": "Terveystieto", "yh": "Yhteiskuntaoppi", "sel": "SEL",
-            "tvt": "TVT"
-        }
-        return names[token] || original
+        // Same rules as custom-calendar-card.js: drop a leading y/x/v/z
+        // grouping letter, then map Wilma subject codes with startsWith.
+        var original = summary ? String(summary) : "Tunti"
+        var t = String(summary || "")
+        if (t.length && t.charAt(0) === "y")
+            t = t.substring(1)
+        if (t.length && t.charAt(0) === "x")
+            t = t.substring(1)
+        if (t.length && t.charAt(0) === "v")
+            t = t.substring(1)
+        if (t.length && t.charAt(0) === "z")
+            t = t.substring(1)
+        t = t.toLowerCase()
+        if (t.indexOf("ena") === 0)
+            return "Englanti"
+        if (t.indexOf("suk") === 0)
+            return "Äidinkieli"
+        if (t.indexOf("ma") === 0)
+            return "Matematiikka"
+        if (t.indexOf("ym") === 0)
+            return "Ympäristöoppi"
+        if (t.indexOf("ue") === 0)
+            return "Uskonto"
+        if (t.indexOf("li") === 0)
+            return "Liikunta"
+        if (t.indexOf("ku") === 0)
+            return "Kuvaamataito"
+        if (t.indexOf("ks") === 0)
+            return "Käsityö"
+        if (t.indexOf("fy") === 0)
+            return "Fysiikka"
+        if (t.indexOf("hi") === 0)
+            return "Historia"
+        if (t.indexOf("mu") === 0)
+            return "Musiikki"
+        if (t.indexOf("op") === 0)
+            return "Opinnonohjaus"
+        if (t.indexOf("bi") === 0)
+            return "Biologia"
+        if (t.indexOf("ruokailu") === 0)
+            return "Ruokailu"
+        if (t.indexOf("tunnetaidot") === 0)
+            return "Tunnetaidot"
+        if (t.indexOf("rub") === 0)
+            return "Ruotsi"
+        if (t.indexOf("ke") === 0)
+            return "Kemia"
+        if (t.indexOf("mt") === 0)
+            return "Maantieto"
+        if (t.indexOf("te") === 0)
+            return "Terveystieto"
+        if (t.indexOf("yh") === 0)
+            return "Yhteiskuntaoppi"
+        if (t.indexOf("sel") === 0)
+            return "Selvityjät"
+        if (t.indexOf("tvt") === 0)
+            return "Tieto- ja viestintätekniikka"
+        return original
+    }
+
+    function colorKey(summary) {
+        var text = String(summary || "Unknown")
+        var cut = text.indexOf("(")
+        if (cut >= 0)
+            text = text.substring(0, cut)
+        cut = text.indexOf(".")
+        if (cut >= 0)
+            text = text.substring(0, cut)
+        return text.replace(/^\s+|\s+$/g, "")
     }
 
     function subjectColor(summary) {
-        var text = String(summary || "Event").split(/[.(]/)[0]
+        var text = root.colorKey(summary)
         var hash = 0
         for (var i = 0; i < text.length; ++i)
             hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0
-        return Qt.hsla(Math.abs(hash % 360) / 360, 0.62, 0.38, 0.9)
+        var hue = Math.abs(hash) % 360
+        var sat = 65 + (Math.abs(hash) % 20)
+        var light = 45 + (Math.abs(hash) % 15)
+        return Qt.hsla(hue / 360, sat / 100, light / 100, 1)
     }
 
     function dayDate(index) {

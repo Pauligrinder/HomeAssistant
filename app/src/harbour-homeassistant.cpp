@@ -2,6 +2,8 @@
 #include <QGuiApplication>
 #include <QQuickView>
 #include <QtQml>
+#include <QNetworkProxy>
+#include <QNetworkProxyFactory>
 
 #include "appsettings.h"
 #include "helmsmanlog.h"
@@ -17,6 +19,11 @@ int main(int argc, char *argv[])
     QGuiApplication *app = SailfishApp::application(argc, argv);
     app->setOrganizationName(QStringLiteral("org.helmsman"));
     app->setApplicationName(QStringLiteral("harbour-helmsman"));
+
+    // ConnMan's system proxy lookup blocks the GUI for a long time when
+    // Wi-Fi vanishes. Helmsman never needs an HTTP proxy to reach HA.
+    QNetworkProxyFactory::setUseSystemConfiguration(false);
+    QNetworkProxy::setApplicationProxy(QNetworkProxy::NoProxy);
 
     HelmsmanLog::install();
     AppSettings::migrateLegacyFile();

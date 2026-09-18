@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.14
+Version:    0.3.15
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,13 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Sep 18 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.15-1
+- Keep the UI alive when Wi-Fi drops: open the HA websocket on an
+  IO thread, skip ConnMan proxy lookup, and retry after a stuck TLS
+  connect instead of freezing the event loop.
+- Parse custom calendar titles with the same Wilma subject mapping
+  as the Lovelace JS card.
+
 * Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.14-1
 - Stack extra native dashboards so the Silica back swipe reveals
   the previous dashboard instead of an empty underlay.

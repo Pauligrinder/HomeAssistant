@@ -4,11 +4,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QUrl>
 #include <QDebug>
 #include <QStringList>
 #include <QThread>
 #include <QMetaObject>
+#include <QNetworkProxy>
 
 namespace {
 
@@ -19,14 +19,106 @@ const int kConnectTimeoutMs = 12000;
 
 } // namespace
 
-HassWebsocket::HassWebsocket(QObject *parent)
+HassWsTransport::HassWsTransport(QObject *parent)
     : QObject(parent)
     , m_socket(0)
-    , m_reaper(new QThread(this))
+    , m_ignoreSsl(false)
+    , m_epoch(0)
+{
+}
+
+void HassWsTransport::openUrl(QUrl url, bool ignoreSsl, int epoch)
+{
+    m_ignoreSsl = ignoreSsl;
+    m_epoch = epoch;
+    destroySocket();
+    m_socket = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
+    m_socket->setProxy(QNetworkProxy::NoProxy);
+    bindSocket();
+    qWarning() << "Helmsman ws: io open" << url.toString();
+    m_socket->open(url);
+}
+
+void HassWsTransport::closeSocket()
+{
+    destroySocket();
+}
+
+void HassWsTransport::sendText(QString text)
+{
+    if (!m_socket || m_socket->state() != QAbstractSocket::ConnectedState)
+        return;
+    m_socket->sendTextMessage(text);
+}
+
+void HassWsTransport::bindSocket()
+{
+    if (!m_socket)
+        return;
+    connect(m_socket, SIGNAL(connected()), this, SLOT(onConnected()));
+    connect(m_socket, SIGNAL(disconnected()), this, SLOT(onDisconnected()));
+    connect(m_socket, SIGNAL(textMessageReceived(QString)),
+            this, SLOT(onTextMessageReceived(QString)));
+    connect(m_socket, SIGNAL(error(QAbstractSocket::SocketError)),
+            this, SLOT(onError(QAbstractSocket::SocketError)));
+    connect(m_socket, SIGNAL(sslErrors(QList<QSslError>)),
+            this, SLOT(onSslErrors(QList<QSslError>)));
+}
+
+void HassWsTransport::destroySocket()
+{
+    if (!m_socket)
+        return;
+    QWebSocket *old = m_socket;
+    m_socket = 0;
+    old->disconnect(this);
+    old->setParent(0);
+    old->abort();
+    old->deleteLater();
+}
+
+void HassWsTransport::onConnected()
+{
+    emit opened(m_epoch);
+}
+
+void HassWsTransport::onDisconnected()
+{
+    emit closed(m_epoch);
+}
+
+void HassWsTransport::onTextMessageReceived(const QString &message)
+{
+    emit textReceived(message);
+}
+
+void HassWsTransport::onError(QAbstractSocket::SocketError error)
+{
+    Q_UNUSED(error);
+    emit errorText(m_socket ? m_socket->errorString() : QStringLiteral("no socket"));
+}
+
+void HassWsTransport::onSslErrors(const QList<QSslError> &errors)
+{
+    QStringList texts;
+    for (int i = 0; i < errors.size(); ++i)
+        texts.append(errors.at(i).errorString());
+    qWarning() << "Helmsman ws: TLS error" << texts.join(QStringLiteral("; "))
+               << "ignore=" << m_ignoreSsl;
+    if (m_ignoreSsl && m_socket)
+        m_socket->ignoreSslErrors();
+}
+
+HassWebsocket::HassWebsocket(QObject *parent)
+    : QObject(parent)
+    , m_transport(0)
+    , m_io(0)
     , m_ignoreSslErrors(false)
     , m_connected(false)
     , m_wantRunning(false)
     , m_authenticated(false)
+    , m_opening(false)
+    , m_epoch(0)
     , m_nextId(1)
     , m_pendingPingId(0)
     , m_reconnectAttempt(0)
@@ -44,8 +136,7 @@ HassWebsocket::HassWebsocket(QObject *parent)
     m_pongTimer.setInterval(kPongTimeoutMs);
     connect(&m_pongTimer, SIGNAL(timeout()), this, SLOT(onPongTimeout()));
 
-    m_reaper->setObjectName(QStringLiteral("hass-ws-reaper"));
-    m_reaper->start();
+    startIo();
 }
 
 HassWebsocket::~HassWebsocket()
@@ -54,12 +145,20 @@ HassWebsocket::~HassWebsocket()
     m_reconnectTimer.stop();
     m_connectTimer.stop();
     stopKeepalive();
-    reapSocket();
-    m_reaper->quit();
-    if (!m_reaper->wait(1500)) {
-        qWarning() << "Helmsman ws: reaper still closing a socket; leaking it";
-        m_reaper->setParent(0);
-        connect(m_reaper, SIGNAL(finished()), m_reaper, SLOT(deleteLater()));
+    if (m_transport) {
+        disconnect(m_transport, 0, this, 0);
+        QMetaObject::invokeMethod(m_transport, "closeSocket", Qt::QueuedConnection);
+        m_transport->deleteLater();
+        m_transport = 0;
+    }
+    if (m_io) {
+        m_io->quit();
+        if (!m_io->wait(1500)) {
+            qWarning() << "Helmsman ws: io thread still closing a socket; leaking it";
+            m_io->setParent(0);
+            connect(m_io, SIGNAL(finished()), m_io, SLOT(deleteLater()));
+            m_io = 0;
+        }
     }
 }
 
@@ -91,11 +190,9 @@ void HassWebsocket::configure(const QString &baseUrl,
         m_connectTimer.stop();
         stopKeepalive();
         m_reconnectAttempt = 0;
+        m_opening = false;
         setAuthenticated(false);
         setConnected(false);
-        // Drop the old socket off this thread and let HassClient stop/start
-        // open the replacement. Opening here raced a second QWebSocket on
-        // every Wi-Fi bounce and left Qt 5.6 blocking on the dying TLS one.
         reapSocket();
     }
 }
@@ -115,6 +212,7 @@ void HassWebsocket::stop()
     m_reconnectTimer.stop();
     m_connectTimer.stop();
     stopKeepalive();
+    m_opening = false;
     setAuthenticated(false);
     setConnected(false);
     reapSocket();
@@ -122,7 +220,7 @@ void HassWebsocket::stop()
 
 int HassWebsocket::sendCommand(QJsonObject payload)
 {
-    if (!m_authenticated || !m_socket || m_socket->state() != QAbstractSocket::ConnectedState)
+    if (!m_authenticated || !m_transport)
         return 0;
     const int id = nextMessageId();
     payload.insert(QStringLiteral("id"), id);
@@ -148,31 +246,27 @@ void HassWebsocket::openSocket()
         qWarning() << "Helmsman ws: missing baseUrl/token; not starting";
         return;
     }
-    if (m_socket) {
-        const QAbstractSocket::SocketState state = m_socket->state();
-        if (state == QAbstractSocket::HostLookupState
-                || state == QAbstractSocket::ConnectingState
-                || state == QAbstractSocket::ConnectedState)
-            return;
-        // Unconnected leftovers are from a previous disconnect. Do not reopen
-        // the same Qt 5.6 QWebSocket; reap it now that we are off its signals.
-        reapSocket();
-    }
-
+    if (m_opening)
+        return;
+    if (!m_transport)
+        startIo();
     if (!accessTokenFresh()) {
         qWarning() << "Helmsman ws: access token expired; asking for a refresh before connecting";
         emit accessTokenStale();
         return;
     }
 
-    resetSocket();
     m_reconnectTimer.stop();
     stopKeepalive();
     setAuthenticated(false);
     const QUrl url = websocketUrl();
     qWarning() << "Helmsman ws: connecting to" << url.toString();
+    m_opening = true;
     m_connectTimer.start();
-    m_socket->open(url);
+    ++m_epoch;
+    QMetaObject::invokeMethod(m_transport, "openUrl", Qt::QueuedConnection,
+                              Q_ARG(QUrl, url), Q_ARG(bool, m_ignoreSslErrors),
+                              Q_ARG(int, m_epoch));
 }
 
 void HassWebsocket::setConnected(bool connected)
@@ -210,71 +304,88 @@ int HassWebsocket::nextMessageId()
     return m_nextId++;
 }
 
-void HassWebsocket::bindSocket()
+void HassWebsocket::startIo()
 {
-    if (!m_socket)
+    if (m_io && m_io->isRunning() && m_transport)
         return;
-    connect(m_socket, SIGNAL(connected()), this, SLOT(onConnected()));
-    connect(m_socket, SIGNAL(disconnected()), this, SLOT(onDisconnected()));
-    connect(m_socket, SIGNAL(textMessageReceived(QString)),
-            this, SLOT(onTextMessageReceived(QString)));
-    connect(m_socket, SIGNAL(error(QAbstractSocket::SocketError)),
-            this, SLOT(onError(QAbstractSocket::SocketError)));
-    connect(m_socket, SIGNAL(sslErrors(QList<QSslError>)),
-            this, SLOT(onSslErrors(QList<QSslError>)));
+
+    m_io = new QThread(this);
+    m_io->setObjectName(QStringLiteral("hass-ws-io"));
+    m_transport = new HassWsTransport;
+    m_transport->moveToThread(m_io);
+    bindTransport();
+    m_io->start();
+}
+
+void HassWebsocket::bindTransport()
+{
+    if (!m_transport)
+        return;
+    connect(m_transport, SIGNAL(opened(int)), this, SLOT(onConnected(int)), Qt::QueuedConnection);
+    connect(m_transport, SIGNAL(closed(int)), this, SLOT(onDisconnected(int)), Qt::QueuedConnection);
+    connect(m_transport, SIGNAL(textReceived(QString)),
+            this, SLOT(onTextMessageReceived(QString)), Qt::QueuedConnection);
+    connect(m_transport, SIGNAL(errorText(QString)),
+            this, SLOT(onTransportError(QString)), Qt::QueuedConnection);
+}
+
+void HassWebsocket::detachStuckIo()
+{
+    qWarning() << "Helmsman ws: detaching stuck io thread";
+    ++m_epoch;
+    if (m_transport) {
+        disconnect(m_transport, 0, this, 0);
+        m_transport->deleteLater();
+        m_transport = 0;
+    }
+    if (m_io) {
+        m_io->setParent(0);
+        connect(m_io, SIGNAL(finished()), m_io, SLOT(deleteLater()));
+        m_io->quit();
+        m_io = 0;
+    }
+    m_opening = false;
+    startIo();
 }
 
 void HassWebsocket::reapSocket()
 {
     m_connectTimer.stop();
     stopKeepalive();
-    if (!m_socket)
-        return;
-
-    QWebSocket *old = m_socket;
-    m_socket = 0;
+    m_opening = false;
+    ++m_epoch;
     m_nextId = 1;
     m_pendingPingId = 0;
-    old->disconnect(this);
-    old->setParent(0);
-
-    // Qt 5.6 QWebSocket's destructor always close()+abort()s the inner
-    // QSslSocket. That write blocks the UI for tens of seconds (or forever)
-    // when the network path just vanished. Destroy it on a worker instead.
-    if (m_reaper && m_reaper->isRunning()) {
-        old->moveToThread(m_reaper);
-        QMetaObject::invokeMethod(old, "deleteLater", Qt::QueuedConnection);
-        qWarning() << "Helmsman ws: moved old socket to reaper thread";
+    if (!m_transport)
         return;
-    }
-    old->deleteLater();
-}
-
-void HassWebsocket::resetSocket()
-{
-    reapSocket();
-    m_socket = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
-    bindSocket();
+    QMetaObject::invokeMethod(m_transport, "closeSocket", Qt::QueuedConnection);
 }
 
 void HassWebsocket::sendJson(const QJsonObject &obj)
 {
-    if (!m_socket || m_socket->state() != QAbstractSocket::ConnectedState)
+    if (!m_transport)
         return;
     const QByteArray payload = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    m_socket->sendTextMessage(QString::fromUtf8(payload));
+    QMetaObject::invokeMethod(m_transport, "sendText", Qt::QueuedConnection,
+                              Q_ARG(QString, QString::fromUtf8(payload)));
 }
 
-void HassWebsocket::onConnected()
+void HassWebsocket::onConnected(int epoch)
 {
+    if (epoch != m_epoch)
+        return;
     m_connectTimer.stop();
+    m_opening = false;
     qWarning() << "Helmsman ws: socket connected, waiting for auth_required";
     m_reconnectAttempt = 0;
 }
 
-void HassWebsocket::onDisconnected()
+void HassWebsocket::onDisconnected(int epoch)
 {
+    if (epoch != m_epoch)
+        return;
     m_connectTimer.stop();
+    m_opening = false;
     qWarning() << "Helmsman ws: disconnected";
     stopKeepalive();
     setAuthenticated(false);
@@ -288,22 +399,15 @@ void HassWebsocket::onDisconnected()
     }
 }
 
-void HassWebsocket::onError(QAbstractSocket::SocketError error)
+void HassWebsocket::onTransportError(const QString &error)
 {
-    Q_UNUSED(error);
-    qWarning() << "Helmsman ws: socket error"
-               << (m_socket ? m_socket->errorString() : QStringLiteral("no socket"));
-}
-
-void HassWebsocket::onSslErrors(const QList<QSslError> &errors)
-{
-    QStringList texts;
-    for (int i = 0; i < errors.size(); ++i)
-        texts.append(errors.at(i).errorString());
-    qWarning() << "Helmsman ws: TLS error" << texts.join(QStringLiteral("; "))
-               << "ignore=" << m_ignoreSslErrors;
-    if (m_ignoreSslErrors && m_socket)
-        m_socket->ignoreSslErrors();
+    qWarning() << "Helmsman ws: socket error" << error;
+    if (!m_opening)
+        return;
+    m_opening = false;
+    m_connectTimer.stop();
+    if (m_wantRunning)
+        scheduleReconnect();
 }
 
 void HassWebsocket::scheduleReconnect()
@@ -337,7 +441,7 @@ void HassWebsocket::stopKeepalive()
 
 void HassWebsocket::sendPing()
 {
-    if (!m_socket || !m_authenticated || m_socket->state() != QAbstractSocket::ConnectedState)
+    if (!m_transport || !m_authenticated)
         return;
     if (m_pongTimer.isActive())
         return;
@@ -367,7 +471,9 @@ void HassWebsocket::onConnectTimeout()
     qWarning() << "Helmsman ws: connect timed out";
     if (!m_wantRunning)
         return;
-    reapSocket();
+    // open() is blocked on the IO thread. Queued closeSocket would never run,
+    // so abandon that thread and talk to a new one.
+    detachStuckIo();
     scheduleReconnect();
 }
 
@@ -409,6 +515,7 @@ void HassWebsocket::onTextMessageReceived(const QString &message)
         m_reconnectTimer.stop();
         m_connectTimer.stop();
         stopKeepalive();
+        m_opening = false;
         setAuthenticated(false);
         setConnected(false);
         QTimer::singleShot(0, this, SLOT(reapSocket()));
