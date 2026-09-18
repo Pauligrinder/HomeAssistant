@@ -21,13 +21,24 @@ PictureEntityCard {
                 }
                 Column {
                     anchors.fill: parent
-                    MdiIcon {
+                    Item {
                         x: (parent.width - width) / 2
-                        mdiIcons: root.mdiIcons
-                        name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId) : ""
-                        iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
-                                   ? Theme.highlightColor : Theme.primaryColor
                         width: Theme.iconSizeSmall
+                        height: Theme.iconSizeSmall
+                        MdiIcon {
+                            anchors.fill: parent
+                            mdiIcons: root.mdiIcons
+                            name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId) : ""
+                            iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
+                                       ? Theme.highlightColor : Theme.primaryColor
+                            width: Theme.iconSizeSmall
+                            opacity: (dashboard && root.rev >= 0 && dashboard.isPending(entityId)) ? 0.55 : 1.0
+                        }
+                        PendingIndicator {
+                            anchors.centerIn: parent
+                            dashboard: root.dashboard
+                            entityId: entityId
+                        }
                     }
                     Label {
                         width: parent.width

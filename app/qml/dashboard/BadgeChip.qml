@@ -66,6 +66,14 @@ Rectangle {
             width: Theme.iconSizeSmall
             iconColor: (dashboard && dashboard.isOn(pill.entityId))
                        ? Theme.highlightColor : Theme.primaryColor
+            opacity: (dashboard && pill.rev >= 0 && dashboard.isPending(pill.entityId)) ? 0.55 : 1.0
+        }
+
+        PendingIndicator {
+            visible: running
+            anchors.verticalCenter: parent.verticalCenter
+            dashboard: pill.dashboard
+            entityId: pill.entityId
         }
 
         Label {
