@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.15
+Version:    0.3.16
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,10 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Sep 18 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.16-1
+- Apply native dashboard actions immediately and show a spinner until
+  Home Assistant confirms the new state.
+
 * Fri Sep 18 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.15-1
 - Keep the UI alive when Wi-Fi drops: open the HA websocket on an
   IO thread, skip ConnMan proxy lookup, and retry after a stuck TLS

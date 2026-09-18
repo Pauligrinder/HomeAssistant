@@ -31,6 +31,17 @@ Rectangle {
            ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
            : "transparent"
     radius: Theme.paddingSmall
+    readonly property string trackedEntityId: {
+        if (!card)
+            return ""
+        if (card.entity)
+            return String(card.entity)
+        if (card.camera_image)
+            return String(card.camera_image)
+        return ""
+    }
+    readonly property bool actionPending: (dashboard && trackedEntityId.length && statesRevision >= 0)
+                                          ? dashboard.isPending(trackedEntityId) : false
     opacity: (dashboard && card && statesRevision >= 0 && !dashboard.cardVisible(card)) ? 0 : 1
     visible: !dashboard || !card || (statesRevision >= 0 && dashboard.cardVisible(card))
     clip: true
@@ -46,13 +57,7 @@ Rectangle {
     }
 
     function entityId() {
-        if (!card)
-            return ""
-        if (card.entity)
-            return String(card.entity)
-        if (card.camera_image)
-            return String(card.camera_image)
-        return ""
+        return chrome.trackedEntityId
     }
 
     function mergeConfirmation(action, confirmation) {
@@ -93,6 +98,17 @@ Rectangle {
         anchors.rightMargin: chrome.contentHorizontalMargin
         anchors.topMargin: chrome.contentTopMargin
         spacing: Theme.paddingSmall
+        opacity: chrome.actionPending ? 0.72 : 1.0
+    }
+
+    PendingIndicator {
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: Theme.paddingSmall / 2
+        dashboard: chrome.dashboard
+        entityId: chrome.trackedEntityId
+        size: BusyIndicatorSize.Small
+        z: 2
     }
 
     MouseArea {

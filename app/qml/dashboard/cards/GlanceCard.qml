@@ -91,15 +91,28 @@ CardChrome {
                               : ((dashboard && root.rev >= 0) ? dashboard.friendlyName(entityId) : entityId)
                     }
 
-                    MdiIcon {
+                    Item {
                         visible: root.showIcon
                         x: Math.round((parent.width - width) / 2)
                         width: Theme.iconSizeSmall
                         height: Theme.iconSizeSmall
-                        mdiIcons: root.mdiIcons
-                        name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId, modelData.icon || "") : ""
-                        iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
-                                   ? Theme.highlightColor : Theme.primaryColor
+
+                        MdiIcon {
+                            anchors.fill: parent
+                            width: Theme.iconSizeSmall
+                            height: Theme.iconSizeSmall
+                            mdiIcons: root.mdiIcons
+                            name: (dashboard && root.rev >= 0) ? dashboard.entityIcon(entityId, modelData.icon || "") : ""
+                            iconColor: (dashboard && root.rev >= 0 && dashboard.isOn(entityId))
+                                       ? Theme.highlightColor : Theme.primaryColor
+                            opacity: (dashboard && root.rev >= 0 && dashboard.isPending(entityId)) ? 0.55 : 1.0
+                        }
+
+                        PendingIndicator {
+                            anchors.centerIn: parent
+                            dashboard: root.dashboard
+                            entityId: entityId
+                        }
                     }
 
                     Label {

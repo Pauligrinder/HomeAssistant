@@ -111,28 +111,43 @@ CardChrome {
                 anchors.fill: parent
                 spacing: Theme.paddingSmall
 
-                MdiIcon {
-                    id: rowIcon
+                Item {
+                    id: rowIconBox
                     y: (parent.height - height) / 2
-                    mdiIcons: root.mdiIcons
-                    name: {
-                        if (entry.icon)
-                            return entry.icon
-                        if (!dashboard || !row.entityId.length || root.rev < 0)
-                            return "mdi:link"
-                        return dashboard.entityIcon(row.entityId)
-                    }
-                    iconColor: (dashboard && row.entityId.length && root.rev >= 0
-                                && dashboard.isOn(row.entityId))
-                               ? Theme.highlightColor : Theme.primaryColor
                     width: Theme.iconSizeSmall
+                    height: Theme.iconSizeSmall
+
+                    MdiIcon {
+                        id: rowIcon
+                        anchors.fill: parent
+                        mdiIcons: root.mdiIcons
+                        name: {
+                            if (entry.icon)
+                                return entry.icon
+                            if (!dashboard || !row.entityId.length || root.rev < 0)
+                                return "mdi:link"
+                            return dashboard.entityIcon(row.entityId)
+                        }
+                        iconColor: (dashboard && row.entityId.length && root.rev >= 0
+                                    && dashboard.isOn(row.entityId))
+                                   ? Theme.highlightColor : Theme.primaryColor
+                        width: Theme.iconSizeSmall
+                        opacity: (dashboard && row.entityId.length && root.rev >= 0
+                                  && dashboard.isPending(row.entityId)) ? 0.55 : 1.0
+                    }
+
+                    PendingIndicator {
+                        anchors.centerIn: parent
+                        dashboard: root.dashboard
+                        entityId: row.entityId
+                    }
                 }
 
                 Label {
                     y: (parent.height - height) / 2
                     // The name gets whatever the icon, state and switch leave,
                     // so nothing is pushed past the edge of the card.
-                    width: Math.max(0, parent.width - rowIcon.width - Theme.paddingSmall
+                    width: Math.max(0, parent.width - rowIconBox.width - Theme.paddingSmall
                                     - (stateLabel.visible
                                        ? stateLabel.width + Theme.paddingSmall : 0)
                                     - (toggle.visible ? toggle.width + Theme.paddingSmall : 0))

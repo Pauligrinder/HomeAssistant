@@ -19,11 +19,14 @@
 #include <QUrlQuery>
 #include <QDebug>
 #include <QSslError>
+#include <QTimer>
 #include <algorithm>
 
 namespace {
 
 const char *kClientName = "Helmsman";
+const int kOptimisticTimeoutMs = 10000;
+const int kPendingTimerMs = 500;
 
 QString domainOfEntity(const QString &entityId)
 {
@@ -495,6 +498,36 @@ QStringList stringListOf(const QVariant &value)
     return out;
 }
 
+bool variantValuesClose(const QVariant &expected, const QVariant &actual)
+{
+    bool okExpected = false;
+    bool okActual = false;
+    const double expectedNumber = expected.toDouble(&okExpected);
+    const double actualNumber = actual.toDouble(&okActual);
+    if (okExpected && okActual)
+        return qAbs(expectedNumber - actualNumber) < 1.5;
+    return expected.toString() == actual.toString();
+}
+
+bool transitionalStateMatches(const QString &expected, const QString &actual)
+{
+    if (expected.isEmpty())
+        return false;
+    if (actual == expected)
+        return true;
+    if (expected == QLatin1String("open"))
+        return actual == QLatin1String("opening");
+    if (expected == QLatin1String("closed"))
+        return actual == QLatin1String("closing");
+    if (expected == QLatin1String("unlocked"))
+        return actual == QLatin1String("unlocking");
+    if (expected == QLatin1String("locked"))
+        return actual == QLatin1String("locking");
+    if (expected == QLatin1String("on"))
+        return actual == QLatin1String("playing") || actual == QLatin1String("active");
+    return false;
+}
+
 } // namespace
 
 LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
@@ -537,6 +570,8 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_initialDashboardSelected(false)
     , m_pendingWebChromeless(false)
 {
+    m_pendingTimer.setInterval(kPendingTimerMs);
+    connect(&m_pendingTimer, SIGNAL(timeout()), this, SLOT(onPendingTimeout()));
 }
 
 LovelaceCoordinator::~LovelaceCoordinator()
@@ -905,6 +940,7 @@ void LovelaceCoordinator::stop()
     m_mediaPending.clear();
     m_todoById.clear();
     m_todoRefreshById.clear();
+    clearOptimisticPending();
     if (m_cameraStream)
         m_cameraStream->stop();
     setReady(false);
@@ -1315,6 +1351,10 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         }
         return;
     }
+    if (m_serviceCommandEntities.contains(id)) {
+        finishServiceCommand(id, success);
+        return;
+    }
 }
 
 void LovelaceCoordinator::onEventReceived(int id, const QVariantMap &event)
@@ -1356,6 +1396,7 @@ void LovelaceCoordinator::applyStates(const QVariant &result)
     m_entities.clear();
     for (int i = 0; i < list.size(); ++i)
         applyStateObject(list.at(i).toMap());
+    reconcilePendingStates();
     m_statesLoaded = true;
     ++m_statesRevision;
     emit statesRevisionChanged();
@@ -1384,6 +1425,14 @@ void LovelaceCoordinator::applyStateChanged(const QVariantMap &event)
         m_entities.remove(entityId);
     else
         m_entities.insert(entityId, newState);
+    if (m_optimisticPending.contains(entityId)) {
+        if (newState.isEmpty() || pendingMatches(entityId, newState))
+            m_optimisticPending.remove(entityId);
+        else
+            overlayPending(entityId);
+        if (m_optimisticPending.isEmpty())
+            m_pendingTimer.stop();
+    }
     ++m_statesRevision;
     emit entityChanged(entityId);
     emit statesRevisionChanged();
@@ -1865,6 +1914,11 @@ bool LovelaceCoordinator::isOn(const QString &entityId) const
             || state == QLatin1String("active") || state == QLatin1String("playing");
 }
 
+bool LovelaceCoordinator::isPending(const QString &entityId) const
+{
+    return !entityId.isEmpty() && m_optimisticPending.contains(entityId);
+}
+
 bool LovelaceCoordinator::isToggleable(const QString &entityId) const
 {
     return domainIsToggleable(domainOfEntity(entityId));
@@ -2292,7 +2346,331 @@ void LovelaceCoordinator::callService(const QString &domain,
         target.insert(QStringLiteral("entity_id"), entityId);
         msg.insert(QStringLiteral("target"), target);
     }
-    m_socket->sendCommand(msg);
+    const int id = m_socket->sendCommand(msg);
+    if (!id)
+        return;
+    beginOptimistic(id, service, serviceData, serviceEntityIds(serviceData, entityId));
+}
+
+QStringList LovelaceCoordinator::serviceEntityIds(const QVariantMap &data, const QString &entityId) const
+{
+    QStringList ids = stringListOf(data.value(QStringLiteral("entity_id")));
+    if (ids.isEmpty())
+        ids = stringListOf(data.value(QStringLiteral("target")).toMap().value(QStringLiteral("entity_id")));
+    if (!entityId.isEmpty() && !ids.contains(entityId))
+        ids.prepend(entityId);
+    QStringList unique;
+    for (int i = 0; i < ids.size(); ++i) {
+        if (!ids.at(i).isEmpty() && !unique.contains(ids.at(i)))
+            unique.append(ids.at(i));
+    }
+    return unique;
+}
+
+QVariantMap LovelaceCoordinator::optimisticEntity(const QString &entityId,
+                                                  const QString &service,
+                                                  const QVariantMap &data) const
+{
+    QVariantMap entity = m_entities.value(entityId);
+    if (entity.isEmpty())
+        return QVariantMap();
+
+    const QString entityDomain = domainOfEntity(entityId);
+    QString state = entity.value(QStringLiteral("state")).toString();
+    QVariantMap attrs = entity.value(QStringLiteral("attributes")).toMap();
+    bool changed = false;
+
+    auto setState = [&](const QString &next) {
+        if (next.isEmpty() || state == next)
+            return;
+        state = next;
+        changed = true;
+    };
+    auto setAttr = [&](const QString &key, const QVariant &value) {
+        if (!value.isValid() || attrs.value(key) == value)
+            return;
+        attrs.insert(key, value);
+        changed = true;
+    };
+
+    if (service == QLatin1String("toggle")) {
+        if (entityDomain == QLatin1String("lock"))
+            setState(isOn(entityId) ? QStringLiteral("locked") : QStringLiteral("unlocked"));
+        else if (entityDomain == QLatin1String("cover") || entityDomain == QLatin1String("valve"))
+            setState(isOn(entityId) ? QStringLiteral("closed") : QStringLiteral("open"));
+        else if (entityDomain == QLatin1String("climate")
+                 || entityDomain == QLatin1String("water_heater")
+                 || entityDomain == QLatin1String("humidifier")) {
+            if (isOn(entityId))
+                setState(QStringLiteral("off"));
+        } else {
+            setState(isOn(entityId) ? QStringLiteral("off") : QStringLiteral("on"));
+        }
+    } else if (service == QLatin1String("turn_off")) {
+        if (entityDomain == QLatin1String("lock"))
+            setState(QStringLiteral("locked"));
+        else if (entityDomain == QLatin1String("cover") || entityDomain == QLatin1String("valve"))
+            setState(QStringLiteral("closed"));
+        else
+            setState(QStringLiteral("off"));
+        if (entityDomain == QLatin1String("light"))
+            setAttr(QStringLiteral("brightness"), 0);
+    } else if (service == QLatin1String("turn_on")) {
+        if (entityDomain == QLatin1String("lock"))
+            setState(QStringLiteral("unlocked"));
+        else if (entityDomain == QLatin1String("cover") || entityDomain == QLatin1String("valve"))
+            setState(QStringLiteral("open"));
+        else if (entityDomain != QLatin1String("climate")
+                 && entityDomain != QLatin1String("water_heater")
+                 && entityDomain != QLatin1String("humidifier"))
+            setState(QStringLiteral("on"));
+    } else if (service == QLatin1String("lock")) {
+        setState(QStringLiteral("locked"));
+    } else if (service == QLatin1String("unlock")) {
+        setState(QStringLiteral("unlocked"));
+    } else if (service == QLatin1String("open_cover") || service == QLatin1String("open_valve")) {
+        setState(QStringLiteral("open"));
+        if (attrs.contains(QStringLiteral("current_position")))
+            setAttr(QStringLiteral("current_position"), 100);
+    } else if (service == QLatin1String("close_cover") || service == QLatin1String("close_valve")) {
+        setState(QStringLiteral("closed"));
+        if (attrs.contains(QStringLiteral("current_position")))
+            setAttr(QStringLiteral("current_position"), 0);
+    } else if (service == QLatin1String("media_play")) {
+        setState(QStringLiteral("playing"));
+    } else if (service == QLatin1String("media_pause")) {
+        setState(QStringLiteral("paused"));
+    } else if (service == QLatin1String("media_play_pause")) {
+        setState(state == QLatin1String("playing") ? QStringLiteral("paused") : QStringLiteral("playing"));
+    } else if (service == QLatin1String("media_stop")) {
+        setState(QStringLiteral("idle"));
+    } else if (service == QLatin1String("alarm_disarm")) {
+        setState(QStringLiteral("disarmed"));
+    } else if (service.startsWith(QLatin1String("alarm_arm_"))) {
+        setState(QStringLiteral("armed_") + service.mid(QStringLiteral("alarm_arm_").size()));
+    } else if (service == QLatin1String("set_hvac_mode")) {
+        setState(data.value(QStringLiteral("hvac_mode")).toString());
+        setAttr(QStringLiteral("hvac_mode"), data.value(QStringLiteral("hvac_mode")));
+    } else if (service == QLatin1String("select_option")) {
+        setState(data.value(QStringLiteral("option")).toString());
+    } else if (service == QLatin1String("set_value") || service == QLatin1String("set_datetime")) {
+        const QVariant value = data.contains(QStringLiteral("value"))
+                ? data.value(QStringLiteral("value"))
+                : data.value(QStringLiteral("datetime"));
+        if (value.isValid())
+            setState(value.toString());
+    }
+
+    if (data.contains(QStringLiteral("brightness"))) {
+        setAttr(QStringLiteral("brightness"), data.value(QStringLiteral("brightness")));
+        setState(QStringLiteral("on"));
+    } else if (data.contains(QStringLiteral("brightness_pct"))) {
+        const int pct = qBound(0, data.value(QStringLiteral("brightness_pct")).toInt(), 100);
+        setAttr(QStringLiteral("brightness"), qRound(pct * 255 / 100.0));
+        setState(pct > 0 ? QStringLiteral("on") : QStringLiteral("off"));
+    }
+    if (data.contains(QStringLiteral("color_temp")))
+        setAttr(QStringLiteral("color_temp"), data.value(QStringLiteral("color_temp")));
+    if (data.contains(QStringLiteral("color_temp_kelvin")))
+        setAttr(QStringLiteral("color_temp_kelvin"), data.value(QStringLiteral("color_temp_kelvin")));
+    if (data.contains(QStringLiteral("rgb_color")))
+        setAttr(QStringLiteral("rgb_color"), data.value(QStringLiteral("rgb_color")));
+    if (data.contains(QStringLiteral("hs_color")))
+        setAttr(QStringLiteral("hs_color"), data.value(QStringLiteral("hs_color")));
+    if (data.contains(QStringLiteral("temperature")))
+        setAttr(QStringLiteral("temperature"), data.value(QStringLiteral("temperature")));
+    if (data.contains(QStringLiteral("humidity")))
+        setAttr(QStringLiteral("humidity"), data.value(QStringLiteral("humidity")));
+    if (data.contains(QStringLiteral("fan_mode")))
+        setAttr(QStringLiteral("fan_mode"), data.value(QStringLiteral("fan_mode")));
+    if (data.contains(QStringLiteral("swing_mode")))
+        setAttr(QStringLiteral("swing_mode"), data.value(QStringLiteral("swing_mode")));
+    if (data.contains(QStringLiteral("preset_mode")))
+        setAttr(QStringLiteral("preset_mode"), data.value(QStringLiteral("preset_mode")));
+    if (data.contains(QStringLiteral("percentage"))) {
+        const int pct = data.value(QStringLiteral("percentage")).toInt();
+        setAttr(QStringLiteral("percentage"), pct);
+        if (entityDomain == QLatin1String("fan"))
+            setState(pct > 0 ? QStringLiteral("on") : QStringLiteral("off"));
+    }
+    if (data.contains(QStringLiteral("volume_level")))
+        setAttr(QStringLiteral("volume_level"), data.value(QStringLiteral("volume_level")));
+    if (data.contains(QStringLiteral("position"))) {
+        const int position = data.value(QStringLiteral("position")).toInt();
+        setAttr(QStringLiteral("current_position"), position);
+        if (entityDomain == QLatin1String("cover") || entityDomain == QLatin1String("valve"))
+            setState(position > 0 ? QStringLiteral("open") : QStringLiteral("closed"));
+    }
+    if (data.contains(QStringLiteral("tilt_position")))
+        setAttr(QStringLiteral("current_tilt_position"), data.value(QStringLiteral("tilt_position")));
+
+    if (!changed)
+        return QVariantMap();
+
+    entity.insert(QStringLiteral("state"), state);
+    entity.insert(QStringLiteral("attributes"), attrs);
+    return entity;
+}
+
+bool LovelaceCoordinator::pendingMatches(const QString &entityId, const QVariantMap &state) const
+{
+    const OptimisticPending pending = m_optimisticPending.value(entityId);
+    const QString actualState = state.value(QStringLiteral("state")).toString();
+    if (!pending.expectedState.isEmpty()
+            && actualState != pending.expectedState
+            && !transitionalStateMatches(pending.expectedState, actualState)) {
+        return false;
+    }
+    if (pending.expectedAttrs.isEmpty())
+        return true;
+
+    const QVariantMap attrs = state.value(QStringLiteral("attributes")).toMap();
+    QVariantMap::const_iterator it = pending.expectedAttrs.constBegin();
+    for (; it != pending.expectedAttrs.constEnd(); ++it) {
+        if (!variantValuesClose(it.value(), attrs.value(it.key())))
+            return false;
+    }
+    return true;
+}
+
+void LovelaceCoordinator::beginOptimistic(int commandId,
+                                          const QString &service,
+                                          const QVariantMap &data,
+                                          const QStringList &entityIds)
+{
+    if (entityIds.isEmpty())
+        return;
+
+    const qint64 deadline = QDateTime::currentMSecsSinceEpoch() + kOptimisticTimeoutMs;
+    QStringList tracked;
+    for (int i = 0; i < entityIds.size(); ++i) {
+        const QString entityId = entityIds.at(i);
+        if (entityId.isEmpty())
+            continue;
+        OptimisticPending pending;
+        pending.snapshot = m_entities.value(entityId);
+        pending.optimistic = optimisticEntity(entityId, service, data);
+        pending.commandId = commandId;
+        pending.deadlineMs = deadline;
+        if (!pending.optimistic.isEmpty()) {
+            pending.expectedState = pending.optimistic.value(QStringLiteral("state")).toString();
+            if (pending.expectedState == pending.snapshot.value(QStringLiteral("state")).toString())
+                pending.expectedState.clear();
+            const QVariantMap oldAttrs = pending.snapshot.value(QStringLiteral("attributes")).toMap();
+            const QVariantMap newAttrs = pending.optimistic.value(QStringLiteral("attributes")).toMap();
+            QVariantMap::const_iterator it = newAttrs.constBegin();
+            for (; it != newAttrs.constEnd(); ++it) {
+                if (oldAttrs.value(it.key()) != it.value())
+                    pending.expectedAttrs.insert(it.key(), it.value());
+            }
+            m_entities.insert(entityId, pending.optimistic);
+            emit entityChanged(entityId);
+        }
+        m_optimisticPending.insert(entityId, pending);
+        tracked.append(entityId);
+    }
+    if (tracked.isEmpty())
+        return;
+    m_serviceCommandEntities.insert(commandId, tracked);
+    if (!m_pendingTimer.isActive())
+        m_pendingTimer.start();
+    bumpStatesRevision();
+}
+
+void LovelaceCoordinator::overlayPending(const QString &entityId)
+{
+    const OptimisticPending pending = m_optimisticPending.value(entityId);
+    if (pending.optimistic.isEmpty())
+        return;
+    m_entities.insert(entityId, pending.optimistic);
+}
+
+void LovelaceCoordinator::reconcilePendingStates()
+{
+    const QStringList ids = m_optimisticPending.keys();
+    for (int i = 0; i < ids.size(); ++i) {
+        const QString entityId = ids.at(i);
+        const QVariantMap current = m_entities.value(entityId);
+        if (current.isEmpty() || pendingMatches(entityId, current))
+            m_optimisticPending.remove(entityId);
+        else
+            overlayPending(entityId);
+    }
+    if (m_optimisticPending.isEmpty())
+        m_pendingTimer.stop();
+}
+
+void LovelaceCoordinator::finishPending(const QString &entityId, bool revert)
+{
+    if (!m_optimisticPending.contains(entityId))
+        return;
+    const OptimisticPending pending = m_optimisticPending.take(entityId);
+    if (revert && !pending.snapshot.isEmpty()) {
+        m_entities.insert(entityId, pending.snapshot);
+        emit entityChanged(entityId);
+    }
+    if (m_optimisticPending.isEmpty())
+        m_pendingTimer.stop();
+}
+
+void LovelaceCoordinator::finishServiceCommand(int commandId, bool success)
+{
+    const QStringList entityIds = m_serviceCommandEntities.take(commandId);
+    bool changed = false;
+    for (int i = 0; i < entityIds.size(); ++i) {
+        const QString entityId = entityIds.at(i);
+        if (!m_optimisticPending.contains(entityId))
+            continue;
+        const OptimisticPending pending = m_optimisticPending.value(entityId);
+        if (pending.commandId != commandId)
+            continue;
+        if (!success) {
+            finishPending(entityId, true);
+            changed = true;
+            continue;
+        }
+        // Commands that do not change entity state still need the spinner
+        // to stop once Home Assistant has accepted them.
+        if (pending.optimistic.isEmpty()) {
+            m_optimisticPending.remove(entityId);
+            changed = true;
+        }
+    }
+    if (m_optimisticPending.isEmpty())
+        m_pendingTimer.stop();
+    if (changed)
+        bumpStatesRevision();
+}
+
+void LovelaceCoordinator::clearOptimisticPending()
+{
+    if (m_optimisticPending.isEmpty() && m_serviceCommandEntities.isEmpty()) {
+        m_pendingTimer.stop();
+        return;
+    }
+    m_optimisticPending.clear();
+    m_serviceCommandEntities.clear();
+    m_pendingTimer.stop();
+    bumpStatesRevision();
+}
+
+void LovelaceCoordinator::onPendingTimeout()
+{
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const QStringList ids = m_optimisticPending.keys();
+    bool changed = false;
+    for (int i = 0; i < ids.size(); ++i) {
+        const QString entityId = ids.at(i);
+        const OptimisticPending pending = m_optimisticPending.value(entityId);
+        if (pending.deadlineMs > now)
+            continue;
+        m_optimisticPending.remove(entityId);
+        changed = true;
+    }
+    if (m_optimisticPending.isEmpty())
+        m_pendingTimer.stop();
+    if (changed)
+        bumpStatesRevision();
 }
 
 void LovelaceCoordinator::openMoreInfo(const QString &entityId)

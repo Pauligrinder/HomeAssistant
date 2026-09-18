@@ -82,6 +82,13 @@ Page {
                     iconColor: page.on ? Theme.highlightColor : Theme.primaryColor
                     width: Theme.iconSizeLarge
                     height: width
+                    opacity: (dashboard && page.rev >= 0 && dashboard.isPending(page.entityId)) ? 0.55 : 1.0
+                }
+                PendingIndicator {
+                    anchors.centerIn: icon
+                    dashboard: page.dashboard
+                    entityId: page.entityId
+                    size: BusyIndicatorSize.Small
                 }
             }
 
@@ -296,21 +303,36 @@ Page {
                 anchors.rightMargin: Theme.horizontalPageMargin
                 spacing: Theme.paddingSmall
 
-                MdiIcon {
-                    id: relatedIcon
+                Item {
+                    id: relatedIconBox
                     y: (parent.height - height) / 2
-                    mdiIcons: page.mdiIcons
-                    name: (dashboard && page.rev >= 0 && row.relatedId.length)
-                          ? dashboard.entityIcon(row.relatedId) : ""
-                    iconColor: (dashboard && page.rev >= 0 && row.relatedId.length
-                                && dashboard.isOn(row.relatedId))
-                               ? Theme.highlightColor : Theme.primaryColor
                     width: Theme.iconSizeSmall
+                    height: Theme.iconSizeSmall
+
+                    MdiIcon {
+                        id: relatedIcon
+                        anchors.fill: parent
+                        mdiIcons: page.mdiIcons
+                        name: (dashboard && page.rev >= 0 && row.relatedId.length)
+                              ? dashboard.entityIcon(row.relatedId) : ""
+                        iconColor: (dashboard && page.rev >= 0 && row.relatedId.length
+                                    && dashboard.isOn(row.relatedId))
+                                   ? Theme.highlightColor : Theme.primaryColor
+                        width: Theme.iconSizeSmall
+                        opacity: (dashboard && page.rev >= 0 && row.relatedId.length
+                                  && dashboard.isPending(row.relatedId)) ? 0.55 : 1.0
+                    }
+
+                    PendingIndicator {
+                        anchors.centerIn: parent
+                        dashboard: page.dashboard
+                        entityId: row.relatedId
+                    }
                 }
 
                 Label {
                     y: (parent.height - height) / 2
-                    width: Math.max(0, parent.width - relatedIcon.width - Theme.paddingSmall
+                    width: Math.max(0, parent.width - relatedIconBox.width - Theme.paddingSmall
                                     - (relatedState.visible
                                        ? relatedState.width + Theme.paddingSmall : 0)
                                     - (relatedToggle.visible

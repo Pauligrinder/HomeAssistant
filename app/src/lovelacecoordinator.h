@@ -14,6 +14,7 @@
 #include <QSslError>
 #include <QList>
 #include <QUrl>
+#include <QTimer>
 
 #include "hasscamerastream.h"
 
@@ -111,6 +112,7 @@ public slots:
     QString entityIcon(const QString &entityId, const QString &fallback = QString()) const;
     QString domainOf(const QString &entityId) const;
     bool isOn(const QString &entityId) const;
+    bool isPending(const QString &entityId) const;
     bool isToggleable(const QString &entityId) const;
     bool isAvailable(const QString &entityId) const;
     QVariant attribute(const QString &entityId, const QString &key) const;
@@ -206,6 +208,7 @@ private slots:
     void onEventReceived(int id, const QVariantMap &event);
     void onReplyFinished();
     void onSslErrors(const QList<QSslError> &errors);
+    void onPendingTimeout();
 
 private:
     void setBusy(bool busy);
@@ -246,6 +249,20 @@ private:
     void applyEntityRegistry(const QVariant &result);
     void applyIconResources(const QString &category, const QVariant &result);
     void bumpStatesRevision();
+    QStringList serviceEntityIds(const QVariantMap &data, const QString &entityId) const;
+    QVariantMap optimisticEntity(const QString &entityId,
+                                 const QString &service,
+                                 const QVariantMap &data) const;
+    bool pendingMatches(const QString &entityId, const QVariantMap &state) const;
+    void beginOptimistic(int commandId,
+                         const QString &service,
+                         const QVariantMap &data,
+                         const QStringList &entityIds);
+    void overlayPending(const QString &entityId);
+    void reconcilePendingStates();
+    void finishPending(const QString &entityId, bool revert);
+    void finishServiceCommand(int commandId, bool success);
+    void clearOptimisticPending();
     QString resolvedEntityIcon(const QString &entityId) const;
     QString iconFromComponentResources(const QString &domain,
                                        const QString &deviceClass,
@@ -352,6 +369,22 @@ private:
     QHash<QString, QVariantList> m_todoItems;
     QHash<int, QString> m_todoById;
     QHash<int, QString> m_todoRefreshById;
+    struct OptimisticPending {
+        QVariantMap snapshot;
+        QVariantMap optimistic;
+        QString expectedState;
+        QVariantMap expectedAttrs;
+        int commandId;
+        qint64 deadlineMs;
+        OptimisticPending()
+            : commandId(0)
+            , deadlineMs(0)
+        {
+        }
+    };
+    QHash<QString, OptimisticPending> m_optimisticPending;
+    QHash<int, QStringList> m_serviceCommandEntities;
+    QTimer m_pendingTimer;
 };
 
 #endif
