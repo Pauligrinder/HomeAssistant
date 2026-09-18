@@ -11,10 +11,46 @@
 #include <QAbstractSocket>
 #include <QList>
 #include <QSslError>
+#include <QUrl>
 
 class QWebSocket;
-class QUrl;
 class QThread;
+
+// Lives on the IO thread. Qt 5.6 QWebSocket::open() and the SSL destructor
+// can block for minutes when the network path is gone; that must not be the
+// GUI thread or the whole phone UI freezes.
+class HassWsTransport : public QObject
+{
+    Q_OBJECT
+public:
+    explicit HassWsTransport(QObject *parent = 0);
+
+public slots:
+    void openUrl(QUrl url, bool ignoreSsl, int epoch);
+    void closeSocket();
+    void sendText(QString text);
+
+signals:
+    void opened(int epoch);
+    void closed(int epoch);
+    void textReceived(const QString &message);
+    void errorText(const QString &error);
+
+private slots:
+    void onConnected();
+    void onDisconnected();
+    void onTextMessageReceived(const QString &message);
+    void onError(QAbstractSocket::SocketError error);
+    void onSslErrors(const QList<QSslError> &errors);
+
+private:
+    void bindSocket();
+    void destroySocket();
+
+    QWebSocket *m_socket;
+    bool m_ignoreSsl;
+    int m_epoch;
+};
 
 // General Home Assistant /api/websocket client. One authenticated socket is
 // shared by push notifications and the native Lovelace dashboard.
@@ -51,11 +87,10 @@ signals:
     void eventReceived(int id, const QVariantMap &event);
 
 private slots:
-    void onConnected();
-    void onDisconnected();
+    void onConnected(int epoch);
+    void onDisconnected(int epoch);
     void onTextMessageReceived(const QString &message);
-    void onError(QAbstractSocket::SocketError error);
-    void onSslErrors(const QList<QSslError> &errors);
+    void onTransportError(const QString &error);
     void openSocket();
     void sendPing();
     void onPongTimeout();
@@ -69,14 +104,15 @@ private:
     void startKeepalive();
     void stopKeepalive();
     void scheduleReconnect();
-    void bindSocket();
-    void resetSocket();
+    void startIo();
+    void bindTransport();
+    void detachStuckIo();
     bool accessTokenFresh() const;
     QUrl websocketUrl() const;
     int nextMessageId();
 
-    QWebSocket *m_socket;
-    QThread *m_reaper;
+    HassWsTransport *m_transport;
+    QThread *m_io;
     QTimer m_reconnectTimer;
     QTimer m_connectTimer;
     QTimer m_pingTimer;
@@ -88,6 +124,8 @@ private:
     bool m_connected;
     bool m_wantRunning;
     bool m_authenticated;
+    bool m_opening;
+    int m_epoch;
     int m_nextId;
     int m_pendingPingId;
     int m_reconnectAttempt;

@@ -9,6 +9,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QNetworkProxy>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -374,6 +375,8 @@ HassClient::HassClient(QObject *parent)
     connect(&m_diagTimer, SIGNAL(timeout()),
             this, SLOT(onDiagHeartbeatTimeout()));
     m_diagTimer.start();
+
+    m_nam->setProxy(QNetworkProxy::NoProxy);
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -1381,7 +1384,7 @@ void HassClient::updateNetworkState(bool wifiReady, bool wifiConnected, const QS
     // Debounce endpoint switches. Joining home Wi-Fi needs DHCP before the
     // LAN address works; leaving it should fail over to the external URL
     // sooner so we are not stuck on a dead 192.168 address.
-    const int delayMs = (state == NetworkWifi) ? 3500 : 800;
+    const int delayMs = (state == NetworkWifi) ? 3500 : 2500;
     m_endpointDebounceTimer.start(delayMs);
 }
 
