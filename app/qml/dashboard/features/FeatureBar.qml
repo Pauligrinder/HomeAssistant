@@ -57,7 +57,7 @@ Column {
             property var feature
             property string entityId
             property var dashboard
-            text: "On"
+            text: qsTr("On")
             automaticCheck: false
             checked: (dashboard && bar.rev >= 0) ? dashboard.isOn(entityId) : false
             onClicked: if (dashboard) dashboard.toggle(entityId)
@@ -77,7 +77,7 @@ Column {
                 var b = (dashboard && bar.rev >= 0) ? Number(dashboard.attribute(entityId, "brightness")) : 0
                 return b ? Math.round(b * 100 / 255) : 0
             }
-            label: "Brightness"
+            label: qsTr("Brightness")
             onReleased: {
                 if (dashboard)
                     dashboard.callService("light", "turn_on",
@@ -204,10 +204,10 @@ Column {
                 text: {
                     var t = feature && feature.type ? feature.type : ""
                     if (t === "lock-commands")
-                        return "Unlock"
+                        return qsTr("Unlock")
                     if (t === "button" || t === "update-actions")
-                        return "Run"
-                    return "Open"
+                        return qsTr("Run")
+                    return qsTr("Open")
                 }
                 onClicked: {
                     var t = feature.type
@@ -226,7 +226,7 @@ Column {
             }
             Button {
                 visible: feature && feature.type !== "button" && feature.type !== "update-actions"
-                text: (feature && feature.type === "lock-commands") ? "Lock" : "Close"
+                text: (feature && feature.type === "lock-commands") ? qsTr("Lock") : qsTr("Close")
                 onClicked: {
                     var t = feature.type
                     var domain = dashboard.domainOf(entityId)
@@ -405,7 +405,7 @@ Column {
                 return v > 0 ? v : 6500
             }
             value: (dashboard && bar.rev >= 0) ? Number(dashboard.attribute(entityId, "color_temp_kelvin")) : 0
-            label: "Color temperature"
+            label: qsTr("Color temperature")
             onReleased: {
                 if (dashboard)
                     dashboard.callService("light", "turn_on",

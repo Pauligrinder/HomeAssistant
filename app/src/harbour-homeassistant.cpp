@@ -4,6 +4,9 @@
 #include <QtQml>
 #include <QNetworkProxy>
 #include <QNetworkProxyFactory>
+#include <QLocale>
+#include <QStringList>
+#include <QTranslator>
 
 #include "appsettings.h"
 #include "helmsmanlog.h"
@@ -13,6 +16,45 @@
 #include "mdiiconrenderer.h"
 #include "sensorcoordinator.h"
 #include "widgetcoordinator.h"
+
+// Loads harbour-helmsman_<lang>.qm for the preferred Settings override,
+// else Home Assistant profile language (cached), else system locale.
+// Full locale first (e.g. fi_FI), then bare language (fi). English
+// ("en") and missing catalogs keep the English source strings.
+// See docs/translations.md.
+static void installAppTranslator(QGuiApplication *app)
+{
+    const QString preferred = HassClient::preferredUiLanguage();
+    if (preferred == QLatin1String("en"))
+        return;
+
+    const QString dir = SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile();
+    QStringList candidates;
+    if (!preferred.isEmpty()) {
+        candidates << preferred;
+        const int sep = preferred.indexOf(QLatin1Char('_'));
+        if (sep > 0)
+            candidates << preferred.left(sep);
+    } else {
+        const QString locale = QLocale::system().name();
+        candidates << locale;
+        const int sep = locale.indexOf(QLatin1Char('_'));
+        if (sep > 0)
+            candidates << locale.left(sep);
+    }
+
+    for (int i = 0; i < candidates.size(); ++i) {
+        const QString &tag = candidates.at(i);
+        if (tag.isEmpty() || tag == QLatin1String("en"))
+            continue;
+        QTranslator *translator = new QTranslator(app);
+        if (translator->load(QStringLiteral("harbour-helmsman_%1").arg(tag), dir)) {
+            app->installTranslator(translator);
+            return;
+        }
+        delete translator;
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -27,6 +69,7 @@ int main(int argc, char *argv[])
 
     HelmsmanLog::install();
     AppSettings::migrateLegacyFile();
+    installAppTranslator(app);
     // Prepare exactly one web engine before any QML import. Gecko stacks
     // share libxul.so; Atlantic is WPE WebKit. Mixing them in-process crashes.
     HassClient::preloadWebViewEmbed();

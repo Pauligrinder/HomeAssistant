@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.16
+Version:    0.3.17
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,16 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Tue Sep 22 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.17-1
+- Translate the native UI into Finnish plus many European and East Asian
+  locales, with a searchable language picker. System follows the Home
+  Assistant profile language when signed in.
+- Collapse Settings into ExpandingSections; scripts show Run instead of Off.
+- Fix Home Assistant picture uploads via Sailfish ImagePicker (Pictures
+  and MediaIndexing permissions).
+- Todo completed lists can expand/collapse; custom calendar week
+  navigation follows “now” until you page away.
+
 * Fri Sep 18 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.16-1
 - Apply native dashboard actions immediately and show a spinner until
   Home Assistant confirms the new state.

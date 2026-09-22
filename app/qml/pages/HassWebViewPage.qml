@@ -1,5 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import Sailfish.Pickers 1.0
 import "../components"
 
 Page {
@@ -25,11 +26,17 @@ Page {
     property int snapshotRevision: 1
     property bool snapshotUsable: false
     property string lastLoadedBase: ""
+    property bool filePickPending: false
     // WebViewPage is only a Page with this marker; WebView looks it up on
     // a parent so either Gecko stack can sit in the same Silica page.
     property int __sailfish_webviewpage
     readonly property var dashboardView: webViewLoader.item
     readonly property string webViewEngine: hassClient ? hassClient.webViewEngineActive : "stock"
+    // Always use ImagePickerPage for <input type=file accept=image…>. Gecko
+    // only opens the gallery when mimeType is exactly "image/*"; HA sends
+    // "image/png, image/jpeg, image/gif" and the fallback ContentPicker is
+    // blank. Atlantic has no chooser at all.
+    readonly property bool nativeImagePick: true
     property color overlayBackgroundColor: page.fallbackOverlayBackground
     property color overlayTextColor: page.fallbackOverlayText
     readonly property color haDarkBackground: "#111111"
@@ -81,16 +88,16 @@ Page {
     }
     property string loadStatusText: {
         if (page.webViewFailed)
-            return "Browser engine failed to load."
+            return qsTr("Browser engine failed to load.")
         if (page.skipFrontendChrome)
-            return "Loading…"
+            return qsTr("Loading…")
         if (!page.tokensInjected)
-            return "Preparing session..."
+            return qsTr("Preparing session...")
         if (dashboardView && dashboardView.loading && dashboardView.loadProgress > 0)
-            return "Loading dashboard… " + dashboardView.loadProgress + "%"
+            return qsTr("Loading dashboard… %1%").arg(dashboardView.loadProgress)
         if (page.readyCheckRunning)
-            return "Loading dashboard…"
-        return "Loading dashboard…"
+            return qsTr("Loading dashboard…")
+        return qsTr("Loading dashboard…")
     }
     // Leave the Silica edge-swipe free while the frontend can go back on its
     // own (settings subpages, add-on history). Pop the page only at the URL
@@ -586,14 +593,22 @@ Page {
                     })
     }
 
+    function jsQuote(s) {
+        return "'" + String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'"
+    }
+
     function settingsExitJs() {
         // Patch ha-config-navigation.pages so "Back to dashboard" is part of
         // the same list Home Assistant renders. Re-splicing on poll or scroll
         // briefly shows a duplicate row under Companion app.
         if (!hassClient || !hassClient.nativeDashboardEnabled || page.isHome)
             return ""
+        var backName = qsTr("Back to dashboard")
+        var backDesc = qsTr("Return to the native dashboard")
         return "window.__helmsmanInstallSettingsExit=function(){"
                 + "try{"
+                + "  var backName=" + jsQuote(backName) + ";"
+                + "  var backDesc=" + jsQuote(backDesc) + ";"
                 + "  var fire=function(){"
                 + "    var now=Date.now();"
                 + "    if(window.__helmsmanBackAt&&now-window.__helmsmanBackAt<1000)return;"
@@ -619,7 +634,7 @@ Page {
                 + "        var tag=n.tagName?String(n.tagName).toLowerCase():'';"
                 + "        var isItem=tag.indexOf('list-item')>=0;"
                 + "        if(String(href).indexOf('helmsman-back-dashboard')>=0"
-                + "            ||(isItem&&txt.indexOf('Return to the native dashboard')>=0&&txt.length<160)){"
+                + "            ||(isItem&&txt.indexOf(backDesc)>=0&&txt.length<160)){"
                 + "          ev.preventDefault();"
                 + "          if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();"
                 + "          else ev.stopPropagation();"
@@ -638,10 +653,10 @@ Page {
                 + "    if(p.__helmsman)return true;"
                 + "    var path=String(p.path||'');"
                 + "    if(path.indexOf('helmsman-back-dashboard')>=0)return true;"
-                + "    return p.name==='Back to dashboard';"
+                + "    return p.name===backName;"
                 + "  };"
-                + "  var backPage={path:'#helmsman-back-dashboard',name:'Back to dashboard',"
-                + "    description:'Return to the native dashboard',"
+                + "  var backPage={path:'#helmsman-back-dashboard',name:backName,"
+                + "    description:backDesc,"
                 + "    iconPath:'M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z',"
                 + "    iconColor:'#B1345C',core:true,__helmsman:true};"
                 + "  var withBack=function(pages){"
@@ -730,6 +745,99 @@ Page {
                 + "};"
     }
 
+    function filePickerHookJs() {
+        // Home Assistant picture upload uses accept="image/png, image/jpeg,
+        // image/gif". Gecko's PickerCreator only opens the gallery for
+        // exactly "image/*"; anything else is ContentPickerPage, which is
+        // blank without MediaIndexing. Rewrite first so the Sailfish
+        // gallery is used. Atlantic has no PickerOpener, so those clicks
+        // are turned into ImagePickerPage instead of a blank WPE chooser.
+        return "window.__helmsmanInstallFilePicker=function(){"
+                + "try{"
+                + "  window.__helmsmanNativeImagePick="
+                + (page.nativeImagePick ? "true" : "false") + ";"
+                + "  window.__helmsmanApplyPickedFile=function(name,mime,b64){"
+                + "    window.__helmsmanPickBusy=false;"
+                + "    var input=window.__helmsmanPendingFileInput;"
+                + "    window.__helmsmanPendingFileInput=null;"
+                + "    if(!input)return 'no-input';"
+                + "    try{"
+                + "      var bin=atob(b64);"
+                + "      var bytes=new Uint8Array(bin.length);"
+                + "      for(var i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);"
+                + "      var file=new File([bytes],name||'image.jpg',{type:mime||'image/jpeg'});"
+                + "      var dt=new DataTransfer();"
+                + "      dt.items.add(file);"
+                + "      input.files=dt.files;"
+                + "      input.dispatchEvent(new Event('change',{bubbles:true,composed:true}));"
+                + "      return 'ok';"
+                + "    }catch(e){return 'fail:'+e;}"
+                + "  };"
+                + "  window.__helmsmanCancelPickedFile=function(){"
+                + "    window.__helmsmanPickBusy=false;"
+                + "    window.__helmsmanPendingFileInput=null;"
+                + "  };"
+                + "  var wantsImage=function(input){"
+                + "    if(!input||String(input.type).toLowerCase()!=='file')return false;"
+                + "    var a=String(input.accept||'').toLowerCase();"
+                + "    return a.indexOf('image')>=0||a.indexOf('.png')>=0||a.indexOf('.jpg')>=0"
+                + "      ||a.indexOf('.jpeg')>=0||a.indexOf('.gif')>=0||a.indexOf('.webp')>=0;"
+                + "  };"
+                + "  var rewrite=function(input){"
+                + "    if(wantsImage(input)&&String(input.accept)!=='image/*')"
+                + "      input.accept='image/*';"
+                + "  };"
+                + "  var fileInputFromEvent=function(ev){"
+                + "    var path=ev.composedPath?ev.composedPath():[];"
+                + "    var found=null;"
+                + "    for(var i=0;i<path.length;i++){"
+                + "      var n=path[i];"
+                + "      if(!n)continue;"
+                + "      if(n.tagName==='INPUT'&&String(n.type).toLowerCase()==='file'){"
+                + "        rewrite(n);"
+                + "        if(wantsImage(n))found=found||n;"
+                + "      }"
+                + "      var scan=function(root){"
+                + "        if(!root||!root.querySelectorAll)return;"
+                + "        try{"
+                + "          var ins=root.querySelectorAll('input[type=file]');"
+                + "          for(var j=0;j<ins.length;j++){"
+                + "            rewrite(ins[j]);"
+                + "            if(wantsImage(ins[j]))found=found||ins[j];"
+                + "          }"
+                + "        }catch(e1){}"
+                + "      };"
+                + "      scan(n);"
+                + "      if(n.shadowRoot)scan(n.shadowRoot);"
+                + "    }"
+                + "    return found;"
+                + "  };"
+                + "  if(!window.__helmsmanFilePickHook){"
+                + "    window.__helmsmanFilePickHook=true;"
+                + "    document.addEventListener('touchstart',function(ev){"
+                + "      fileInputFromEvent(ev);"
+                + "    },true);"
+                + "    document.addEventListener('mousedown',function(ev){"
+                + "      fileInputFromEvent(ev);"
+                + "    },true);"
+                + "    document.addEventListener('click',function(ev){"
+                + "      var input=fileInputFromEvent(ev);"
+                + "      if(!input||!window.__helmsmanNativeImagePick)return;"
+                + "      ev.preventDefault();"
+                + "      if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();"
+                + "      else ev.stopPropagation();"
+                + "      if(window.__helmsmanPickBusy)return;"
+                + "      window.__helmsmanPickBusy=true;"
+                + "      window.__helmsmanPendingFileInput=input;"
+                + "      window.__helmsmanQueue=window.__helmsmanQueue||[];"
+                + "      window.__helmsmanQueue.push({type:'externalBus',"
+                + "        opts:JSON.stringify({type:'helmsman/pick_image'})});"
+                + "    },true);"
+                + "  }"
+                + "}catch(e){}"
+                + "};"
+    }
+
     function injectSessionAndBridge(silent) {
         if (!hassClient.accessToken || hassClient.accessToken.length === 0)
             return
@@ -783,7 +891,9 @@ Page {
                 + "};"
                 + "try{window.__helmsmanAttachExternal();}catch(e){}"
                 + page.settingsExitJs()
+                + page.filePickerHookJs()
                 + "try{window.__helmsmanInstallSettingsExit&&window.__helmsmanInstallSettingsExit();}catch(e2){}"
+                + "try{window.__helmsmanInstallFilePicker&&window.__helmsmanInstallFilePicker();}catch(e3){}"
                 + "window.__helmsmanBridge = true;"
                 + "return 'ok';"
                 + "})();"
@@ -921,7 +1031,56 @@ Page {
         if (msg.type === "helmsman/back_dashboard") {
             if (!page.isHome && hassClient && hassClient.nativeDashboardEnabled)
                 pageStack.pop()
+            return
         }
+        if (msg.type === "helmsman/pick_image")
+            page.openImagePicker()
+    }
+
+    function openImagePicker() {
+        if (page.filePickPending)
+            return
+        page.filePickPending = true
+        pageStack.push(imagePickerComponent)
+    }
+
+    function finishFilePick(props) {
+        page.filePickPending = false
+        if (!props || !props.filePath || !hassClient) {
+            page.cancelFilePick()
+            return
+        }
+        var data = hassClient.readLocalImage(props.filePath)
+        if (!data || !data.base64) {
+            console.log("Helmsman: cannot read picked image")
+            page.cancelFilePick()
+            return
+        }
+        page.runViewJavaScript(
+                    "return (function(){"
+                    + "try{"
+                    + "  if(!window.__helmsmanApplyPickedFile)return 'no-fn';"
+                    + "  return window.__helmsmanApplyPickedFile("
+                    + page.jsString(data.name) + ","
+                    + page.jsString(data.mime) + ","
+                    + page.jsString(data.base64)
+                    + ");"
+                    + "}catch(e){return 'fail:'+e;}"
+                    + "})();",
+                    function(result) {
+                        if (result !== "ok")
+                            console.log("Helmsman: applying picked image failed:", result)
+                    })
+    }
+
+    function cancelFilePick() {
+        page.filePickPending = false
+        page.runViewJavaScript(
+                    "return (function(){"
+                    + "try{window.__helmsmanCancelPickedFile&&window.__helmsmanCancelPickedFile();}"
+                    + "catch(e){}"
+                    + "return 'ok';"
+                    + "})();")
     }
 
     WifiChecker {
@@ -1212,8 +1371,26 @@ Page {
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: page.webViewFailed
-                text: "Open settings"
+                text: qsTr("Open settings")
                 onClicked: page.openSettings()
+            }
+        }
+    }
+
+    Component {
+        id: imagePickerComponent
+        ImagePickerPage {
+            title: qsTr("Select picture")
+            property bool picked: false
+            onSelectedContentPropertiesChanged: {
+                if (!selectedContentProperties || !selectedContentProperties.filePath)
+                    return
+                picked = true
+                page.finishFilePick(selectedContentProperties)
+            }
+            Component.onDestruction: {
+                if (!picked)
+                    page.cancelFilePick()
             }
         }
     }

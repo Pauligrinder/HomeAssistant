@@ -201,7 +201,7 @@ Item {
         Label {
             x: Theme.horizontalPageMargin
             width: parent.width - 2 * x
-            text: "Helmsman"
+            text: qsTr("Helmsman")
             color: Theme.highlightColor
             font.pixelSize: Theme.fontSizeMedium
             font.family: Theme.fontFamilyHeading

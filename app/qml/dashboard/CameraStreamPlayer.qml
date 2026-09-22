@@ -97,7 +97,7 @@ Item {
         Label {
             id: liveLabel
             anchors.centerIn: parent
-            text: "LIVE"
+            text: qsTr("LIVE")
             font.pixelSize: Theme.fontSizeTiny
             font.bold: true
             color: "white"

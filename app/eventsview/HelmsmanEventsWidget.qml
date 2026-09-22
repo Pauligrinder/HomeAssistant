@@ -18,7 +18,7 @@ Item {
 
     property var entities: []
     property string lastPayload: ""
-    property string errorText: "Helmsman must be running to show the widget"
+    property string errorText: qsTr("Helmsman must be running to show the widget")
     property bool appRunning: false
 
     // Card whose brightness / color / temperature controls are open.
@@ -76,11 +76,11 @@ Item {
                 root.errorText = ""
             } else {
                 root.entities = []
-                root.errorText = "Invalid widget data"
+                root.errorText = qsTr("Invalid widget data")
             }
         } catch (e) {
             root.entities = []
-            root.errorText = "Widget unavailable"
+            root.errorText = qsTr("Widget unavailable")
         }
     }
 
@@ -98,8 +98,8 @@ Item {
         if (entity.kind === "graph" || entity.kind === "sensor")
             return root.graphLabel(entity)
         if (entity.dimmable === true && entity.on === true)
-            return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
-        return entity.on === true ? "On" : "Off"
+            return qsTr("On · %1%").arg(Math.round(Number(entity.brightnessPct) || 0))
+        return entity.on === true ? qsTr("On") : qsTr("Off")
     }
 
     function formatGraphValue(value) {
@@ -144,17 +144,17 @@ Item {
 
     function climateLabel(entity) {
         if (!entity || entity.on !== true)
-            return "Off"
+            return qsTr("Off")
         var mode = entity.hvacMode || entity.state || ""
         var label = ""
         if (mode === "fan_only")
-            label = "Fan"
+            label = qsTr("Fan")
         else if (mode === "heat_cool")
-            label = "Heat/Cool"
+            label = qsTr("Heat/Cool")
         else if (mode === "off")
-            return "Off"
+            return qsTr("Off")
         else if (!mode)
-            label = "On"
+            label = qsTr("On")
         else
             label = mode.charAt(0).toUpperCase() + mode.slice(1)
         var temp = entity.supportsTargetTemp === true ? root.formatTemp(entity) : ""
@@ -438,7 +438,7 @@ Item {
                              root.appRunning = false
                              root.lastPayload = ""
                              root.entities = []
-                             root.errorText = "Helmsman must be running to show the widget"
+                             root.errorText = qsTr("Helmsman must be running to show the widget")
                          })
     }
 
@@ -508,7 +508,7 @@ Item {
         Label {
             x: Theme.horizontalPageMargin
             width: parent.width - 2 * x
-            text: "Helmsman"
+            text: qsTr("Helmsman")
             color: Theme.highlightColor
             font.pixelSize: Theme.fontSizeMedium
             font.family: Theme.fontFamilyHeading
@@ -522,10 +522,10 @@ Item {
                      && root.notificationEntities.length === 0
             text: {
                 if (!root.appRunning)
-                    return "Helmsman must be running to show the widget"
+                    return qsTr("Helmsman must be running to show the widget")
                 if (root.errorText.length > 0)
                     return root.errorText
-                return "No favorites selected yet."
+                return qsTr("No favorites selected yet.")
             }
             color: Theme.secondaryColor
             font.pixelSize: Theme.fontSizeExtraSmall
@@ -760,10 +760,10 @@ Item {
                                             return root.stateLabel(modelData)
                                         return card.showScriptActions
                                                 ? ""
-                                                : "Tap for Run or Cancel"
+                                                : qsTr("Tap for Run or Cancel")
                                     }
                                     if (card.hasAdjusters && card.available && !card.showAdjusters)
-                                        return root.stateLabel(modelData) + " · hold to adjust"
+                                        return root.stateLabel(modelData) + qsTr(" · hold to adjust")
                                     return root.stateLabel(modelData)
                                 }
                                 text: labelText
@@ -778,13 +778,13 @@ Item {
 
                         Button {
                             width: (parent.width - parent.spacing) / 2
-                            text: "Run"
+                            text: qsTr("Run")
                             onClicked: root.runScript(modelData)
                         }
 
                         Button {
                             width: (parent.width - parent.spacing) / 2
-                            text: "Cancel"
+                            text: qsTr("Cancel")
                             onClicked: root.cancelScript(modelData)
                         }
                     }
@@ -798,7 +798,7 @@ Item {
                         maximumValue: 100
                         stepSize: 1
                         valueText: Math.round(value) + "%"
-                        label: "Brightness"
+                        label: qsTr("Brightness")
 
                         Binding {
                             target: dimmer
@@ -823,7 +823,7 @@ Item {
                         maximumValue: Number(modelData.maxKelvin) || 6500
                         stepSize: 50
                         valueText: Math.round(value) + " K"
-                        label: "Temperature"
+                        label: qsTr("Temperature")
 
                         Binding {
                             target: temperature
@@ -853,7 +853,7 @@ Item {
                             width: parent.width
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: "Color"
+                            text: qsTr("Color")
                         }
 
                         Row {
@@ -936,7 +936,7 @@ Item {
                             minimumValue: Number(card.entity.minTemp) || 16
                             maximumValue: Number(card.entity.maxTemp) || 30
                             stepSize: Number(card.entity.tempStep) || 0.5
-                            label: "Temperature"
+                            label: qsTr("Temperature")
                             valueText: {
                                 var step = Number(card.entity.tempStep) || 0.5
                                 var shown = step < 1
@@ -971,7 +971,7 @@ Item {
                             visible: card.entity.supportsFan === true
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: "Fan"
+                            text: qsTr("Fan")
                         }
 
                         Row {
@@ -996,7 +996,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: "Auto"
+                                    text: qsTr("Auto")
                                 }
 
                                 MouseArea {
@@ -1050,7 +1050,7 @@ Item {
                             visible: card.entity.supportsVaneVertical === true
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: "Vertical vanes"
+                            text: qsTr("Vertical vanes")
                         }
 
                         Row {
@@ -1079,7 +1079,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: "Auto"
+                                    text: qsTr("Auto")
                                 }
 
                                 MouseArea {
@@ -1104,7 +1104,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: "Swing"
+                                    text: qsTr("Swing")
                                 }
 
                                 MouseArea {
@@ -1129,7 +1129,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: "Manual"
+                                    text: qsTr("Manual")
                                 }
 
                                 // Reveals the level picker; the AC only changes
@@ -1193,7 +1193,7 @@ Item {
                             visible: card.entity.supportsVaneHorizontal === true
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: "Horizontal vanes"
+                            text: qsTr("Horizontal vanes")
                         }
 
                         Row {
@@ -1222,7 +1222,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: "Auto"
+                                    text: qsTr("Auto")
                                 }
 
                                 MouseArea {
@@ -1247,7 +1247,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: "Swing"
+                                    text: qsTr("Swing")
                                 }
 
                                 MouseArea {
@@ -1272,7 +1272,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: "Manual"
+                                    text: qsTr("Manual")
                                 }
 
                                 // Reveals the level picker; the AC only changes
@@ -1349,7 +1349,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 color: chooseFavorites.highlighted ? Theme.highlightColor : Theme.primaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Choose favorites"
+                text: qsTr("Choose favorites")
             }
         }
 
@@ -1367,8 +1367,8 @@ Item {
                 color: showMore.highlighted ? Theme.highlightColor : Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: root.expanded
-                      ? "Show less"
-                      : ("Show more (" + (root.favoriteEntities.length - root.collapsedCount) + ")")
+                      ? qsTr("Show less")
+                      : qsTr("Show more (%1)").arg(root.favoriteEntities.length - root.collapsedCount)
             }
         }
     }

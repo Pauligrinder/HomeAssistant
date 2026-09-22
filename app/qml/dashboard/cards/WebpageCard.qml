@@ -13,7 +13,7 @@ CardChrome {
         color: Theme.highlightColor
     }
     Button {
-        text: "Open"
+        text: qsTr("Open")
         onClicked: {
             var url = card && (card.url || card.path) ? String(card.url || card.path) : ""
             if (!dashboard || !url.length)

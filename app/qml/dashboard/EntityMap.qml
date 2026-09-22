@@ -445,7 +445,7 @@ Item {
         visible: !root.valid
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeSmall
-        text: "Waiting for location…"
+        text: qsTr("Waiting for location…")
     }
 
     Row {
@@ -478,6 +478,6 @@ Item {
         anchors.margins: Theme.paddingSmall
         font.pixelSize: Theme.fontSizeTiny
         color: Theme.secondaryColor
-        text: "© OpenStreetMap"
+        text: qsTr("© OpenStreetMap")
     }
 }

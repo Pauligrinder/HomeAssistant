@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network websockets gui positioning dbus qml
 LIBS += -ldl
 
-VERSION = 0.3.16
+VERSION = 0.3.17
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
@@ -48,7 +48,16 @@ DISTFILES += \
     eventsview/*.qml \
     eventsview/*.json \
     data/mdi/LICENSE.txt \
-    sailjail/harbour-helmsman.profile
+    sailjail/harbour-helmsman.profile \
+    translations/harbour-helmsman.ts \
+    translations/harbour-helmsman_*.ts
+
+# i18n (see tools/build-qm.sh + docs/translations.md): qsTr()/translate()
+# catalogs compiled to .qm are installed beside qml/ and loaded in main().
+TRANSLATIONS += $$files(translations/harbour-helmsman_*.ts)
+
+transqm.files = translations/*.qm
+transqm.path = /usr/share/$${TARGET}/translations
 
 icon86.files = icons/86x86/harbour-helmsman.png
 icon86.path = /usr/share/icons/hicolor/86x86/apps
@@ -68,4 +77,4 @@ eventsWidgetJson.path = /usr/share/lipstick/eventswidgets
 sailjailProfile.files = sailjail/harbour-helmsman.profile
 sailjailProfile.path = /etc/sailjail/permissions
 
-INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson sailjailProfile
+INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson sailjailProfile transqm

@@ -20,6 +20,8 @@
 #include <QStandardPaths>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QMimeDatabase>
 #include <QSaveFile>
 #include <QUuid>
 #include <QSysInfo>
@@ -30,8 +32,14 @@
 #include <QCoreApplication>
 #include <QProcess>
 #include <QVariantList>
+#include <QDir>
+#include <QLocale>
+#include <QCoreApplication>
 
 #include <dlfcn.h>
+#include <algorithm>
+
+#include <sailfishapp.h>
 
 namespace {
 
@@ -319,6 +327,45 @@ QString snapshotMetaPath()
     return cacheDirectory() + QStringLiteral("/dashboard-snapshot.url");
 }
 
+QString sanitizeUiLanguage(const QString &language)
+{
+    QString tag = language.trimmed();
+    if (tag.isEmpty() || tag == QLatin1String("system"))
+        return QString();
+    tag.replace(QLatin1Char('-'), QLatin1Char('_'));
+
+    // Home Assistant frontend / BCP47 aliases → shipped catalog codes.
+    if (tag == QLatin1String("en") || tag.startsWith(QLatin1String("en_")))
+        return QStringLiteral("en");
+    if (tag == QLatin1String("no") || tag.startsWith(QLatin1String("nb")))
+        return QStringLiteral("nb");
+    if (tag == QLatin1String("zh") || tag == QLatin1String("zh_Hans")
+            || tag == QLatin1String("zh_CN") || tag.startsWith(QLatin1String("zh_Hans")))
+        return QStringLiteral("zh_CN");
+    if (tag == QLatin1String("zh_Hant") || tag == QLatin1String("zh_TW")
+            || tag.startsWith(QLatin1String("zh_Hant")))
+        return QStringLiteral("zh_TW");
+    if (tag == QLatin1String("zh_HK"))
+        return QStringLiteral("zh_HK");
+    if (tag == QLatin1String("pt_BR") || tag == QLatin1String("pt_br"))
+        return QStringLiteral("pt_BR");
+
+    const QString dir = SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile();
+    auto catalogExists = [&](const QString &code) {
+        return QFile::exists(dir + QLatin1Char('/')
+                             + QStringLiteral("harbour-helmsman_%1.qm").arg(code));
+    };
+    if (catalogExists(tag))
+        return tag;
+    const int sep = tag.indexOf(QLatin1Char('_'));
+    if (sep > 0) {
+        const QString bare = tag.left(sep);
+        if (catalogExists(bare))
+            return bare;
+    }
+    return tag;
+}
+
 } // namespace
 
 HassClient::HassClient(QObject *parent)
@@ -346,6 +393,9 @@ HassClient::HassClient(QObject *parent)
     , m_nativeDashboardEnabled(false)
     , m_webViewEngine(QStringLiteral("stock"))
     , m_webViewEngineActive(g_webViewEngineActive)
+    , m_uiLanguage(QString())
+    , m_haProfileLanguage(QString())
+    , m_haLanguageReqId(0)
     , m_networkState(NetworkUnknown)
     , m_pendingNetworkState(NetworkUnknown)
     , m_pushAuthRetries(0)
@@ -396,6 +446,10 @@ HassClient::HassClient(QObject *parent)
             this, SLOT(onAccessTokenStale()));
     connect(m_websocket, SIGNAL(authenticationFailed(QString)),
             this, SLOT(onPushAuthenticationFailed(QString)));
+    connect(m_websocket, SIGNAL(authenticatedChanged()),
+            this, SLOT(onWebsocketAuthenticatedChanged()));
+    connect(m_websocket, SIGNAL(resultReceived(int,bool,QVariant,QVariantMap)),
+            this, SLOT(onWebsocketResult(int,bool,QVariant,QVariantMap)));
     connect(m_widget, SIGNAL(accessTokenStale()),
             this, SLOT(onAccessTokenStale()));
 
@@ -424,6 +478,11 @@ HassClient::HassClient(QObject *parent)
         m_nativeDashboardEnabled = ui.value(QStringLiteral("nativeDashboardEnabled")).toBool();
     m_webViewEngine = preferredWebViewEngine(&ui);
     m_availableWebViewEngines = buildAvailableWebViewEngines();
+    // Explicit Settings choice only — empty means System (HA profile, else phone).
+    m_uiLanguage = sanitizeUiLanguage(ui.value(QStringLiteral("uiLanguage")).toString());
+    m_haProfileLanguage = sanitizeUiLanguage(
+                ui.value(QStringLiteral("haProfileLanguage")).toString());
+    m_availableUiLanguages = buildAvailableUiLanguages();
 }
 
 HassClient::~HassClient()
@@ -473,6 +532,125 @@ bool HassClient::nativeDashboardEnabled() const { return m_nativeDashboardEnable
 QString HassClient::webViewEngine() const { return m_webViewEngine; }
 QString HassClient::webViewEngineActive() const { return m_webViewEngineActive; }
 QVariantList HassClient::availableWebViewEngines() const { return m_availableWebViewEngines; }
+QString HassClient::uiLanguage() const { return m_uiLanguage; }
+QVariantList HassClient::availableUiLanguages() const { return m_availableUiLanguages; }
+
+QString HassClient::preferredUiLanguage()
+{
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    const QString explicitLang = sanitizeUiLanguage(
+                ui.value(QStringLiteral("uiLanguage")).toString());
+    if (!explicitLang.isEmpty())
+        return explicitLang;
+    // System: Home Assistant profile language when known, else phone locale
+    // (installAppTranslator falls back to QLocale::system()).
+    return sanitizeUiLanguage(ui.value(QStringLiteral("haProfileLanguage")).toString());
+}
+
+QString HassClient::languageDisplayName(const QString &code)
+{
+    if (code.isEmpty() || code == QLatin1String("system"))
+        return QCoreApplication::translate("Helmsman", "System");
+    if (code == QLatin1String("en"))
+        return QCoreApplication::translate("Helmsman", "English");
+    if (code == QLatin1String("fi"))
+        return QStringLiteral("Suomi");
+    if (code == QLatin1String("sv"))
+        return QStringLiteral("Svenska");
+    if (code == QLatin1String("de"))
+        return QStringLiteral("Deutsch");
+    if (code == QLatin1String("fr"))
+        return QStringLiteral("Français");
+    if (code == QLatin1String("es"))
+        return QStringLiteral("Español");
+    if (code == QLatin1String("it"))
+        return QStringLiteral("Italiano");
+    if (code == QLatin1String("nl"))
+        return QStringLiteral("Nederlands");
+    if (code == QLatin1String("nb") || code == QLatin1String("no"))
+        return QStringLiteral("Norsk");
+    if (code == QLatin1String("da"))
+        return QStringLiteral("Dansk");
+    if (code == QLatin1String("ru"))
+        return QStringLiteral("Русский");
+    if (code == QLatin1String("pl"))
+        return QStringLiteral("Polski");
+    if (code == QLatin1String("pt"))
+        return QStringLiteral("Português");
+    if (code == QLatin1String("pt_BR"))
+        return QStringLiteral("Português (Brasil)");
+    if (code == QLatin1String("cs"))
+        return QStringLiteral("Čeština");
+    if (code == QLatin1String("sk"))
+        return QStringLiteral("Slovenčina");
+    if (code == QLatin1String("sl"))
+        return QStringLiteral("Slovenščina");
+    if (code == QLatin1String("hu"))
+        return QStringLiteral("Magyar");
+    if (code == QLatin1String("ro"))
+        return QStringLiteral("Română");
+    if (code == QLatin1String("bg"))
+        return QStringLiteral("Български");
+    if (code == QLatin1String("uk"))
+        return QStringLiteral("Українська");
+    if (code == QLatin1String("el"))
+        return QStringLiteral("Ελληνικά");
+    if (code == QLatin1String("tr"))
+        return QStringLiteral("Türkçe");
+    if (code == QLatin1String("et"))
+        return QStringLiteral("Eesti");
+    if (code == QLatin1String("lv"))
+        return QStringLiteral("Latviešu");
+    if (code == QLatin1String("lt"))
+        return QStringLiteral("Lietuvių");
+    if (code == QLatin1String("zh_CN"))
+        return QStringLiteral("简体中文");
+    if (code == QLatin1String("zh_TW"))
+        return QStringLiteral("繁體中文 (台灣)");
+    if (code == QLatin1String("zh_HK"))
+        return QStringLiteral("繁體中文 (香港)");
+    if (code == QLatin1String("ja"))
+        return QStringLiteral("日本語");
+    if (code == QLatin1String("ko"))
+        return QStringLiteral("한국어");
+    const QLocale locale(code);
+    const QString native = locale.nativeLanguageName();
+    if (!native.isEmpty())
+        return native;
+    return code;
+}
+
+QVariantList HassClient::buildAvailableUiLanguages()
+{
+    QVariantList list;
+    list << engineEntry(QString(), languageDisplayName(QString()));
+    list << engineEntry(QStringLiteral("en"), languageDisplayName(QStringLiteral("en")));
+
+    const QString dirPath = SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile();
+    QDir dir(dirPath);
+    const QStringList files = dir.entryList(QStringList() << QStringLiteral("harbour-helmsman_*.qm"),
+                                            QDir::Files, QDir::Name);
+    const QString prefix = QStringLiteral("harbour-helmsman_");
+    for (int i = 0; i < files.size(); ++i) {
+        QString name = files.at(i);
+        if (!name.startsWith(prefix) || !name.endsWith(QLatin1String(".qm")))
+            continue;
+        const QString code = name.mid(prefix.size(), name.size() - prefix.size() - 3);
+        if (code.isEmpty() || code == QLatin1String("en"))
+            continue;
+        list << engineEntry(code, languageDisplayName(code));
+    }
+    // Keep System + English pinned; sort the rest by native display name.
+    if (list.size() > 2) {
+        QVariantList rest = list.mid(2);
+        std::sort(rest.begin(), rest.end(), [](const QVariant &a, const QVariant &b) {
+            return a.toMap().value(QStringLiteral("name")).toString()
+                    .localeAwareCompare(b.toMap().value(QStringLiteral("name")).toString()) < 0;
+        });
+        list = list.mid(0, 2) + rest;
+    }
+    return list;
+}
 
 bool HassClient::next153ModuleInstalled()
 {
@@ -538,6 +716,36 @@ void HassClient::clearDashboardSnapshot()
 {
     QFile::remove(dashboardSnapshotPath());
     QFile::remove(snapshotMetaPath());
+}
+
+QVariantMap HassClient::readLocalImage(const QString &path) const
+{
+    const QFileInfo info(path);
+    if (path.isEmpty() || !info.isFile() || !info.isReadable())
+        return QVariantMap();
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Helmsman: cannot read picked image" << path;
+        return QVariantMap();
+    }
+
+    const QByteArray bytes = file.readAll();
+    if (bytes.isEmpty() || bytes.size() > 20 * 1024 * 1024) {
+        qWarning() << "Helmsman: picked image empty or too large" << path << bytes.size();
+        return QVariantMap();
+    }
+
+    QMimeDatabase db;
+    QString mime = db.mimeTypeForFile(info, QMimeDatabase::MatchDefault).name();
+    if (!mime.startsWith(QLatin1String("image/")))
+        mime = QStringLiteral("image/jpeg");
+
+    QVariantMap out;
+    out.insert(QStringLiteral("name"), info.fileName());
+    out.insert(QStringLiteral("mime"), mime);
+    out.insert(QStringLiteral("base64"), QString::fromLatin1(bytes.toBase64()));
+    return out;
 }
 
 void HassClient::setHost(const QString &host)
@@ -635,6 +843,75 @@ void HassClient::setWebViewEngine(const QString &engine)
     emit webViewEngineChanged();
 }
 
+void HassClient::setUiLanguage(const QString &language)
+{
+    const QString sanitized = sanitizeUiLanguage(language);
+    if (m_uiLanguage == sanitized)
+        return;
+    m_uiLanguage = sanitized;
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    if (sanitized.isEmpty())
+        ui.remove(QStringLiteral("uiLanguage"));
+    else
+        ui.setValue(QStringLiteral("uiLanguage"), sanitized);
+    emit uiLanguageChanged();
+}
+
+void HassClient::requestHaProfileLanguage()
+{
+    if (!m_websocket || !m_websocket->authenticated())
+        return;
+    if (m_haLanguageReqId != 0)
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("frontend/get_user_data"));
+    msg.insert(QStringLiteral("key"), QStringLiteral("language"));
+    m_haLanguageReqId = m_websocket->sendCommand(msg);
+}
+
+void HassClient::applyHaProfileLanguage(const QString &raw)
+{
+    const QString sanitized = sanitizeUiLanguage(raw);
+    if (sanitized == m_haProfileLanguage)
+        return;
+
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    const QString previousPreferred = preferredUiLanguage();
+    m_haProfileLanguage = sanitized;
+    if (sanitized.isEmpty())
+        ui.remove(QStringLiteral("haProfileLanguage"));
+    else
+        ui.setValue(QStringLiteral("haProfileLanguage"), sanitized);
+
+    // System mode follows HA: reload catalogs when the effective tag changes.
+    if (!m_uiLanguage.isEmpty())
+        return;
+    const QString nextPreferred = preferredUiLanguage();
+    if (previousPreferred != nextPreferred)
+        restartApp();
+}
+
+void HassClient::onWebsocketAuthenticatedChanged()
+{
+    if (m_websocket && m_websocket->authenticated())
+        requestHaProfileLanguage();
+    else
+        m_haLanguageReqId = 0;
+}
+
+void HassClient::onWebsocketResult(int id, bool success, const QVariant &result,
+                                   const QVariantMap &error)
+{
+    Q_UNUSED(error);
+    if (id == 0 || id != m_haLanguageReqId)
+        return;
+    m_haLanguageReqId = 0;
+    if (!success)
+        return;
+    const QVariantMap value = result.toMap().value(QStringLiteral("value")).toMap();
+    applyHaProfileLanguage(value.value(QStringLiteral("language")).toString());
+}
+
 void HassClient::refreshWebViewEngines()
 {
     const QVariantList available = buildAvailableWebViewEngines();
@@ -645,6 +922,12 @@ void HassClient::refreshWebViewEngines()
     const QString sanitized = sanitizeWebViewEngine(m_webViewEngine);
     if (sanitized != m_webViewEngine)
         setWebViewEngine(sanitized);
+
+    const QVariantList languages = buildAvailableUiLanguages();
+    if (m_availableUiLanguages != languages) {
+        m_availableUiLanguages = languages;
+        emit availableUiLanguagesChanged();
+    }
 }
 
 void HassClient::restartApp()

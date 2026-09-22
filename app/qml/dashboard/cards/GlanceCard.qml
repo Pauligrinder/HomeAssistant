@@ -117,7 +117,7 @@ CardChrome {
 
                     Label {
                         width: parent.width
-                        visible: entityShowState
+                        visible: entityShowState && entityId.indexOf("script.") !== 0
                         horizontalAlignment: Text.AlignHCenter
                         elide: Text.ElideRight
                         maximumLineCount: 1
@@ -125,6 +125,17 @@ CardChrome {
                         font.pixelSize: Theme.fontSizeTiny
                         color: Theme.primaryColor
                         text: (dashboard && root.rev >= 0) ? dashboard.formatState(entityId) : ""
+                    }
+                    Label {
+                        width: parent.width
+                        visible: entityId.indexOf("script.") === 0
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        maximumLineCount: 1
+                        wrapMode: Text.NoWrap
+                        font.pixelSize: Theme.fontSizeTiny
+                        color: Theme.highlightColor
+                        text: qsTr("Run")
                     }
                 }
             }

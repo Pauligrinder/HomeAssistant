@@ -123,14 +123,22 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.3.16-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.3.17-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.3.16-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.3.17-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`,
-`Documents`. Daily diagnostic logs go to
+`Documents`, `Pictures`, `MediaIndexing`. Daily diagnostic logs go to
 `Documents/Helmsman/helmsman-YYYY-MM-DD.log`.
+
+## Translations
+
+Native UI strings use `qsTr()` / `translate()`. Settings → Interface →
+Language opens a searchable list of System, English, and shipped catalogs
+(Finnish plus other European and East Asian locales). Changing language
+restarts Helmsman. See `docs/translations.md` and run `tools/build-qm.sh`
+after editing user-visible strings.
 
 ## Releases (GitHub Actions)
 

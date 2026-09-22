@@ -67,6 +67,9 @@ class HassClient : public QObject
     Q_PROPERTY(QString webViewEngine READ webViewEngine WRITE setWebViewEngine NOTIFY webViewEngineChanged)
     Q_PROPERTY(QString webViewEngineActive READ webViewEngineActive CONSTANT)
     Q_PROPERTY(QVariantList availableWebViewEngines READ availableWebViewEngines NOTIFY availableWebViewEnginesChanged)
+    // Empty = follow system locale. "en" = English source (no catalog).
+    Q_PROPERTY(QString uiLanguage READ uiLanguage WRITE setUiLanguage NOTIFY uiLanguageChanged)
+    Q_PROPERTY(QVariantList availableUiLanguages READ availableUiLanguages NOTIFY availableUiLanguagesChanged)
 
 public:
     explicit HassClient(QObject *parent = nullptr);
@@ -112,9 +115,16 @@ public:
     QString webViewEngine() const;
     QString webViewEngineActive() const;
     QVariantList availableWebViewEngines() const;
+    QString uiLanguage() const;
+    QVariantList availableUiLanguages() const;
     static bool next153ModuleInstalled();
     static bool atlanticModuleInstalled();
     static bool preloadWebViewEmbed();
+    // Effective catalog tag for main(): explicit Settings override, else last
+    // known Home Assistant profile language, else empty (phone locale).
+    static QString preferredUiLanguage();
+    static QString languageDisplayName(const QString &code);
+    static QVariantList buildAvailableUiLanguages();
 
     void setHost(const QString &host);
     void setPort(int port);
@@ -126,6 +136,7 @@ public:
     void setCoverNotificationsEnabled(bool enabled);
     void setNativeDashboardEnabled(bool enabled);
     void setWebViewEngine(const QString &engine);
+    void setUiLanguage(const QString &language);
 
 public slots:
     void restoreSession();
@@ -150,6 +161,7 @@ public slots:
     void notifyDashboardReady();
     void refreshWebViewEngines();
     void restartApp();
+    QVariantMap readLocalImage(const QString &path) const;
 
 signals:
     void busyChanged();
@@ -191,6 +203,8 @@ signals:
     void nativeDashboardEnabledChanged();
     void webViewEngineChanged();
     void availableWebViewEnginesChanged();
+    void uiLanguageChanged();
+    void availableUiLanguagesChanged();
     void notificationReceived(const QString &title,
                               const QString &message,
                               const QVariantMap &data);
@@ -200,6 +214,8 @@ private slots:
     void onTestReplyFinished();
     void onSslErrors(QNetworkReply *reply, const QList<QSslError> &errors);
     void onPushConnectedChanged();
+    void onWebsocketAuthenticatedChanged();
+    void onWebsocketResult(int id, bool success, const QVariant &result, const QVariantMap &error);
     void onAccessTokenStale();
     void onPushAuthenticationFailed(const QString &message);
     void onTokenRefreshTimeout();
@@ -273,6 +289,8 @@ private:
     void registerMobileApp();
     void startPushChannel();
     void stopPushChannel();
+    void requestHaProfileLanguage();
+    void applyHaProfileLanguage(const QString &raw);
     void clearMobileRegistration();
     void scheduleSensorStart(int delayMs);
     void startSensors();
@@ -321,6 +339,10 @@ private:
     QString m_webViewEngine;
     QString m_webViewEngineActive;
     QVariantList m_availableWebViewEngines;
+    QString m_uiLanguage;
+    QString m_haProfileLanguage;
+    QVariantList m_availableUiLanguages;
+    int m_haLanguageReqId;
     NetworkState m_networkState;
     NetworkState m_pendingNetworkState;
     int m_pushAuthRetries;

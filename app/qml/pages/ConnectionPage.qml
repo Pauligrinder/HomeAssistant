@@ -48,7 +48,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: "Home Assistant" }
+            PageHeader { title: qsTr("Home Assistant") }
 
             Label {
                 anchors.left: parent.left
@@ -58,8 +58,8 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.hasSavedSession
-                      ? "A saved session was found. Retry restore, or sign in again on the configured address."
-                      : "Configure your Home Assistant addresses, then connect to sign in."
+                      ? qsTr("A saved session was found. Retry restore, or sign in again on the configured address.")
+                      : qsTr("Configure your Home Assistant addresses, then connect to sign in.")
             }
 
             Label {
@@ -71,14 +71,14 @@ Page {
                 font.pixelSize: Theme.fontSizeExtraSmall
                 text: {
                     if (!page.hasConfiguredUrls)
-                        return "No addresses configured yet."
+                        return qsTr("No addresses configured yet.")
                     var lines = []
                     if (hassClient.internalUrl.length > 0)
-                        lines.push("Internal: " + hassClient.internalUrl)
+                        lines.push(qsTr("Internal: %1").arg(hassClient.internalUrl))
                     if (hassClient.externalUrl.length > 0)
-                        lines.push("External: " + hassClient.externalUrl)
+                        lines.push(qsTr("External: %1").arg(hassClient.externalUrl))
                     if (hassClient.baseUrl.length > 0) {
-                        var using = "Using: " + hassClient.baseUrl
+                        var using = qsTr("Using: %1").arg(hassClient.baseUrl)
                         if (hassClient.internalUrl.length > 0)
                             using += hassClient.usingInternalUrl ? " (internal)" : " (external)"
                         lines.push(using)
@@ -89,7 +89,7 @@ Page {
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: "Edit addresses"
+                text: qsTr("Edit addresses")
                 onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"),
                                           { hassClient: hassClient })
             }
@@ -123,7 +123,7 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
                 visible: hassClient.restoringSession
-                text: "Restoring saved session..."
+                text: qsTr("Restoring saved session...")
             }
 
             BusyIndicator {
@@ -136,10 +136,10 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: {
                     if (hassClient.restoringSession)
-                        return "Restoring..."
+                        return qsTr("Restoring...")
                     if (page.hasSavedSession)
-                        return "Retry restore"
-                    return hassClient.busy ? "Connecting..." : "Connect"
+                        return qsTr("Retry restore")
+                    return hassClient.busy ? qsTr("Connecting...") : qsTr("Connect")
                 }
                 enabled: page.hasConfiguredUrls
                          && !hassClient.busy
@@ -149,7 +149,7 @@ Page {
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: "Sign in again"
+                text: qsTr("Sign in again")
                 visible: page.hasSavedSession
                 enabled: page.hasConfiguredUrls
                          && !hassClient.busy
@@ -161,7 +161,7 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
-                text: "App " + hassClient.appVersion
+                text: qsTr("App %1").arg(hassClient.appVersion)
             }
         }
     }

@@ -76,7 +76,7 @@ CardChrome {
     }
     Label {
         visible: root.events.length === 0
-        text: "No upcoming events"
+        text: qsTr("No upcoming events")
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
     }
