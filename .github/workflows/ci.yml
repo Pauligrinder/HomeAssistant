@@ -33,3 +33,17 @@ jobs:
             !RPMS/*-debugsource-*.rpm
           if-no-files-found: error
           retention-days: 14
+
+  i18n:
+    name: Translations freshness (lupdate/lrelease)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Rebuild catalogs and fail on drift
+        # tools/build-qm.sh bootstraps Qt linguist tools from the PySide6
+        # wheel (no system Qt needed) and fails when the committed
+        # app/translations/*.ts/*.qm differ from a fresh extraction.
+        run: bash tools/build-qm.sh --check

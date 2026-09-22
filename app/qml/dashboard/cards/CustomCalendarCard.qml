@@ -9,10 +9,16 @@ CardChrome {
                                        ? String(card.calendar_entity) : ""
     property var events: []
     property date weekStart: weekStartFor(new Date())
+    property bool followingNow: true
     readonly property real timeWidth: Theme.itemSizeSmall
     readonly property real dayWidth: (body.width - timeWidth) / 5
     readonly property real hourHeight: Theme.itemSizeSmall
     readonly property real gridHeight: hourHeight * 8
+
+    function schoolWeekHasEnded(date) {
+        var day = date.getDay()
+        return day === 0 || day === 6 || (day === 5 && date.getHours() >= 16)
+    }
 
     function weekStartFor(date) {
         var d = new Date(date.getTime())
@@ -20,7 +26,7 @@ CardChrome {
         var mondayOffset = day === 0 ? -6 : 1 - day
         d.setDate(d.getDate() + mondayOffset)
         d.setHours(0, 0, 0, 0)
-        if (day === 5 && date.getHours() >= 16)
+        if (root.schoolWeekHasEnded(date))
             d.setDate(d.getDate() + 7)
         return d
     }
@@ -169,10 +175,27 @@ CardChrome {
         dashboard.fetchCalendarRange(entityId, weekStart.toISOString(), end.toISOString())
     }
 
+    function sameDay(a, b) {
+        return a.getFullYear() === b.getFullYear()
+                && a.getMonth() === b.getMonth()
+                && a.getDate() === b.getDate()
+    }
+
     function syncWeek() {
-        var next = weekStartFor(new Date())
-        if (next.getTime() !== weekStart.getTime())
-            weekStart = next
+        if (root.followingNow) {
+            var next = weekStartFor(new Date())
+            if (!root.sameDay(next, weekStart))
+                weekStart = next
+        }
+        fetchEvents()
+    }
+
+    function shiftWeek(delta) {
+        var d = new Date(weekStart.getTime())
+        d.setDate(d.getDate() + delta * 7)
+        d.setHours(0, 0, 0, 0)
+        weekStart = d
+        followingNow = root.sameDay(d, weekStartFor(new Date()))
         fetchEvents()
     }
 
@@ -205,11 +228,14 @@ CardChrome {
 
     Component.onCompleted: root.syncWeek()
 
-    Row {
+    Item {
         width: parent.width
-        spacing: Theme.paddingSmall
+        height: Math.max(titleLabel.implicitHeight, Theme.iconSizeSmall)
 
         MdiIcon {
+            id: calendarIcon
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
             mdiIcons: root.mdiIcons
             name: (dashboard && root.statesRevision >= 0)
                   ? dashboard.entityIcon(root.entityId, card && card.icon ? card.icon : "")
@@ -218,12 +244,53 @@ CardChrome {
             height: width
             iconColor: Theme.highlightColor
         }
+
         Label {
-            width: parent.width - Theme.iconSizeSmall - Theme.paddingSmall
+            id: titleLabel
+            anchors.left: calendarIcon.right
+            anchors.right: prevWeek.left
+            anchors.leftMargin: Theme.paddingSmall
+            anchors.rightMargin: Theme.paddingSmall
+            anchors.verticalCenter: parent.verticalCenter
             text: root.configName(root.entityId, "School Calendar")
                   + " — Viikko " + root.weekNumber(root.weekStart)
             color: Theme.highlightColor
             truncationMode: TruncationMode.Fade
+        }
+
+        MouseArea {
+            id: prevWeek
+            anchors.right: nextWeek.left
+            anchors.rightMargin: Theme.paddingSmall
+            anchors.verticalCenter: parent.verticalCenter
+            width: Theme.iconSizeSmall
+            height: Theme.iconSizeSmall
+            onClicked: root.shiftWeek(-1)
+
+            MdiIcon {
+                anchors.fill: parent
+                mdiIcons: root.mdiIcons
+                name: "mdi:chevron-left"
+                iconColor: Theme.highlightColor
+                width: Theme.iconSizeSmall
+            }
+        }
+
+        MouseArea {
+            id: nextWeek
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: Theme.iconSizeSmall
+            height: Theme.iconSizeSmall
+            onClicked: root.shiftWeek(1)
+
+            MdiIcon {
+                anchors.fill: parent
+                mdiIcons: root.mdiIcons
+                name: "mdi:chevron-right"
+                iconColor: Theme.highlightColor
+                width: Theme.iconSizeSmall
+            }
         }
     }
 
@@ -241,7 +308,7 @@ CardChrome {
             Label {
                 width: root.timeWidth
                 height: parent.height
-                text: "Aika"
+                text: qsTr("Time")
                 font.pixelSize: Theme.fontSizeTiny
                 verticalAlignment: Text.AlignVCenter
             }

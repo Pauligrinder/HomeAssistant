@@ -42,9 +42,23 @@ CardChrome {
             Label {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
+                visible: String(modelData).indexOf("script.") !== 0
                 text: (dashboard && root.rev >= 0) ? dashboard.formatState(String(modelData)) : ""
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
+            }
+            Button {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                visible: String(modelData).indexOf("script.") === 0
+                preferredWidth: Theme.buttonWidthExtraSmall
+                height: Theme.itemSizeExtraSmall
+                text: qsTr("Run")
+                onClicked: {
+                    if (!dashboard)
+                        return
+                    dashboard.performAction({ "action": "toggle" }, String(modelData))
+                }
             }
         }
     }

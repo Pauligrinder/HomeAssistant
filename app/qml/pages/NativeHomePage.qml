@@ -324,17 +324,17 @@ Page {
 
         PullDownMenu {
             MenuItem {
-                text: "Change dashboard"
+                text: qsTr("Change dashboard")
                 visible: !!(dashboard && dashboard.switcherItems
                             && dashboard.switcherItems.length > 1)
                 onClicked: page.openDashboardSwitcher()
             }
             MenuItem {
-                text: "Settings"
+                text: qsTr("Settings")
                 onClicked: page.openHassSettings()
             }
             MenuItem {
-                text: "Refresh"
+                text: qsTr("Refresh")
                 onClicked: {
                     if (dashboard)
                         dashboard.refresh()
@@ -459,7 +459,7 @@ Page {
             height: Theme.itemSizeLarge
             Label {
                 anchors.centerIn: parent
-                text: dashboard && dashboard.busy ? "Loading dashboard…" : "No views"
+                text: dashboard && dashboard.busy ? qsTr("Loading dashboard…") : qsTr("No views")
                 color: Theme.secondaryColor
             }
         }

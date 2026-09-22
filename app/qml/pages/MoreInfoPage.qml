@@ -45,7 +45,7 @@ Page {
         PullDownMenu {
             visible: page.domain === "camera"
             MenuItem {
-                text: "Restart stream"
+                text: qsTr("Restart stream")
                 onClicked: {
                     if (dashboard && dashboard.cameraStream)
                         dashboard.cameraStream.restart()
@@ -99,6 +99,7 @@ Page {
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: Theme.fontSizeLarge
                 wrapMode: Text.Wrap
+                visible: page.domain !== "script"
                 text: (dashboard && page.rev >= 0) ? dashboard.formatState(page.entityId) : ""
             }
 
@@ -129,7 +130,11 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: dashboard && page.rev >= 0 && (dashboard.isToggleable(page.entityId)
                          || page.cameraPowerSupported())
-                text: page.on ? "Turn off" : "Turn on"
+                text: {
+                    if (page.domain === "script")
+                        return qsTr("Run")
+                    return page.on ? qsTr("Turn off") : qsTr("Turn on")
+                }
                 onClicked: {
                     if (page.domain === "camera")
                         dashboard.callService("camera",
@@ -150,7 +155,7 @@ Page {
                             ? Number(dashboard.attribute(page.entityId, "brightness")) : 0
                     return b ? Math.round(b * 100 / 255) : 0
                 }
-                label: "Brightness"
+                label: qsTr("Brightness")
                 onReleased: dashboard.callService("light", "turn_on",
                                                   { "brightness_pct": Math.round(value) }, page.entityId)
             }
@@ -182,15 +187,15 @@ Page {
                 visible: page.domain === "cover"
                 spacing: Theme.paddingMedium
                 Button {
-                    text: "Open"
+                    text: qsTr("Open")
                     onClicked: dashboard.callService("cover", "open_cover", {}, page.entityId)
                 }
                 Button {
-                    text: "Stop"
+                    text: qsTr("Stop")
                     onClicked: dashboard.callService("cover", "stop_cover", {}, page.entityId)
                 }
                 Button {
-                    text: "Close"
+                    text: qsTr("Close")
                     onClicked: dashboard.callService("cover", "close_cover", {}, page.entityId)
                 }
             }
@@ -203,7 +208,7 @@ Page {
                 maximumValue: 100
                 value: (dashboard && page.rev >= 0)
                        ? Number(dashboard.attribute(page.entityId, "current_position")) : 0
-                label: "Position"
+                label: qsTr("Position")
                 onReleased: dashboard.callService("cover", "set_cover_position",
                                                   { "position": Math.round(value) }, page.entityId)
             }
@@ -217,13 +222,13 @@ Page {
                 stepSize: page.numberBound("step", 1)
                 value: (dashboard && page.rev >= 0)
                        ? Number(dashboard.entityState(page.entityId)) : 0
-                label: "Value"
+                label: qsTr("Value")
                 onReleased: dashboard.callService(page.domain, "set_value",
                                                   { "value": value }, page.entityId)
             }
 
             SectionHeader {
-                text: "Controls"
+                text: qsTr("Controls")
                 visible: page.relatedControls.length > 0
             }
 
@@ -233,7 +238,7 @@ Page {
             }
 
             SectionHeader {
-                text: "Sensors"
+                text: qsTr("Sensors")
                 visible: page.relatedSensors.length > 0
             }
 
@@ -243,7 +248,7 @@ Page {
             }
 
             SectionHeader {
-                text: "Related"
+                text: qsTr("Related")
                 visible: page.relatedOther.length > 0
             }
 
@@ -253,7 +258,7 @@ Page {
             }
 
             SectionHeader {
-                text: "Attributes"
+                text: qsTr("Attributes")
                 visible: true
             }
 
@@ -284,8 +289,12 @@ Page {
             width: column.width
             height: Theme.itemSizeSmall
             property string relatedId: String(modelData || "")
+            readonly property bool isScript: row.relatedId.indexOf("script.") === 0
             readonly property bool toggleable: dashboard && page.rev >= 0 && row.relatedId.length
                                                ? dashboard.isToggleable(row.relatedId) : false
+            readonly property bool showRun: row.isScript
+            readonly property bool showToggle: row.toggleable && !row.isScript
+            readonly property bool showState: row.relatedId.length > 0 && !row.toggleable && !row.isScript
 
             onClicked: {
                 if (!row.relatedId.length)
@@ -335,6 +344,8 @@ Page {
                     width: Math.max(0, parent.width - relatedIconBox.width - Theme.paddingSmall
                                     - (relatedState.visible
                                        ? relatedState.width + Theme.paddingSmall : 0)
+                                    - (relatedRun.visible
+                                       ? relatedRun.width + Theme.paddingSmall : 0)
                                     - (relatedToggle.visible
                                        ? relatedToggle.width + Theme.paddingSmall : 0))
                     text: (dashboard && page.rev >= 0 && row.relatedId.length)
@@ -347,7 +358,7 @@ Page {
                 Label {
                     id: relatedState
                     y: (parent.height - height) / 2
-                    visible: row.relatedId.length > 0 && !row.toggleable
+                    visible: row.showState
                     width: Math.min(implicitWidth, row.width * 0.45)
                     horizontalAlignment: Text.AlignRight
                     text: (dashboard && page.rev >= 0 && row.relatedId.length)
@@ -357,12 +368,22 @@ Page {
                     truncationMode: TruncationMode.Fade
                 }
 
+                Button {
+                    id: relatedRun
+                    y: (parent.height - height) / 2
+                    visible: row.showRun
+                    preferredWidth: Theme.buttonWidthExtraSmall
+                    height: Theme.itemSizeExtraSmall
+                    text: qsTr("Run")
+                    onClicked: dashboard.toggle(row.relatedId)
+                }
+
                 Switch {
                     id: relatedToggle
                     y: (parent.height - height) / 2
-                    visible: row.toggleable
+                    visible: row.showToggle
                     automaticCheck: false
-                    checked: (row.toggleable && page.rev >= 0)
+                    checked: (row.showToggle && page.rev >= 0)
                              ? dashboard.isOn(row.relatedId) : false
                     onClicked: dashboard.toggle(row.relatedId)
                 }

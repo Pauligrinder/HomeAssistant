@@ -56,6 +56,14 @@ CardChrome {
             property bool toggleable: (rowType === "entity" && row.entityId.length > 0
                                        && dashboard && root.rev >= 0)
                                       ? dashboard.isToggleable(row.entityId) : false
+            // Prefer entity-id prefix so scripts still get a Run control before
+            // states arrive (domainOf alone is fine, but keep this resilient).
+            readonly property bool isScript: row.entityId.indexOf("script.") === 0
+            readonly property bool showRunButton: row.isScript
+                    && rowType === "entity" && row.entityId.length > 0
+            readonly property bool showToggle: row.toggleable && !row.isScript
+            readonly property bool showState: row.entityId.length > 0
+                    && !row.toggleable && !row.isScript
 
             // Both a conditional row and a plain row carrying "visibility" are
             // collapsed rather than left blank when their conditions fail.
@@ -150,6 +158,8 @@ CardChrome {
                     width: Math.max(0, parent.width - rowIconBox.width - Theme.paddingSmall
                                     - (stateLabel.visible
                                        ? stateLabel.width + Theme.paddingSmall : 0)
+                                    - (runButton.visible
+                                       ? runButton.width + Theme.paddingSmall : 0)
                                     - (toggle.visible ? toggle.width + Theme.paddingSmall : 0))
                     text: {
                         if (entry.name)
@@ -168,7 +178,7 @@ CardChrome {
                 Label {
                     id: stateLabel
                     y: (parent.height - height) / 2
-                    visible: row.entityId.length > 0 && !row.toggleable
+                    visible: row.showState
                     // Long states keep at most part of the row for themselves.
                     width: Math.min(implicitWidth, row.width * 0.45)
                     horizontalAlignment: Text.AlignRight
@@ -179,13 +189,29 @@ CardChrome {
                     truncationMode: TruncationMode.Fade
                 }
 
+                Button {
+                    id: runButton
+                    y: (parent.height - height) / 2
+                    visible: row.showRunButton
+                    preferredWidth: Theme.buttonWidthExtraSmall
+                    height: Theme.itemSizeExtraSmall
+                    text: qsTr("Run")
+                    onClicked: {
+                        var confirm = entry.confirmation
+                        if (confirm === undefined && entry.tap_action)
+                            confirm = entry.tap_action.confirmation
+                        dashboard.performAction(root.mergeConfirmation({ "action": "toggle" }, confirm),
+                                               row.entityId)
+                    }
+                }
+
                 Switch {
                     id: toggle
                     y: (parent.height - height) / 2
-                    visible: row.toggleable
+                    visible: row.showToggle
                     automaticCheck: false
                     // root.rev is read so the switch follows entity updates.
-                    checked: (row.toggleable && root.rev >= 0)
+                    checked: (row.showToggle && root.rev >= 0)
                              ? dashboard.isOn(row.entityId) : false
                     onClicked: {
                         var confirm = entry.confirmation

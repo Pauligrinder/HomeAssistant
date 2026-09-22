@@ -73,7 +73,7 @@ CardChrome {
         Label {
             anchors.baseline: stateLabel.baseline
             visible: isFinite(root.current)
-            text: "Now " + root.formatTemp(root.current)
+            text: qsTr("Now %1").arg(root.formatTemp(root.current))
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.secondaryColor
         }
@@ -96,7 +96,7 @@ CardChrome {
         minimumValue: root.minTemp
         maximumValue: root.maxTemp
         stepSize: root.step
-        label: "Temperature"
+        label: qsTr("Temperature")
         valueText: root.formatTemp(value)
 
         // The slider owns its value while dragged, so the binding only feeds
@@ -122,7 +122,7 @@ CardChrome {
     }
 
     ModeChips {
-        title: "Fan"
+        title: qsTr("Fan")
         modes: root.listAttr("fan_modes")
         current: String(root.attr("fan_mode") || "")
         onPicked: {
@@ -133,7 +133,7 @@ CardChrome {
     }
 
     ModeChips {
-        title: "Swing"
+        title: qsTr("Swing")
         modes: root.listAttr("swing_modes")
         current: String(root.attr("swing_mode") || "")
         onPicked: {
@@ -144,7 +144,7 @@ CardChrome {
     }
 
     ModeChips {
-        title: "Preset"
+        title: qsTr("Preset")
         modes: root.listAttr("preset_modes")
         current: String(root.attr("preset_mode") || "")
         onPicked: {

@@ -20,6 +20,7 @@
 #include <QDebug>
 #include <QSslError>
 #include <QTimer>
+#include <QCoreApplication>
 #include <algorithm>
 
 namespace {
@@ -2771,19 +2772,26 @@ QVariantMap LovelaceCoordinator::buildConfirmationPrompt(const QVariant &confirm
     }
 
     const QString name = entityId.isEmpty() ? QString() : friendlyName(entityId);
+    const bool isScript = domainOfEntity(entityId) == QLatin1String("script");
     if (title.isEmpty()) {
-        if (!name.isEmpty())
-            title = QStringLiteral("Wants to run %1").arg(name);
+        if (isScript && !name.isEmpty())
+            title = QCoreApplication::translate("Helmsman", "Running %1").arg(name);
+        else if (!name.isEmpty())
+            title = QCoreApplication::translate("Helmsman", "Wants to run %1").arg(name);
         else
-            title = QStringLiteral("Wants to perform this action");
+            title = QCoreApplication::translate("Helmsman", "Wants to perform this action");
     }
 
     QString confirmText = map.value(QStringLiteral("confirm_text")).toString().trimmed();
     QString dismissText = map.value(QStringLiteral("dismiss_text")).toString().trimmed();
     if (confirmText.isEmpty())
-        confirmText = QStringLiteral("Allow");
+        confirmText = isScript
+                ? QCoreApplication::translate("Helmsman", "Run")
+                : QCoreApplication::translate("Helmsman", "Allow");
     if (dismissText.isEmpty())
-        dismissText = QStringLiteral("Deny");
+        dismissText = isScript
+                ? QCoreApplication::translate("Helmsman", "Cancel")
+                : QCoreApplication::translate("Helmsman", "Deny");
 
     QVariantMap prompt;
     prompt.insert(QStringLiteral("active"), true);

@@ -12,11 +12,16 @@ CardChrome {
             return String(card.title)
         return root.configName(root.entityId, "To-do")
     }
+    readonly property int totalCount: openModel.count + completedModel.count
+    readonly property int completedLimit: 5
+    readonly property int completedShown: (completedExpanded
+                                           || completedModel.count <= completedLimit)
+                                          ? completedModel.count : completedLimit
     property bool editing: false
+    property bool completedExpanded: false
 
-    ListModel {
-        id: itemModel
-    }
+    ListModel { id: openModel }
+    ListModel { id: completedModel }
 
     Connections {
         target: dashboard
@@ -39,23 +44,32 @@ CardChrome {
             dashboard.fetchTodo(root.entityId)
     }
 
+    function appendEntry(model, entry, section) {
+        var summary = entry.summary ? String(entry.summary)
+                      : (entry.name ? String(entry.name) : "")
+        model.append({
+                         "uid": entry.uid ? String(entry.uid) : "",
+                         "summary": summary,
+                         "status": entry.status ? String(entry.status) : "",
+                         "section": section
+                     })
+    }
+
     function reload() {
         var raw = dashboard ? dashboard.todoItems(root.entityId) : []
         if (!raw)
             raw = []
-        itemModel.clear()
+        openModel.clear()
+        completedModel.clear()
         for (var i = 0; i < raw.length; ++i) {
             var entry = raw[i] || {}
-            var summary = entry.summary ? String(entry.summary)
-                          : (entry.name ? String(entry.name) : "")
-            itemModel.append({
-                                 "uid": entry.uid ? String(entry.uid) : "",
-                                 "summary": summary,
-                                 "status": entry.status ? String(entry.status) : ""
-                             })
+            if (String(entry.status || "") === "completed")
+                root.appendEntry(completedModel, entry, "completed")
+            else
+                root.appendEntry(openModel, entry, "open")
         }
-        if (itemModel.count === 0)
-            root.editing = false
+        if (completedModel.count <= root.completedLimit)
+            root.completedExpanded = false
     }
 
     function scheduleReload() {
@@ -83,19 +97,27 @@ CardChrome {
         root.scheduleReload()
     }
 
-    function moveItem(from, delta) {
+    function lastOpenKey() {
+        if (openModel.count < 1)
+            return ""
+        return root.itemKey(openModel.get(openModel.count - 1))
+    }
+
+    function moveItem(model, from, delta) {
         var to = from + delta
-        if (!dashboard || to < 0 || to >= itemModel.count)
+        if (!dashboard || to < 0 || to >= model.count)
             return
-        var uid = root.itemKey(itemModel.get(from))
+        var uid = root.itemKey(model.get(from))
         if (!uid.length)
             return
         var previous = ""
         if (delta < 0) {
             if (to > 0)
-                previous = root.itemKey(itemModel.get(to - 1))
+                previous = root.itemKey(model.get(to - 1))
+            else if (model === completedModel)
+                previous = root.lastOpenKey()
         } else {
-            previous = root.itemKey(itemModel.get(to))
+            previous = root.itemKey(model.get(to))
         }
         dashboard.moveTodoItem(root.entityId, uid, previous)
         root.scheduleReload()
@@ -109,53 +131,18 @@ CardChrome {
 
     Component.onCompleted: root.requestItems()
 
-    Row {
-        width: parent.width
-        spacing: Theme.paddingSmall
-
-        Label {
-            width: Math.max(0, parent.width - editButton.width - Theme.paddingSmall)
-            text: root.titleText
-            color: Theme.highlightColor
-            font.pixelSize: Theme.fontSizeSmall
-            truncationMode: TruncationMode.Fade
-        }
-
-        MouseArea {
-            id: editButton
-            width: editLabel.implicitWidth + Theme.paddingSmall
-            height: Theme.itemSizeExtraSmall
-            enabled: itemModel.count > 0 || root.editing
-            opacity: enabled ? 1 : 0.4
-            onClicked: root.editing = !root.editing
-
-            Label {
-                id: editLabel
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.editing ? "Done" : "Edit"
-                color: Theme.highlightColor
-                font.pixelSize: Theme.fontSizeExtraSmall
-            }
-        }
-    }
-
-    Label {
-        width: parent.width
-        visible: itemModel.count === 0
-        height: visible ? implicitHeight : 0
-        text: "No items"
-        color: Theme.secondaryColor
-        font.pixelSize: Theme.fontSizeExtraSmall
-    }
-
-    Repeater {
-        model: itemModel
-
+    Component {
+        id: todoRow
         Item {
             id: row
-            width: parent.width
-            height: Theme.itemSizeSmall
-            property int rowIndex: index
+            width: parent ? parent.width : Theme.itemSizeHuge
+            height: row.rowVisible ? Theme.itemSizeSmall : 0
+            visible: row.rowVisible
+            readonly property var listModel: String(section) === "completed"
+                                             ? completedModel : openModel
+            readonly property int rowIndex: index
+            readonly property bool rowVisible: String(section) !== "completed"
+                                               || index < root.completedShown
             readonly property string key: uid && String(uid).length ? String(uid)
                                           : (summary ? String(summary) : "")
             readonly property string summaryText: summary ? String(summary) : (row.key || "Item")
@@ -198,7 +185,7 @@ CardChrome {
                     anchors.verticalCenter: parent.verticalCenter
                     icon.source: "image://theme/icon-m-up"
                     enabled: row.rowIndex > 0 && row.key.length > 0
-                    onClicked: root.moveItem(row.rowIndex, -1)
+                    onClicked: root.moveItem(row.listModel, row.rowIndex, -1)
                 }
 
                 IconButton {
@@ -207,8 +194,8 @@ CardChrome {
                     height: Theme.iconSizeMedium
                     anchors.verticalCenter: parent.verticalCenter
                     icon.source: "image://theme/icon-m-down"
-                    enabled: row.rowIndex < itemModel.count - 1 && row.key.length > 0
-                    onClicked: root.moveItem(row.rowIndex, 1)
+                    enabled: row.rowIndex < row.listModel.count - 1 && row.key.length > 0
+                    onClicked: root.moveItem(row.listModel, row.rowIndex, 1)
                 }
 
                 IconButton {
@@ -229,16 +216,56 @@ CardChrome {
         }
     }
 
+    Item {
+        width: parent.width
+        height: Math.max(titleLabel.implicitHeight, editButton.height)
+
+        Label {
+            id: titleLabel
+            anchors.left: parent.left
+            anchors.right: editButton.left
+            anchors.rightMargin: Theme.paddingSmall
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.titleText
+            color: Theme.highlightColor
+            font.pixelSize: Theme.fontSizeSmall
+            truncationMode: TruncationMode.Fade
+        }
+
+        MouseArea {
+            id: editButton
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            onClicked: {
+                root.editing = !root.editing
+                if (!root.editing)
+                    addField.text = ""
+            }
+
+            MdiIcon {
+                id: editIcon
+                anchors.centerIn: parent
+                mdiIcons: root.mdiIcons
+                name: root.editing ? "mdi:check" : "mdi:pencil"
+                iconColor: Theme.highlightColor
+                width: Theme.iconSizeMedium
+            }
+        }
+    }
+
     Row {
         width: parent.width
+        visible: root.editing
         spacing: Theme.paddingSmall
 
         TextField {
             id: addField
             width: Math.max(Theme.itemSizeLarge,
                             parent.width - addButton.width - Theme.paddingSmall)
-            label: "Add item"
-            placeholderText: "Add item"
+            label: qsTr("Add item")
+            placeholderText: qsTr("Add item")
             inputMethodHints: Qt.ImhNoPredictiveText
             EnterKey.enabled: text.trim().length > 0
             EnterKey.iconSource: "image://theme/icon-m-add"
@@ -253,6 +280,51 @@ CardChrome {
             icon.source: "image://theme/icon-m-add"
             enabled: addField.text.trim().length > 0
             onClicked: root.addItem()
+        }
+    }
+
+    Label {
+        width: parent.width
+        visible: root.totalCount === 0
+        height: visible ? implicitHeight : 0
+        text: qsTr("No items")
+        color: Theme.secondaryColor
+        font.pixelSize: Theme.fontSizeExtraSmall
+    }
+
+    Repeater {
+        model: openModel
+        delegate: todoRow
+    }
+
+    Label {
+        width: parent.width
+        visible: completedModel.count > 0
+        height: visible ? implicitHeight : 0
+        text: qsTr("Completed")
+        color: Theme.secondaryHighlightColor
+        font.pixelSize: Theme.fontSizeExtraSmall
+        font.bold: true
+    }
+
+    Repeater {
+        model: completedModel
+        delegate: todoRow
+    }
+
+    MouseArea {
+        width: parent.width
+        height: visible ? showMoreLabel.implicitHeight + Theme.paddingSmall : 0
+        visible: completedModel.count > root.completedLimit
+        onClicked: root.completedExpanded = !root.completedExpanded
+
+        Label {
+            id: showMoreLabel
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width
+            text: root.completedExpanded ? qsTr("Show less") : qsTr("Show more")
+            color: Theme.highlightColor
+            font.pixelSize: Theme.fontSizeExtraSmall
         }
     }
 }

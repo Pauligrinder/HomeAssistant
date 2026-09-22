@@ -71,7 +71,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: "Change dashboard" }
+            PageHeader { title: qsTr("Change dashboard") }
 
             Flow {
                 x: Theme.horizontalPageMargin

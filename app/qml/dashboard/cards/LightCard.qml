@@ -35,7 +35,7 @@ CardChrome {
         maximumValue: 100
         stepSize: 1
         value: root.brightness
-        label: "Brightness"
+        label: qsTr("Brightness")
         onReleased: {
             if (dashboard)
                 dashboard.callService("light", "turn_on",

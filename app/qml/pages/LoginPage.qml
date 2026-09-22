@@ -27,7 +27,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: "Sign in" }
+            PageHeader { title: qsTr("Sign in") }
 
             Label {
                 anchors.left: parent.left
@@ -36,14 +36,14 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: "Sign in to " + hassClient.baseUrl + " with a Home Assistant user."
+                text: qsTr("Sign in to %1 with a Home Assistant user.").arg(hassClient.baseUrl)
             }
 
             TextField {
                 id: usernameField
                 width: parent.width
-                label: "Username"
-                placeholderText: "Username"
+                label: qsTr("Username")
+                placeholderText: qsTr("Username")
                 text: hassClient.username
                 inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
                 EnterKey.iconSource: "image://theme/icon-m-enter-next"
@@ -53,8 +53,8 @@ Page {
             PasswordField {
                 id: passwordField
                 width: parent.width
-                label: "Password"
-                placeholderText: "Password"
+                label: qsTr("Password")
+                placeholderText: qsTr("Password")
                 EnterKey.enabled: usernameField.text.length > 0 && text.length > 0 && !hassClient.busy
                 EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                 EnterKey.onClicked: page.submit()

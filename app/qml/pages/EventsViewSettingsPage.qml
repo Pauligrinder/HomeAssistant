@@ -109,14 +109,14 @@ Page {
 
             PageHeader {
                 title: page.eventsViewMode
-                       ? "Events View favorites"
-                       : "Cover favorites"
+                       ? qsTr("Events View favorites")
+                       : qsTr("Cover favorites")
             }
 
             SearchField {
                 id: searchField
                 width: parent.width
-                placeholderText: "Search name or entity id"
+                placeholderText: qsTr("Search name or entity id")
                 onTextChanged: page.filterText = text
             }
 
@@ -141,11 +141,11 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.eventsViewMode
-                      ? "Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Use search to filter every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In the preview, drag a favorite to reorder it, or drop it on the bin to remove it."
-                      : "Choose lights, switches, scripts, ACs, and sensors for the app cover. Use search to filter the lists. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button."
+                      ? qsTr("Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Use search to filter every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In the preview, drag a favorite to reorder it, or drop it on the bin to remove it.")
+                      : qsTr("Choose lights, switches, scripts, ACs, and sensors for the app cover. Use search to filter the lists. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.")
             }
 
-            SectionHeader { text: "Preview" }
+            SectionHeader { text: qsTr("Preview") }
 
             EventsViewWidget {
                 id: preview
@@ -160,16 +160,16 @@ Page {
                              : hassClient.widget.widgetEntities)
                 statusText: {
                     if (!hassClient.loggedIn)
-                        return "Sign in to Home Assistant first."
+                        return qsTr("Sign in to Home Assistant first.")
                     if (!hassClient.widget)
-                        return "Widget unavailable."
+                        return qsTr("Widget unavailable.")
                     if (hassClient.widget && hassClient.widget.lastError.length > 0)
                         return hassClient.widget.lastError
                     var entities = page.eventsViewMode
                             ? hassClient.widget.eventsViewWidgetEntities
                             : hassClient.widget.widgetEntities
                     if (hassClient.widget && entities.length === 0)
-                        return "Nothing selected yet."
+                        return qsTr("Nothing selected yet.")
                     return ""
                 }
                 onReorderRequested: {
@@ -203,25 +203,25 @@ Page {
                 visible: !page.hasPickableEntities
                          && !(hassClient.widget && hassClient.widget.lastError.length > 0)
                 text: hassClient.widget && hassClient.widget.busy
-                      ? "Loading…"
+                      ? qsTr("Loading…")
                       : (page.filterText.length > 0
-                         ? "No matching entities."
+                         ? qsTr("No matching entities.")
                          : (page.eventsViewMode
-                            ? "No lights, switches, scripts, ACs, sensors, or graphs found."
-                            : "No lights, switches, scripts, ACs, or sensors found."))
+                            ? qsTr("No lights, switches, scripts, ACs, sensors, or graphs found.")
+                            : qsTr("No lights, switches, scripts, ACs, or sensors found.")))
             }
 
             Repeater {
                 model: {
                     var items = [
-                        { "title": "Lights", "kind": "light" },
-                        { "title": "Switches", "kind": "switch" },
-                        { "title": "Air conditioners", "kind": "climate" },
-                        { "title": "Scripts", "kind": "script" }
+                        { "title": qsTr("Lights"), "kind": "light" },
+                        { "title": qsTr("Switches"), "kind": "switch" },
+                        { "title": qsTr("Air conditioners"), "kind": "climate" },
+                        { "title": qsTr("Scripts"), "kind": "script" }
                     ]
                     if (page.eventsViewMode)
-                        items.push({ "title": "Graphs", "kind": "graph" })
-                    items.push({ "title": "Sensors", "kind": "sensor" })
+                        items.push({ "title": qsTr("Graphs"), "kind": "graph" })
+                    items.push({ "title": qsTr("Sensors"), "kind": "sensor" })
                     return items
                 }
                 delegate: Column {
@@ -243,11 +243,10 @@ Page {
                         font.pixelSize: Theme.fontSizeSmall
                         visible: kindGroup.entityKind === "sensor" && page.sensorListGated
                         text: page.filterText.length > 0
-                              ? ("Too many sensors match ("
-                                 + page.entitiesOfKind("sensor").length
-                                 + "). Type more of the name or entity id.")
-                              : ("Search to find sensors ("
-                                 + page.unfilteredSensorCount + ")")
+                              ? qsTr("Too many sensors match (%1). Type more of the name or entity id.")
+                                    .arg(page.entitiesOfKind("sensor").length)
+                              : qsTr("Search to find sensors (%1)")
+                                    .arg(page.unfilteredSensorCount)
                     }
 
                     Repeater {
@@ -326,7 +325,7 @@ Page {
                     visible: preview.dragging
                     color: Theme.primaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    text: preview.dragOverTrash ? "Release to remove" : "Drop here to remove"
+                    text: preview.dragOverTrash ? qsTr("Release to remove") : qsTr("Drop here to remove")
                 }
             }
         }

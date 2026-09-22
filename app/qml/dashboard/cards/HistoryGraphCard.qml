@@ -34,7 +34,7 @@ CardChrome {
 
     Label {
         width: parent.width
-        text: card && card.title ? card.title : "History"
+        text: card && card.title ? card.title: qsTr("History")
         color: Theme.highlightColor
         font.pixelSize: Theme.fontSizeSmall
     }

@@ -28,6 +28,13 @@ ui_*.h
 # Local build counter: "<version> <release>"
 .build-release
 
+# Machine-translation resume cache for tools/fill-languages.py
+app/translations/.fill-cache/
+
+# Python
+**/__pycache__/
+*.py[cod]
+
 # CI build scratch trees
 .ci-work-*/
 RPMS/

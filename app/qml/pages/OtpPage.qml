@@ -21,7 +21,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: "Verification" }
+            PageHeader { title: qsTr("Verification") }
 
             Label {
                 anchors.left: parent.left
@@ -38,7 +38,7 @@ Page {
             TextField {
                 id: codeField
                 width: parent.width
-                label: "One-time code"
+                label: qsTr("One-time code")
                 placeholderText: "123456"
                 inputMethodHints: Qt.ImhDigitsOnly
                 echoMode: TextInput.Normal
