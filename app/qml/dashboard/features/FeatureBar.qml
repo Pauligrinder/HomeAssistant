@@ -15,6 +15,16 @@ Column {
         model: bar.features
         Loader {
             width: bar.width
+            visible: {
+                var _ = bar.rev
+                if (!modelData)
+                    return true
+                if (modelData.visibility && bar.dashboard)
+                    return !!bar.dashboard.isVisible(modelData.visibility)
+                return true
+            }
+            height: visible && status === Loader.Ready && item ? item.height : 0
+            active: visible
             sourceComponent: bar.componentFor(modelData)
             onLoaded: {
                 if (!item)

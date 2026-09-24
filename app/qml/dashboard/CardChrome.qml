@@ -42,7 +42,14 @@ Rectangle {
     }
     readonly property bool actionPending: (dashboard && trackedEntityId.length && statesRevision >= 0)
                                           ? dashboard.isPending(trackedEntityId) : false
-    opacity: (dashboard && card && statesRevision >= 0 && !dashboard.cardVisible(card)) ? 0 : 1
+    opacity: {
+        if (dashboard && card && statesRevision >= 0 && !dashboard.cardVisible(card))
+            return 0
+        if (dashboard && trackedEntityId.length && statesRevision >= 0
+                && dashboard.entityDimmed(trackedEntityId))
+            return 0.45
+        return 1
+    }
     visible: !dashboard || !card || (statesRevision >= 0 && dashboard.cardVisible(card))
     clip: true
 

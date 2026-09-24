@@ -50,9 +50,18 @@ Rectangle {
     width: Math.ceil(content.implicitWidth + Theme.paddingMedium * 2)
     color: Theme.rgba(Theme.primaryColor,
                       Theme.colorScheme === Theme.LightOnDark ? 0.20 : 0.10)
-    opacity: (!dashboard || pill.entityId.length === 0
-              || dashboard.isAvailable(pill.entityId)) ? 1.0 : 0.45
-    visible: pill.entityId.length > 0 && pill.labelText.length > 0
+    opacity: {
+        if (!dashboard || pill.entityId.length === 0)
+            return 1.0
+        return dashboard.entityDimmed(pill.entityId) ? 0.45 : 1.0
+    }
+    visible: {
+        if (pill.entityId.length === 0 || pill.labelText.length === 0)
+            return false
+        if (!dashboard || pill.rev < 0)
+            return true
+        return !!dashboard.entityEntryVisible(pill.badge)
+    }
 
     Row {
         id: content

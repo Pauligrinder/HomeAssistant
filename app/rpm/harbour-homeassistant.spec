@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.17
+Version:    0.3.18
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,14 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Thu Sep 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.18-1
+- Native dashboard Settings opens Helmsman settings; add a Home Assistant
+  settings button that opens the web UI /config page.
+- Hide Lovelace items when visibility conditions fail or the entity is
+  registry-hidden; grey out disabled and unavailable entities.
+- Todo lists keep completed items collapsed behind a toggle, and allow
+  renaming items while editing.
+
 * Tue Sep 22 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.17-1
 - Translate the native UI into Finnish plus many European and East Asian
   locales, with a searchable language picker. System follows the Home

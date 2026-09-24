@@ -147,7 +147,7 @@
   <context>
     <name>EntitiesCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="198" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="195" />
       <source>Run</source>
       <translation>Ausführen</translation>
     </message>
@@ -163,7 +163,7 @@
   <context>
     <name>EntityFilterCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntityFilterCard.qml" line="56" />
+      <location filename="../qml/dashboard/cards/EntityFilterCard.qml" line="58" />
       <source>Run</source>
       <translation>Ausführen</translation>
     </message>
@@ -318,42 +318,42 @@
   <context>
     <name>FeatureBar</name>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="60" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="70" />
       <source>On</source>
       <translation>Ein</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="80" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="90" />
       <source>Brightness</source>
       <translation>Helligkeit</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="207" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="217" />
       <source>Unlock</source>
       <translation>entriegeln</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="209" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="219" />
       <source>Run</source>
       <translation>Ausführen</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="210" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="220" />
       <source>Open</source>
       <translation>auf</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
       <source>Lock</source>
       <translation>Sperre</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
       <source>Close</source>
       <translation>Schließen</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="408" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="418" />
       <source>Color temperature</source>
       <translation>Farbtemperatur</translation>
     </message>
@@ -389,7 +389,7 @@
   <context>
     <name>GlanceCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="138" />
+      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="154" />
       <source>Run</source>
       <translation>Ausführen</translation>
     </message>
@@ -456,37 +456,37 @@
       <translation>English</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2778" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2851" />
       <source>Running %1</source>
       <translation>Ausführen von %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2780" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2853" />
       <source>Wants to run %1</source>
       <translation>Möchte %1 ausführen</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2782" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2855" />
       <source>Wants to perform this action</source>
       <translation>Möchte diese Aktion ausführen</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2789" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2862" />
       <source>Run</source>
       <translation>Ausführen</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2790" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2863" />
       <source>Allow</source>
       <translation>Erlauben</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2793" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2866" />
       <source>Cancel</source>
       <translation>Abbrechen</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2794" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2867" />
       <source>Deny</source>
       <translation>Ablehnen</translation>
     </message>
@@ -823,27 +823,27 @@
   <context>
     <name>NativeHomePage</name>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="327" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="323" />
       <source>Change dashboard</source>
       <translation>Änderungen im Dashboard</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="333" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="329" />
       <source>Settings</source>
       <translation>Einstellungen</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="337" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="333" />
       <source>Refresh</source>
       <translation>Neu laden</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="462" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
       <source>Loading dashboard…</source>
       <translation>Dashboard wird geladen...</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="462" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
       <source>No views</source>
       <translation>Keine Aufrufe</translation>
     </message>
@@ -1244,12 +1244,17 @@
       <translation>Speichern</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="675" />
+      <location filename="../qml/pages/SettingsPage.qml" line="696" />
       <source>Sign out</source>
       <translation>Abmelden</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="686" />
+      <location filename="../qml/pages/SettingsPage.qml" line="682" />
+      <source>Home Assistant settings</source>
+      <translation>Home Assistant-Einstellungen</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="707" />
       <source>App %1</source>
       <translation>App %1</translation>
     </message>
@@ -1293,30 +1298,25 @@
   <context>
     <name>TodoCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="267" />
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="268" />
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="294" />
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="295" />
       <source>Add item</source>
       <translation>Element hinzufügen</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="290" />
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="317" />
       <source>No items</source>
       <translation>Keine Artikel </translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="304" />
-      <source>Completed</source>
-      <translation>erledigt</translation>
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="337" />
+      <source>Hide completed items</source>
+      <translation>Erledigte ausblenden</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="325" />
-      <source>Show less</source>
-      <translation>Weniger anzeigen</translation>
-    </message>
-    <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="325" />
-      <source>Show more</source>
-      <translation>Mehr anzeigen</translation>
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="338" />
+      <source>Show completed items</source>
+      <translation>Erledigte anzeigen</translation>
     </message>
   </context>
   <context>

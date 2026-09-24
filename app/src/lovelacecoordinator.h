@@ -115,6 +115,10 @@ public slots:
     bool isPending(const QString &entityId) const;
     bool isToggleable(const QString &entityId) const;
     bool isAvailable(const QString &entityId) const;
+    bool isEntityHidden(const QString &entityId) const;
+    bool isEntityDisabled(const QString &entityId) const;
+    bool entityDimmed(const QString &entityId) const;
+    bool entityEntryVisible(const QVariant &entry) const;
     QVariant attribute(const QString &entityId, const QString &key) const;
     QString formatState(const QString &entityId) const;
     QString areaName(const QString &areaId) const;
@@ -161,6 +165,7 @@ public slots:
                             const QString &end);
     void fetchTodo(const QString &entityId);
     void setTodoItem(const QString &entityId, const QString &item, bool checked);
+    void renameTodoItem(const QString &entityId, const QString &item, const QString &summary);
     void addTodoItem(const QString &entityId, const QString &summary);
     void removeTodoItem(const QString &entityId, const QString &item);
     void moveTodoItem(const QString &entityId,

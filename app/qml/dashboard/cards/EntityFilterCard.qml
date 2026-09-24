@@ -31,6 +31,8 @@ CardChrome {
         BackgroundItem {
             width: parent.width
             height: Theme.itemSizeSmall
+            opacity: (dashboard && root.rev >= 0
+                      && dashboard.entityDimmed(String(modelData))) ? 0.45 : 1.0
             onClicked: dashboard.openMoreInfo(String(modelData))
             Label {
                 anchors.left: parent.left

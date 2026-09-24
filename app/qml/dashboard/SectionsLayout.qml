@@ -7,6 +7,7 @@ Column {
     property var dashboard
     property var hassClient
     property var mdiIcons
+    readonly property int rev: dashboard ? dashboard.statesRevision : 0
     width: parent ? parent.width : Screen.width
     spacing: Theme.paddingLarge
 
@@ -15,6 +16,15 @@ Column {
         Column {
             width: layout.width
             spacing: Theme.paddingSmall
+            visible: {
+                var _ = layout.rev
+                if (!layout.dashboard)
+                    return true
+                if (modelData && modelData.visibility)
+                    return !!layout.dashboard.isVisible(modelData.visibility)
+                return true
+            }
+            height: visible ? implicitHeight : 0
 
             CardFlow {
                 width: parent.width

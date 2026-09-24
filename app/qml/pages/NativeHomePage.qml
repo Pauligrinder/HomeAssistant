@@ -113,10 +113,6 @@ Page {
                        })
     }
 
-    function openHassSettings() {
-        page.openWeb("/config")
-    }
-
     function openSettings() {
         pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), { hassClient: hassClient })
     }
@@ -331,7 +327,7 @@ Page {
             }
             MenuItem {
                 text: qsTr("Settings")
-                onClicked: page.openHassSettings()
+                onClicked: page.openSettings()
             }
             MenuItem {
                 text: qsTr("Refresh")

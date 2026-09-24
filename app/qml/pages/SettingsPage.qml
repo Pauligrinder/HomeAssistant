@@ -670,6 +670,27 @@ Page {
                 onClicked: page.save()
             }
 
+            Item {
+                width: 1
+                height: Theme.paddingLarge
+                visible: hassClient && hassClient.loggedIn
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: hassClient && hassClient.loggedIn
+                text: qsTr("Home Assistant settings")
+                onClicked: pageStack.push(Qt.resolvedUrl("HassWebViewPage.qml"), {
+                                              hassClient: hassClient,
+                                              startPath: "/config"
+                                          })
+            }
+
+            Item {
+                width: 1
+                height: Theme.paddingLarge
+            }
+
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: qsTr("Sign out")

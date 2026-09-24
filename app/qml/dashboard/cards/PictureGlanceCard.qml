@@ -9,10 +9,23 @@ PictureEntityCard {
         width: parent.width
         spacing: Theme.paddingSmall
         Repeater {
-            model: (card && card.entities) ? card.entities : []
+            model: {
+                var list = (card && card.entities) ? card.entities : []
+                var rev = root.rev
+                if (!dashboard || rev < 0 || !list || !list.length)
+                    return list || []
+                var out = []
+                for (var i = 0; i < list.length; ++i) {
+                    if (dashboard.entityEntryVisible(list[i]))
+                        out.push(list[i])
+                }
+                return out
+            }
             MouseArea {
                 width: Theme.itemSizeMedium
                 height: Theme.itemSizeMedium
+                opacity: (entityId.length && dashboard && root.rev >= 0
+                          && dashboard.entityDimmed(entityId)) ? 0.45 : 1.0
                 property string entityId: typeof modelData === "string" ? modelData
                                           : (modelData.entity ? String(modelData.entity) : "")
                 onClicked: {

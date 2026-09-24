@@ -147,7 +147,7 @@
   <context>
     <name>EntitiesCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="198" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="195" />
       <source>Run</source>
       <translation>Бягай!</translation>
     </message>
@@ -163,7 +163,7 @@
   <context>
     <name>EntityFilterCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntityFilterCard.qml" line="56" />
+      <location filename="../qml/dashboard/cards/EntityFilterCard.qml" line="58" />
       <source>Run</source>
       <translation>Бягай!</translation>
     </message>
@@ -318,42 +318,42 @@
   <context>
     <name>FeatureBar</name>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="60" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="70" />
       <source>On</source>
       <translation>На</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="80" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="90" />
       <source>Brightness</source>
       <translation>Яркост</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="207" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="217" />
       <source>Unlock</source>
       <translation>Отключване</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="209" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="219" />
       <source>Run</source>
       <translation>Бягай!</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="210" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="220" />
       <source>Open</source>
       <translation>Отваряне</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
       <source>Lock</source>
       <translation>Заключване</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
       <source>Close</source>
       <translation>Затваряне</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="408" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="418" />
       <source>Color temperature</source>
       <translation>Цветна температура</translation>
     </message>
@@ -389,7 +389,7 @@
   <context>
     <name>GlanceCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="138" />
+      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="154" />
       <source>Run</source>
       <translation>Бягай!</translation>
     </message>
@@ -456,37 +456,37 @@
       <translation>English</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2778" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2851" />
       <source>Running %1</source>
       <translation>Пускане на %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2780" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2853" />
       <source>Wants to run %1</source>
       <translation>Иска да пусне %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2782" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2855" />
       <source>Wants to perform this action</source>
       <translation>Иска да изпълни това действие.</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2789" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2862" />
       <source>Run</source>
       <translation>Бягай!</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2790" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2863" />
       <source>Allow</source>
       <translation>Позволяване</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2793" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2866" />
       <source>Cancel</source>
       <translation>Отмяна</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2794" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2867" />
       <source>Deny</source>
       <translation>Отказ</translation>
     </message>
@@ -823,27 +823,27 @@
   <context>
     <name>NativeHomePage</name>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="327" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="323" />
       <source>Change dashboard</source>
       <translation>Промяна на таблото</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="333" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="329" />
       <source>Settings</source>
       <translation>Настройки</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="337" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="333" />
       <source>Refresh</source>
       <translation>Обновяване</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="462" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
       <source>Loading dashboard…</source>
       <translation>Зареждане на таблото...</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="462" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
       <source>No views</source>
       <translation>Няма изгледи.</translation>
     </message>
@@ -1244,12 +1244,17 @@
       <translation>Запис</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="675" />
+      <location filename="../qml/pages/SettingsPage.qml" line="696" />
       <source>Sign out</source>
       <translation>Отписване</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="686" />
+      <location filename="../qml/pages/SettingsPage.qml" line="682" />
+      <source>Home Assistant settings</source>
+      <translation>Настройки на Home Assistant</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="707" />
       <source>App %1</source>
       <translation>Приложение %1</translation>
     </message>
@@ -1293,30 +1298,25 @@
   <context>
     <name>TodoCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="267" />
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="268" />
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="294" />
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="295" />
       <source>Add item</source>
       <translation>Добавяне на елемент</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="290" />
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="317" />
       <source>No items</source>
       <translation>Без елементи</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="304" />
-      <source>Completed</source>
-      <translation>Завършено</translation>
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="337" />
+      <source>Hide completed items</source>
+      <translation>Скрий завършените</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="325" />
-      <source>Show less</source>
-      <translation>Показване на по- малко</translation>
-    </message>
-    <message>
-      <location filename="../qml/dashboard/cards/TodoCard.qml" line="325" />
-      <source>Show more</source>
-      <translation>Покажи още</translation>
+      <location filename="../qml/dashboard/cards/TodoCard.qml" line="338" />
+      <source>Show completed items</source>
+      <translation>Покажи завършените</translation>
     </message>
   </context>
   <context>
