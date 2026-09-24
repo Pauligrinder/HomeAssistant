@@ -65,17 +65,14 @@ CardChrome {
             readonly property bool showState: row.entityId.length > 0
                     && !row.toggleable && !row.isScript
 
-            // Both a conditional row and a plain row carrying "visibility" are
-            // collapsed rather than left blank when their conditions fail.
+            // Collapse when visibility/conditions fail or the entity is registry-hidden.
             visible: {
                 if (!dashboard || root.rev < 0)
                     return true
-                if (row.conditionalRow)
-                    return !!dashboard.isVisible(row.config.conditions)
-                if (row.config.visibility)
-                    return !!dashboard.isVisible(row.config.visibility)
-                return true
+                return !!dashboard.entityEntryVisible(row.config)
             }
+            opacity: (row.entityId.length && dashboard && root.rev >= 0
+                      && dashboard.entityDimmed(row.entityId)) ? 0.45 : 1.0
 
             onClicked: {
                 if (rowType === "weblink" && dashboard) {

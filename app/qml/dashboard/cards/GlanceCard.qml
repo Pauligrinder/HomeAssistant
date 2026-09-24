@@ -8,9 +8,23 @@ CardChrome {
     contentTopMargin: Theme.paddingSmall
     contentBottomMargin: Theme.paddingSmall
 
-    readonly property var entities: (card && card.entities) ? card.entities : []
-    readonly property bool hasTitle: !!(card && card.title && String(card.title).length > 0)
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property var entities: (card && card.entities) ? card.entities : []
+    readonly property var visibleEntities: {
+        var list = root.entities
+        var _ = root.rev
+        if (!list || !list.length)
+            return []
+        if (!dashboard || root.rev < 0)
+            return list
+        var out = []
+        for (var i = 0; i < list.length; ++i) {
+            if (dashboard.entityEntryVisible(list[i]))
+                out.push(list[i])
+        }
+        return out
+    }
+    readonly property bool hasTitle: !!(card && card.title && String(card.title).length > 0)
     readonly property bool showName: !card || card.show_name !== false
     readonly property bool showIcon: !card || card.show_icon !== false
     readonly property bool showState: !card || card.show_state !== false
@@ -22,7 +36,7 @@ CardChrome {
             configured = Number(card.columns)
         if (configured > 0)
             return Math.max(1, Math.round(configured))
-        var n = root.entities.length
+        var n = root.visibleEntities.length
         if (n < 1)
             return 1
         return Math.min(n, 5)
@@ -47,10 +61,12 @@ CardChrome {
         columnSpacing: 0
 
         Repeater {
-            model: root.entities
+            model: root.visibleEntities
             MouseArea {
                 width: Math.floor(grid.width / Math.max(1, grid.columns))
                 height: cell.height
+                opacity: (entityId.length && dashboard && root.rev >= 0
+                          && dashboard.entityDimmed(entityId)) ? 0.45 : 1.0
                 property string entityId: typeof modelData === "string"
                                           ? modelData
                                           : (modelData.entity ? String(modelData.entity) : "")

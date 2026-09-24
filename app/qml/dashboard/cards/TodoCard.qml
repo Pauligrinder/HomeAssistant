@@ -13,12 +13,8 @@ CardChrome {
         return root.configName(root.entityId, "To-do")
     }
     readonly property int totalCount: openModel.count + completedModel.count
-    readonly property int completedLimit: 5
-    readonly property int completedShown: (completedExpanded
-                                           || completedModel.count <= completedLimit)
-                                          ? completedModel.count : completedLimit
     property bool editing: false
-    property bool completedExpanded: false
+    property bool showCompleted: false
 
     ListModel { id: openModel }
     ListModel { id: completedModel }
@@ -68,8 +64,8 @@ CardChrome {
             else
                 root.appendEntry(openModel, entry, "open")
         }
-        if (completedModel.count <= root.completedLimit)
-            root.completedExpanded = false
+        if (completedModel.count < 1)
+            root.showCompleted = false
     }
 
     function scheduleReload() {
@@ -123,6 +119,27 @@ CardChrome {
         root.scheduleReload()
     }
 
+    function commitRename(model, index, key, field) {
+        if (!dashboard || !field || !key || !key.length)
+            return
+        var current = ""
+        if (model && index >= 0 && index < model.count) {
+            var entry = model.get(index)
+            current = entry && entry.summary ? String(entry.summary) : ""
+        }
+        var text = field.text.trim()
+        if (!text.length) {
+            field.text = current
+            return
+        }
+        if (text === current)
+            return
+        dashboard.renameTodoItem(root.entityId, key, text)
+        if (model && index >= 0 && index < model.count)
+            model.setProperty(index, "summary", text)
+        root.scheduleReload()
+    }
+
     Timer {
         id: reloadDelay
         interval: 400
@@ -136,13 +153,12 @@ CardChrome {
         Item {
             id: row
             width: parent ? parent.width : Theme.itemSizeHuge
-            height: row.rowVisible ? Theme.itemSizeSmall : 0
-            visible: row.rowVisible
+            height: root.editing
+                    ? Math.max(Theme.itemSizeMedium, editField.height)
+                    : Theme.itemSizeSmall
             readonly property var listModel: String(section) === "completed"
                                              ? completedModel : openModel
             readonly property int rowIndex: index
-            readonly property bool rowVisible: String(section) !== "completed"
-                                               || index < root.completedShown
             readonly property string key: uid && String(uid).length ? String(uid)
                                           : (summary ? String(summary) : "")
             readonly property string summaryText: summary ? String(summary) : (row.key || "Item")
@@ -167,15 +183,26 @@ CardChrome {
                 anchors.fill: parent
                 spacing: Theme.paddingSmall
 
-                Label {
-                    y: (parent.height - height) / 2
+                TextField {
+                    id: editField
                     width: Math.max(0, parent.width - upButton.width - downButton.width
                                     - deleteButton.width - 3 * Theme.paddingSmall)
+                    anchors.verticalCenter: parent.verticalCenter
                     text: row.summaryText
-                    truncationMode: TruncationMode.Fade
-                    font.pixelSize: Theme.fontSizeSmall
+                    label: ""
                     color: row.completed ? Theme.secondaryColor : Theme.primaryColor
                     font.strikeout: row.completed
+                    inputMethodHints: Qt.ImhNoPredictiveText
+                    EnterKey.enabled: text.trim().length > 0
+                    EnterKey.iconSource: "image://theme/icon-m-enter-accept"
+                    EnterKey.onClicked: {
+                        root.commitRename(row.listModel, row.rowIndex, row.key, editField)
+                        focus = false
+                    }
+                    onActiveFocusChanged: {
+                        if (!activeFocus)
+                            root.commitRename(row.listModel, row.rowIndex, row.key, editField)
+                    }
                 }
 
                 IconButton {
@@ -297,34 +324,25 @@ CardChrome {
         delegate: todoRow
     }
 
-    Label {
-        width: parent.width
-        visible: completedModel.count > 0
-        height: visible ? implicitHeight : 0
-        text: qsTr("Completed")
-        color: Theme.secondaryHighlightColor
-        font.pixelSize: Theme.fontSizeExtraSmall
-        font.bold: true
-    }
-
-    Repeater {
-        model: completedModel
-        delegate: todoRow
-    }
-
     MouseArea {
         width: parent.width
-        height: visible ? showMoreLabel.implicitHeight + Theme.paddingSmall : 0
-        visible: completedModel.count > root.completedLimit
-        onClicked: root.completedExpanded = !root.completedExpanded
+        height: visible ? showCompletedLabel.implicitHeight + Theme.paddingSmall : 0
+        visible: completedModel.count > 0
+        onClicked: root.showCompleted = !root.showCompleted
 
         Label {
-            id: showMoreLabel
+            id: showCompletedLabel
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width
-            text: root.completedExpanded ? qsTr("Show less") : qsTr("Show more")
+            text: root.showCompleted ? qsTr("Hide completed items")
+                                     : qsTr("Show completed items")
             color: Theme.highlightColor
             font.pixelSize: Theme.fontSizeExtraSmall
         }
+    }
+
+    Repeater {
+        model: root.showCompleted ? completedModel : null
+        delegate: todoRow
     }
 }

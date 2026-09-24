@@ -45,12 +45,22 @@ QString objectIdOf(const QString &entityId)
     return entityId.mid(dot + 1);
 }
 
-bool registryDisabled(const QVariantMap &entry)
+bool registryFlagged(const QVariantMap &entry, const QString &key)
 {
-    const QVariant flagged = entry.value(QStringLiteral("disabled_by"));
+    const QVariant flagged = entry.value(key);
     if (!flagged.isValid() || flagged.isNull())
         return false;
     return !flagged.toString().isEmpty();
+}
+
+bool registryDisabled(const QVariantMap &entry)
+{
+    return registryFlagged(entry, QStringLiteral("disabled_by"));
+}
+
+bool registryHidden(const QVariantMap &entry)
+{
+    return registryFlagged(entry, QStringLiteral("hidden_by"));
 }
 
 int relatedRank(const QString &domain)
@@ -1932,6 +1942,62 @@ bool LovelaceCoordinator::isAvailable(const QString &entityId) const
             && !state.isEmpty();
 }
 
+bool LovelaceCoordinator::isEntityHidden(const QString &entityId) const
+{
+    if (entityId.isEmpty())
+        return false;
+    return registryHidden(m_entityRegistry.value(entityId));
+}
+
+bool LovelaceCoordinator::isEntityDisabled(const QString &entityId) const
+{
+    if (entityId.isEmpty())
+        return false;
+    return registryDisabled(m_entityRegistry.value(entityId));
+}
+
+bool LovelaceCoordinator::entityDimmed(const QString &entityId) const
+{
+    if (entityId.isEmpty())
+        return false;
+    return isEntityDisabled(entityId) || !isAvailable(entityId);
+}
+
+bool LovelaceCoordinator::entityEntryVisible(const QVariant &entry) const
+{
+    if (entry.type() == QVariant::String)
+        return !isEntityHidden(entry.toString());
+
+    const QVariantMap map = entry.toMap();
+    if (map.isEmpty())
+        return true;
+
+    const QString type = map.value(QStringLiteral("type")).toString();
+    if (type == QLatin1String("conditional")) {
+        if (!isVisible(map.value(QStringLiteral("conditions"))))
+            return false;
+        const QVariant row = map.value(QStringLiteral("row"));
+        if (row.isValid() && !row.isNull())
+            return entityEntryVisible(row);
+        return true;
+    }
+
+    if (map.contains(QStringLiteral("visibility"))
+            && !isVisible(map.value(QStringLiteral("visibility"))))
+        return false;
+
+    // Entity rows may carry conditions without wrapping as type: conditional.
+    if ((type.isEmpty() || type == QLatin1String("entity"))
+            && map.contains(QStringLiteral("conditions"))
+            && !isVisible(map.value(QStringLiteral("conditions"))))
+        return false;
+
+    const QString entityId = map.value(QStringLiteral("entity")).toString();
+    if (!entityId.isEmpty() && isEntityHidden(entityId))
+        return false;
+    return true;
+}
+
 QVariant LovelaceCoordinator::attribute(const QString &entityId, const QString &key) const
 {
     return m_entities.value(entityId).value(QStringLiteral("attributes")).toMap().value(key);
@@ -2053,11 +2119,16 @@ bool LovelaceCoordinator::isVisible(const QVariant &visibility) const
 
 bool LovelaceCoordinator::cardVisible(const QVariantMap &card) const
 {
-    if (card.contains(QStringLiteral("visibility")))
-        return isVisible(card.value(QStringLiteral("visibility")));
+    if (card.contains(QStringLiteral("visibility"))
+            && !isVisible(card.value(QStringLiteral("visibility"))))
+        return false;
     const QString type = card.value(QStringLiteral("type")).toString();
-    if (type == QLatin1String("conditional"))
-        return evalConditions(variantListOf(card.value(QStringLiteral("conditions"))), true);
+    if (type == QLatin1String("conditional")
+            && !evalConditions(variantListOf(card.value(QStringLiteral("conditions"))), true))
+        return false;
+    const QString entityId = card.value(QStringLiteral("entity")).toString();
+    if (!entityId.isEmpty() && isEntityHidden(entityId))
+        return false;
     return true;
 }
 
@@ -2160,6 +2231,8 @@ QVariantList LovelaceCoordinator::filterEntities(const QVariantMap &card) const
             : card.value(QStringLiteral("conditions")));
     for (int i = 0; i < entities.size(); ++i) {
         const QString entityId = entities.at(i);
+        if (isEntityHidden(entityId))
+            continue;
         if (conditions.isEmpty()) {
             out.append(entityId);
             continue;
@@ -3014,6 +3087,19 @@ void LovelaceCoordinator::setTodoItem(const QString &entityId, const QString &it
     data.insert(QStringLiteral("item"), item);
     data.insert(QStringLiteral("status"),
                 checked ? QStringLiteral("completed") : QStringLiteral("needs_action"));
+    callService(QStringLiteral("todo"), QStringLiteral("update_item"), data, entityId);
+}
+
+void LovelaceCoordinator::renameTodoItem(const QString &entityId,
+                                         const QString &item,
+                                         const QString &summary)
+{
+    const QString text = summary.trimmed();
+    if (entityId.isEmpty() || item.isEmpty() || text.isEmpty())
+        return;
+    QVariantMap data;
+    data.insert(QStringLiteral("item"), item);
+    data.insert(QStringLiteral("rename"), text);
     callService(QStringLiteral("todo"), QStringLiteral("update_item"), data, entityId);
 }
 

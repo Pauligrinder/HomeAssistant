@@ -77,8 +77,16 @@ CardChrome {
                         top = parseFloat(String(el.style.top))
                     return stage.height * top / 100 - height / 2
                 }
-                visible: !el.conditions
-                         || (dashboard && root.rev >= 0 && dashboard.isVisible(el.conditions))
+                visible: {
+                    if (dashboard && root.rev >= 0 && entityId.length
+                            && dashboard.isEntityHidden(entityId))
+                        return false
+                    if (!el.conditions)
+                        return true
+                    return !!(dashboard && root.rev >= 0 && dashboard.isVisible(el.conditions))
+                }
+                opacity: (dashboard && root.rev >= 0 && entityId.length
+                          && dashboard.entityDimmed(entityId)) ? 0.45 : 1.0
 
                 MouseArea {
                     anchors.fill: parent
