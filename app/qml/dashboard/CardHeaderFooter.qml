@@ -98,10 +98,22 @@ Item {
         id: graphComponent
         Item {
             id: graph
-            height: Theme.itemSizeSmall
+            width: extra.width
+            height: chart.height > 0 ? chart.height : Theme.itemSizeSmall
             property string entityId: (extra.config && extra.config.entity)
                                       ? String(extra.config.entity) : ""
             property var points: []
+            readonly property int hours: {
+                if (extra.config && extra.config.hours_to_show)
+                    return Math.max(1, Number(extra.config.hours_to_show) || 24)
+                return 24
+            }
+            readonly property string unit: {
+                if (!extra.dashboard || !graph.entityId.length)
+                    return ""
+                var u = extra.dashboard.attribute(graph.entityId, "unit_of_measurement")
+                return u ? String(u) : ""
+            }
 
             Connections {
                 target: extra.dashboard
@@ -114,49 +126,18 @@ Item {
             Component.onCompleted: {
                 if (!extra.dashboard || !graph.entityId.length)
                     return
-                var hours = (extra.config && extra.config.hours_to_show)
-                        ? Number(extra.config.hours_to_show) : 24
-                extra.dashboard.fetchHistory([graph.entityId], hours > 0 ? hours : 24)
+                extra.dashboard.fetchHistory([graph.entityId], graph.hours)
             }
 
-            Canvas {
-                id: canvas
-                anchors.fill: parent
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    var src = graph.points || []
-                    var values = []
-                    for (var i = 0; i < src.length; ++i) {
-                        var value = Number(src[i].state)
-                        if (!isNaN(value))
-                            values.push(value)
-                    }
-                    if (values.length < 2)
-                        return
-                    var min = Math.min.apply(Math, values)
-                    var max = Math.max.apply(Math, values)
-                    if (min === max) {
-                        min -= 1
-                        max += 1
-                    }
-                    ctx.strokeStyle = Theme.highlightColor
-                    ctx.lineWidth = 2
-                    ctx.beginPath()
-                    for (var j = 0; j < values.length; ++j) {
-                        var x = j * (width - 2) / (values.length - 1)
-                        var y = height - ((values[j] - min) / (max - min)) * (height - 4) - 2
-                        if (j === 0)
-                            ctx.moveTo(x, y)
-                        else
-                            ctx.lineTo(x, y)
-                    }
-                    ctx.stroke()
-                }
-                Connections {
-                    target: graph
-                    onPointsChanged: canvas.requestPaint()
-                }
+            HistoryChart {
+                id: chart
+                width: parent.width
+                points: graph.points
+                hours: graph.hours
+                unit: graph.unit
+                showTitle: false
+                compact: true
+                chartHeight: Theme.itemSizeMedium
             }
         }
     }

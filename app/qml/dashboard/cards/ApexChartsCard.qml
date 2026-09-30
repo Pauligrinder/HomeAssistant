@@ -236,11 +236,17 @@ CardChrome {
             var end = root.rangeEnd.getTime()
             for (var tick = 0; tick <= 4; ++tick) {
                 var tx = left + tick * plotWidth / 4
+                ctx.strokeStyle = Theme.rgba(Theme.secondaryColor, 0.25)
+                ctx.beginPath()
+                ctx.moveTo(tx, top)
+                ctx.lineTo(tx, bottom)
+                ctx.stroke()
                 var time = new Date(start + tick * (end - start) / 4)
                 var hours = time.getHours()
                 var minutes = time.getMinutes()
                 var timeLabel = (hours < 10 ? "0" : "") + hours + ":"
                               + (minutes < 10 ? "0" : "") + minutes
+                ctx.fillStyle = Theme.secondaryColor
                 ctx.fillText(timeLabel, tx - Theme.paddingLarge, height - 2)
             }
 

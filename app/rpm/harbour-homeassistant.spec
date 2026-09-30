@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.3.18
+Version:    0.4.1
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,16 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Sep 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.1-1
+- Native Silica Lovelace is the default home screen; empty or custom-HTML
+  dashboards offer a switch back to webview-based dashboards.
+- More-info shows last changed/updated and a state history timeline for
+  non-numeric entities.
+- History graph cards draw numeric lines or categorical state bars with
+  grid, timestamps, and y-axis values.
+- Picture elements cards render image overlays, action buttons, and
+  conditional elements more faithfully.
+
 * Thu Sep 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.18-1
 - Native dashboard Settings opens Helmsman settings; add a Home Assistant
   settings button that opens the web UI /config page.

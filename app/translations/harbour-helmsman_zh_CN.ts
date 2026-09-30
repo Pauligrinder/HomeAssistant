@@ -631,11 +631,72 @@
     </message>
   </context>
   <context>
+    <name>HistoryChart</name>
+    <message>
+      <location filename="../qml/dashboard/HistoryChart.qml" line="194" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="198" />
+      <source>Unknown</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/dashboard/HistoryChart.qml" line="196" />
+      <source>Unavailable</source>
+      <translation type="unfinished" />
+    </message>
+  </context>
+  <context>
+    <name>HistoryGraph</name>
+    <message>
+      <location filename="../qml/dashboard/HistoryGraph.qml" line="50" />
+      <source>Last 24 hours</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/dashboard/HistoryGraph.qml" line="51" />
+      <source>Last %1 hours</source>
+      <translation type="unfinished" />
+    </message>
+  </context>
+  <context>
     <name>HistoryGraphCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/HistoryGraphCard.qml" line="37" />
+      <location filename="../qml/dashboard/cards/HistoryGraphCard.qml" line="129" />
+      <source>No history</source>
+      <translation type="unfinished" />
+    </message>
+  </context>
+  <context>
+    <name>HistoryTimelinePage</name>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="27" />
       <source>History</source>
       <translation>历史</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="28" />
+      <source>Last 24 hours</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="29" />
+      <source>Last %1 hours</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="34" />
+      <source>No history</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="186" />
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="190" />
+      <source>Unknown</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="188" />
+      <source>Unavailable</source>
+      <translation type="unfinished" />
     </message>
   </context>
   <context>
@@ -749,73 +810,88 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="48" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="60" />
       <source>Restart stream</source>
       <translation>重启流</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="135" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="377" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="127" />
+      <source>History</source>
+      <translation>历史</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="138" />
+      <source>Last changed</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="144" />
+      <source>Last updated</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="172" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="414" />
       <source>Run</source>
       <translation>运行</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="136" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
       <source>Turn off</source>
       <translation>关闭</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="136" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
       <source>Turn on</source>
       <translation>打开</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="158" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="195" />
       <source>Brightness</source>
       <translation>亮度</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="190" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="227" />
       <source>Open</source>
       <translation>打开</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="194" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="231" />
       <source>Stop</source>
       <translation>停止</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="198" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="235" />
       <source>Close</source>
       <translation>关闭</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="211" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="248" />
       <source>Position</source>
       <translation>位置</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="225" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="262" />
       <source>Value</source>
       <translation>值</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="231" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
       <source>Controls</source>
       <translation>控制</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="241" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="278" />
       <source>Sensors</source>
       <translation>传感器</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="251" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="288" />
       <source>Related</source>
       <translation>相关</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="261" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="298" />
       <source>Attributes</source>
       <translation>属性</translation>
     </message>
@@ -823,27 +899,37 @@
   <context>
     <name>NativeHomePage</name>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="323" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="391" />
       <source>Change dashboard</source>
       <translation>更换仪表板</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="329" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="397" />
       <source>Settings</source>
       <translation>设置</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="333" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="401" />
       <source>Refresh</source>
       <translation>刷新</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="533" />
+      <source>This dashboard is empty or uses custom HTML that the native renderer cannot show.</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/NativeHomePage.qml" line="538" />
+      <source>Change to webview based dashboards</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
       <source>Loading dashboard…</source>
       <translation>正在加载仪表板…</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
       <source>No views</source>
       <translation>无视图</translation>
     </message>
@@ -1019,6 +1105,11 @@
       <translation>界面</translation>
     </message>
     <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="307" />
+      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="368" />
       <source>Events View and Cover</source>
       <translation>Events View 与封面</translation>
@@ -1052,11 +1143,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="34" />
       <source>System</source>
       <translation>System</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="307" />
-      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards and energy still open in the web view.</source>
-      <translation>将你的Lovelace仪表板作为Silica而不是Home Assistant网络UI. 默认关闭。 自定义卡和能量在网络视图中仍然开放.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="314" />

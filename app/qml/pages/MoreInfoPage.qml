@@ -36,6 +36,18 @@ Page {
         var ids = page.relatedIds
         return page.relatedBucket("other", ids)
     }
+    readonly property bool numericHistory: page.isNumericHistoryEntity()
+    readonly property bool showHistoryTimeline: page.entityId.length > 0
+                                                && page.domain !== "camera"
+                                                && !page.numericHistory
+    property int clockTick: 0
+
+    Timer {
+        interval: 30000
+        running: page.status === PageStatus.Active
+        repeat: true
+        onTriggered: page.clockTick++
+    }
 
     SilicaFlickable {
         id: flick
@@ -107,6 +119,31 @@ Page {
                 width: parent.width
                 dashboard: page.dashboard
                 entityId: page.entityId
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: page.showHistoryTimeline
+                text: qsTr("History")
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("HistoryTimelinePage.qml"), {
+                                       hassClient: page.hassClient,
+                                       mdiIcons: page.mdiIcons,
+                                       entityId: page.entityId
+                                   })
+                }
+            }
+
+            DetailItem {
+                label: qsTr("Last changed")
+                value: page.formatEntityTime("last_changed")
+                visible: value.length > 0
+            }
+
+            DetailItem {
+                label: qsTr("Last updated")
+                value: page.formatEntityTime("last_updated")
+                visible: value.length > 0
             }
 
             Loader {
@@ -514,5 +551,42 @@ Page {
             out.push({ "key": key, "value": String(val) })
         }
         return out
+    }
+
+    function isNumericHistoryEntity() {
+        if (!dashboard || page.rev < 0 || !page.entityId.length)
+            return false
+        var unit = dashboard.attribute(page.entityId, "unit_of_measurement")
+        if (unit !== undefined && unit !== null && String(unit).length)
+            return true
+        var state = dashboard.entityState(page.entityId)
+        if (!state || state === "unavailable" || state === "unknown")
+            return false
+        var n = Number(state)
+        return !isNaN(n)
+    }
+
+    function parseEntityStamp(stamp) {
+        if (!stamp)
+            return null
+        var t = Date.parse(String(stamp))
+        return isNaN(t) ? null : new Date(t)
+    }
+
+    function formatEntityTime(field) {
+        var tick = page.clockTick
+        if (!dashboard || page.rev < 0 || !page.entityId.length)
+            return ""
+        var st = dashboard.entity(page.entityId)
+        if (!st)
+            return ""
+        var d = page.parseEntityStamp(st[field])
+        if (!d)
+            return ""
+        var ago = Format.formatDate(d, Formatter.DurationElapsed)
+        var stamp = Format.formatDate(d, Formatter.Timepoint)
+        if (!ago || !ago.length)
+            return stamp
+        return ago + " (" + stamp + ")"
     }
 }

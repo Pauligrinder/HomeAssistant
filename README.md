@@ -5,8 +5,8 @@ Built as a Harbour app (Qt 5 / QML + C++) the same way most SFOS apps are,
 and tested against Platform SDK target `SailfishOS-5.2.0.15-aarch64`.
 
 This first cut covers connecting to an instance and signing in, including
-TOTP two-step verification, dashboards (webview-wrapped by default, with an
-optional native Silica renderer), notifications, and
+TOTP two-step verification, dashboards (native Silica Lovelace by default,
+with an optional WebView frontend), notifications, and
 mobile_app sensors (battery, Wi‑Fi, location).
 
 ## Layout
@@ -36,12 +36,14 @@ app/
    (or other MFA) code, then exchanges the auth code for tokens.
 4. **Session** — Refresh token is stored in the sandboxed app settings and
    restored on launch.
-5. **Dashboards** — The Home Assistant frontend in a WebView is the default
-   home screen. Settings → Dashboard → Browser engine picks among the engines
+5. **Dashboards** — Native Silica Lovelace is the default home screen.
+   Settings → Dashboard can switch back to the Home Assistant frontend in a
+   WebView. Browser engine picks among the engines
    installed on the device: stock Gecko, sailfish-browser-next153 (ESR153),
    and Atlantic Browser's WPE WebKit view. Extra engines are off until you
-   choose them, and switching needs a restart. Settings → Dashboard can also
-   enable an experimental native Silica renderer of Lovelace JSON. The native
+   choose them, and switching needs a restart. Empty dashboards and ones
+   made only of webpage/iframe/custom HTML cards offer a button to switch
+   to webview-based dashboards. The native
    dashboard pulley opens Home Assistant settings in the web view (`/config`).
    Helmsman connection and engine options are under Settings → Companion app
    in that web view. The Silica
@@ -62,8 +64,7 @@ app/
    locations with coordinates
    render natively (OpenStreetMap tiles, person pictures as markers). Camera
    details play a live MJPEG stream. Lovelace `confirmation` on native
-   scripts and taps shows a full-screen swipe Allow/Deny prompt. The native
-   renderer is off by default.
+   scripts and taps shows a full-screen swipe Allow/Deny prompt.
 6. **Sensors** — After mobile_app registration, Helmsman reports battery level/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
    location. Native settings can disable individual sensors and select a
@@ -123,9 +124,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.3.18-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.4.1-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.3.18-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.4.1-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`,
