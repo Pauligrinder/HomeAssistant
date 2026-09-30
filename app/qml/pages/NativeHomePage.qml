@@ -72,7 +72,75 @@ Page {
             return false
         return dashboard.pathConfigReady(page.boundPath)
     }
+    // Empty views, or views made only of webpage/iframe/custom HTML cards,
+    // cannot usefully render natively — offer the webview dashboard instead.
+    readonly property bool needsWebviewPrompt: {
+        var rev = dashboard ? dashboard.configsRevision : 0
+        if (!dashboard || rev < 0 || !page.boundReady)
+            return false
+        if (dashboard.busy)
+            return false
+        return page.viewIsEmptyOrWebHtml(page.boundView)
+    }
     backNavigation: !page.followDefault
+
+    function cardIsWebHtml(card) {
+        if (!card)
+            return true
+        var t = String(card.type || "")
+        if (t === "webpage" || t === "iframe")
+            return true
+        if (t.indexOf("custom:html") === 0 || t === "custom:html-template-card"
+                || t === "custom:html-card" || t === "custom:config-template-card")
+            return true
+        if (t === "vertical-stack" || t === "horizontal-stack" || t === "grid") {
+            var nested = card.cards || []
+            if (!nested.length)
+                return true
+            for (var i = 0; i < nested.length; ++i) {
+                if (!page.cardIsWebHtml(nested[i]))
+                    return false
+            }
+            return true
+        }
+        if (t === "conditional" && card.card)
+            return page.cardIsWebHtml(card.card)
+        return false
+    }
+
+    function collectViewCards(view) {
+        var out = []
+        if (!view)
+            return out
+        var cards = view.cards || []
+        for (var i = 0; i < cards.length; ++i)
+            out.push(cards[i])
+        var sections = view.sections || []
+        for (var s = 0; s < sections.length; ++s) {
+            var sectionCards = (sections[s] && sections[s].cards) ? sections[s].cards : []
+            for (var c = 0; c < sectionCards.length; ++c)
+                out.push(sectionCards[c])
+        }
+        return out
+    }
+
+    function viewIsEmptyOrWebHtml(view) {
+        if (!view || !view.type)
+            return true
+        var cards = page.collectViewCards(view)
+        if (!cards.length)
+            return true
+        for (var i = 0; i < cards.length; ++i) {
+            if (!page.cardIsWebHtml(cards[i]))
+                return false
+        }
+        return true
+    }
+
+    function switchToWebviewDashboards() {
+        if (hassClient)
+            hassClient.nativeDashboardEnabled = false
+    }
 
     function selectLocalView(path) {
         if (!path || !page.boundViews)
@@ -433,6 +501,8 @@ Page {
                 width: page.panelMapView ? parent.width : parent.width - 2 * Theme.horizontalPageMargin
                 anchors.horizontalCenter: parent.horizontalCenter
                 sourceComponent: {
+                    if (page.needsWebviewPrompt)
+                        return webviewPromptComp
                     if (!page.boundView || !page.boundView.type)
                         return emptyComp
                     var t = page.boundView.type || "masonry"
@@ -444,6 +514,29 @@ Page {
                         return sidebarComp
                     return masonryComp
                 }
+            }
+        }
+    }
+
+    Component {
+        id: webviewPromptComp
+        Column {
+            width: viewLoader.width
+            spacing: Theme.paddingLarge
+
+            Label {
+                width: parent.width
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+                color: Theme.secondaryColor
+                font.pixelSize: Theme.fontSizeSmall
+                text: qsTr("This dashboard is empty or uses custom HTML that the native renderer cannot show.")
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Change to webview based dashboards")
+                onClicked: page.switchToWebviewDashboards()
             }
         }
     }

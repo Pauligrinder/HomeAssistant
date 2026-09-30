@@ -631,11 +631,72 @@
     </message>
   </context>
   <context>
+    <name>HistoryChart</name>
+    <message>
+      <location filename="../qml/dashboard/HistoryChart.qml" line="194" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="198" />
+      <source>Unknown</source>
+      <translation>Tuntematon</translation>
+    </message>
+    <message>
+      <location filename="../qml/dashboard/HistoryChart.qml" line="196" />
+      <source>Unavailable</source>
+      <translation>Ei saatavilla</translation>
+    </message>
+  </context>
+  <context>
+    <name>HistoryGraph</name>
+    <message>
+      <location filename="../qml/dashboard/HistoryGraph.qml" line="50" />
+      <source>Last 24 hours</source>
+      <translation>Viimeiset 24 tuntia</translation>
+    </message>
+    <message>
+      <location filename="../qml/dashboard/HistoryGraph.qml" line="51" />
+      <source>Last %1 hours</source>
+      <translation>Viimeiset %1 tuntia</translation>
+    </message>
+  </context>
+  <context>
     <name>HistoryGraphCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/HistoryGraphCard.qml" line="37" />
+      <location filename="../qml/dashboard/cards/HistoryGraphCard.qml" line="129" />
+      <source>No history</source>
+      <translation>Ei historiaa</translation>
+    </message>
+  </context>
+  <context>
+    <name>HistoryTimelinePage</name>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="27" />
       <source>History</source>
       <translation>Historia</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="28" />
+      <source>Last 24 hours</source>
+      <translation>Viimeiset 24 tuntia</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="29" />
+      <source>Last %1 hours</source>
+      <translation>Viimeiset %1 tuntia</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="34" />
+      <source>No history</source>
+      <translation>Ei historiaa</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="186" />
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="190" />
+      <source>Unknown</source>
+      <translation>Tuntematon</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="188" />
+      <source>Unavailable</source>
+      <translation>Ei saatavilla</translation>
     </message>
   </context>
   <context>
@@ -749,73 +810,88 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="48" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="60" />
       <source>Restart stream</source>
       <translation>Käynnistä stream uudelleen</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="135" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="377" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="127" />
+      <source>History</source>
+      <translation>Historia</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="138" />
+      <source>Last changed</source>
+      <translation>Viimeksi muuttunut</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="144" />
+      <source>Last updated</source>
+      <translation>Viimeksi päivitetty</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="172" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="414" />
       <source>Run</source>
       <translation>Suorita</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="136" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
       <source>Turn off</source>
       <translation>Sammuta</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="136" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
       <source>Turn on</source>
       <translation>Käynnistä</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="158" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="195" />
       <source>Brightness</source>
       <translation>Kirkkaus</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="190" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="227" />
       <source>Open</source>
       <translation>Avaa</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="194" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="231" />
       <source>Stop</source>
       <translation>Pysäytä</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="198" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="235" />
       <source>Close</source>
       <translation>Sulje</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="211" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="248" />
       <source>Position</source>
       <translation>Asento</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="225" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="262" />
       <source>Value</source>
       <translation>Arvo</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="231" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
       <source>Controls</source>
       <translation>Ohjaimet</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="241" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="278" />
       <source>Sensors</source>
       <translation>Anturit</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="251" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="288" />
       <source>Related</source>
       <translation>Liittyvät</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="261" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="298" />
       <source>Attributes</source>
       <translation>Attribuutit</translation>
     </message>
@@ -823,27 +899,37 @@
   <context>
     <name>NativeHomePage</name>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="323" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="391" />
       <source>Change dashboard</source>
       <translation>Vaihda kojelauta</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="329" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="397" />
       <source>Settings</source>
       <translation>Asetukset</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="333" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="401" />
       <source>Refresh</source>
       <translation>Päivitä</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="533" />
+      <source>This dashboard is empty or uses custom HTML that the native renderer cannot show.</source>
+      <translation>Tämä kojelauta on tyhjä tai käyttää mukautettua HTML:ää, jota natiivi renderöijä ei voi näyttää.</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/NativeHomePage.qml" line="538" />
+      <source>Change to webview based dashboards</source>
+      <translation>Vaihda webview-kojelautoihin</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
       <source>Loading dashboard…</source>
       <translation>Ladataan kojelautaa…</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
       <source>No views</source>
       <translation>Ei näkymiä</translation>
     </message>
@@ -1019,6 +1105,11 @@
       <translation>Käyttöliittymä</translation>
     </message>
     <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="307" />
+      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.</source>
+      <translation>Näytä Lovelace-kojelauta Silicana Home Assistantin web-käyttöliittymän sijaan. Päällä oletuksena. Mukautetut kortit ja energia avautuvat edelleen web-näkymässä.</translation>
+    </message>
+    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="368" />
       <source>Events View and Cover</source>
       <translation>Events View ja kansi</translation>
@@ -1052,11 +1143,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="34" />
       <source>System</source>
       <translation>Järjestelmä</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="307" />
-      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards and energy still open in the web view.</source>
-      <translation>Näytä Lovelace-kojelauta Silicana Home Assistantin web-käyttöliittymän sijaan. Oletuksena pois. Mukautetut kortit ja energia avautuvat edelleen web-näkymässä.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="314" />

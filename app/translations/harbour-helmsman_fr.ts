@@ -631,11 +631,72 @@
     </message>
   </context>
   <context>
+    <name>HistoryChart</name>
+    <message>
+      <location filename="../qml/dashboard/HistoryChart.qml" line="194" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="198" />
+      <source>Unknown</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/dashboard/HistoryChart.qml" line="196" />
+      <source>Unavailable</source>
+      <translation type="unfinished" />
+    </message>
+  </context>
+  <context>
+    <name>HistoryGraph</name>
+    <message>
+      <location filename="../qml/dashboard/HistoryGraph.qml" line="50" />
+      <source>Last 24 hours</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/dashboard/HistoryGraph.qml" line="51" />
+      <source>Last %1 hours</source>
+      <translation type="unfinished" />
+    </message>
+  </context>
+  <context>
     <name>HistoryGraphCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/HistoryGraphCard.qml" line="37" />
+      <location filename="../qml/dashboard/cards/HistoryGraphCard.qml" line="129" />
+      <source>No history</source>
+      <translation type="unfinished" />
+    </message>
+  </context>
+  <context>
+    <name>HistoryTimelinePage</name>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="27" />
       <source>History</source>
       <translation>Historique</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="28" />
+      <source>Last 24 hours</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="29" />
+      <source>Last %1 hours</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="34" />
+      <source>No history</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="186" />
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="190" />
+      <source>Unknown</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/HistoryTimelinePage.qml" line="188" />
+      <source>Unavailable</source>
+      <translation type="unfinished" />
     </message>
   </context>
   <context>
@@ -749,73 +810,88 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="48" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="60" />
       <source>Restart stream</source>
       <translation>Redémarrer le flux</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="135" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="377" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="127" />
+      <source>History</source>
+      <translation>Historique</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="138" />
+      <source>Last changed</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="144" />
+      <source>Last updated</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="172" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="414" />
       <source>Run</source>
       <translation>Exécuter</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="136" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
       <source>Turn off</source>
       <translation>Éteignez</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="136" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
       <source>Turn on</source>
       <translation>Allumez</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="158" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="195" />
       <source>Brightness</source>
       <translation>Luminosité</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="190" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="227" />
       <source>Open</source>
       <translation>Ouvert</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="194" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="231" />
       <source>Stop</source>
       <translation>Arrête</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="198" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="235" />
       <source>Close</source>
       <translation>Fermer</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="211" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="248" />
       <source>Position</source>
       <translation>Fonction</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="225" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="262" />
       <source>Value</source>
       <translation>Valeur</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="231" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
       <source>Controls</source>
       <translation>Contrôles</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="241" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="278" />
       <source>Sensors</source>
       <translation>Capteurs</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="251" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="288" />
       <source>Related</source>
       <translation>Autres</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="261" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="298" />
       <source>Attributes</source>
       <translation>Attributs</translation>
     </message>
@@ -823,27 +899,37 @@
   <context>
     <name>NativeHomePage</name>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="323" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="391" />
       <source>Change dashboard</source>
       <translation>Changer le tableau de bord</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="329" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="397" />
       <source>Settings</source>
       <translation>Paramètres</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="333" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="401" />
       <source>Refresh</source>
       <translation>Actualiser</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="533" />
+      <source>This dashboard is empty or uses custom HTML that the native renderer cannot show.</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/NativeHomePage.qml" line="538" />
+      <source>Change to webview based dashboards</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
       <source>Loading dashboard…</source>
       <translation>Chargement du tableau de bord</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="458" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
       <source>No views</source>
       <translation>Pas de vues</translation>
     </message>
@@ -1019,6 +1105,11 @@
       <translation>Interface</translation>
     </message>
     <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="307" />
+      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="368" />
       <source>Events View and Cover</source>
       <translation>Affichage et couverture des événements</translation>
@@ -1052,11 +1143,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="34" />
       <source>System</source>
       <translation>System</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="307" />
-      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards and energy still open in the web view.</source>
-      <translation>Renvoyez votre tableau de bord Lovelace comme Silica au lieu de l'interface web Home Assistant. Arrêt par défaut. Les cartes personnalisées et l'énergie sont toujours ouvertes dans la vue Web.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="314" />

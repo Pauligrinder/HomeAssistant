@@ -304,7 +304,7 @@ Page {
                             text: qsTr("Native dashboard")
                             automaticCheck: false
                             checked: hassClient.nativeDashboardEnabled
-                            description: qsTr("Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. Off by default. Custom cards and energy still open in the web view.")
+                            description: qsTr("Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.")
                             onClicked: hassClient.nativeDashboardEnabled = !checked
                         }
 
