@@ -147,17 +147,15 @@
   <context>
     <name>EntitiesCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="195" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="74" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="239" />
       <source>Run</source>
       <translation>Exécuter</translation>
     </message>
-  </context>
-  <context>
-    <name>EntityCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntityCard.qml" line="35" />
-      <source>Run</source>
-      <translation>Exécuter</translation>
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="238" />
+      <source>Running</source>
+      <translation type="unfinished" />
     </message>
   </context>
   <context>
@@ -397,48 +395,47 @@
   <context>
     <name>HassWebViewPage</name>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="91" />
+      <location filename="../qml/pages/HassWebViewPage.qml" line="94" />
       <source>Browser engine failed to load.</source>
       <translation>Échec du chargement du moteur de navigation.</translation>
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="93" />
+      <location filename="../qml/pages/HassWebViewPage.qml" line="96" />
       <source>Loading…</source>
       <translation>Chargement…</translation>
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="95" />
+      <location filename="../qml/pages/HassWebViewPage.qml" line="98" />
       <source>Preparing session...</source>
       <translation>Préparation de la session...</translation>
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="97" />
-      <source>Loading dashboard… %1%</source>
-      <translation>Chargement du tableau de bord… %1%</translation>
+      <location filename="../qml/pages/HassWebViewPage.qml" line="99" />
+      <source>Loading Settings…</source>
+      <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="99" />
       <location filename="../qml/pages/HassWebViewPage.qml" line="100" />
       <source>Loading dashboard…</source>
       <translation>Chargement du tableau de bord</translation>
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="606" />
+      <location filename="../qml/pages/HassWebViewPage.qml" line="716" />
       <source>Back to dashboard</source>
       <translation>Back to dashboard</translation>
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="607" />
+      <location filename="../qml/pages/HassWebViewPage.qml" line="717" />
       <source>Return to the native dashboard</source>
       <translation>Return to the native dashboard</translation>
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="1374" />
+      <location filename="../qml/pages/HassWebViewPage.qml" line="1503" />
       <source>Open settings</source>
       <translation>Ouvrir les paramètres</translation>
     </message>
     <message>
-      <location filename="../qml/pages/HassWebViewPage.qml" line="1383" />
+      <location filename="../qml/pages/HassWebViewPage.qml" line="1512" />
       <source>Select picture</source>
       <translation>Sélectionner l'image</translation>
     </message>
@@ -446,47 +443,53 @@
   <context>
     <name>Helmsman</name>
     <message>
-      <location filename="../src/hassclient.cpp" line="553" />
+      <location filename="../src/hassclient.cpp" line="593" />
       <source>System</source>
       <translation>System</translation>
     </message>
     <message>
-      <location filename="../src/hassclient.cpp" line="555" />
+      <location filename="../src/hassclient.cpp" line="595" />
       <source>English</source>
       <translation>English</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2851" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2940" />
       <source>Running %1</source>
       <translation>Exécution de %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2853" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2942" />
       <source>Wants to run %1</source>
       <translation>Voulez exécuter %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2855" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2944" />
       <source>Wants to perform this action</source>
       <translation>Voulait effectuer cette action</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2862" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2103" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2951" />
       <source>Run</source>
       <translation>Exécuter</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2863" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2102" />
+      <source>Running</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../src/lovelacecoordinator.cpp" line="2952" />
       <source>Allow</source>
       <translation>Autoriser</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2866" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2955" />
       <source>Cancel</source>
       <translation>Annuler</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2867" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2956" />
       <source>Deny</source>
       <translation>Refuser</translation>
     </message>
@@ -810,126 +813,146 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="60" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="84" />
       <source>Restart stream</source>
       <translation>Redémarrer le flux</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="127" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="151" />
       <source>History</source>
       <translation>Historique</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="138" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="162" />
       <source>Last changed</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="144" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="168" />
       <source>Last updated</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="172" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="414" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="196" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="649" />
       <source>Run</source>
       <translation>Exécuter</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
       <source>Turn off</source>
       <translation>Éteignez</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="173" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
       <source>Turn on</source>
       <translation>Allumez</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="195" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="455" />
       <source>Brightness</source>
       <translation>Luminosité</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="227" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="264" />
       <source>Open</source>
       <translation>Ouvert</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="231" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="220" />
+      <source>Lights</source>
+      <translation>Lumières</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
       <source>Stop</source>
       <translation>Arrête</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="235" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="272" />
       <source>Close</source>
       <translation>Fermer</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="248" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="285" />
       <source>Position</source>
       <translation>Fonction</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="262" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="299" />
       <source>Value</source>
       <translation>Valeur</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="305" />
       <source>Controls</source>
       <translation>Contrôles</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="278" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="315" />
       <source>Sensors</source>
       <translation>Capteurs</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="288" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="325" />
       <source>Related</source>
       <translation>Autres</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="298" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="335" />
       <source>Attributes</source>
       <translation>Attributs</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="472" />
+      <source>Temperature</source>
+      <translation>Température</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/MoreInfoPage.qml" line="504" />
+      <source>Color</source>
+      <translation>Couleur</translation>
     </message>
   </context>
   <context>
     <name>NativeHomePage</name>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="391" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="402" />
+      <source>Edit dashboard</source>
+      <translation type="unfinished" />
+    </message>
+    <message>
+      <location filename="../qml/pages/NativeHomePage.qml" line="416" />
       <source>Change dashboard</source>
       <translation>Changer le tableau de bord</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="397" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="422" />
       <source>Settings</source>
       <translation>Paramètres</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="401" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="426" />
       <source>Refresh</source>
       <translation>Actualiser</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="533" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="558" />
       <source>This dashboard is empty or uses custom HTML that the native renderer cannot show.</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="538" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="563" />
       <source>Change to webview based dashboards</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="576" />
       <source>Loading dashboard…</source>
       <translation>Chargement du tableau de bord</translation>
     </message>
     <message>
-      <location filename="../qml/pages/NativeHomePage.qml" line="551" />
+      <location filename="../qml/pages/NativeHomePage.qml" line="576" />
       <source>No views</source>
       <translation>Pas de vues</translation>
     </message>
