@@ -10,15 +10,50 @@ Item {
     property int fillHeight: 0
     property int columns: 12
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
-    property var rows: flow.packRows(flow.cards, flow.columns, flow.rev)
+    // Re-pack only when visibility or column span changes — not on every entity
+    // state tick (that was destroying CardLoaders after MoreInfo).
+    readonly property string rowLayoutKey: {
+        var _ = flow.rev
+        var list = flow.cards || []
+        var key = ""
+        for (var i = 0; i < list.length; ++i) {
+            var c = list[i]
+            if (!c)
+                continue
+            if (flow.dashboard && !flow.dashboard.cardVisible(c))
+                key += "h"
+            else
+                key += "v" + String(c._columns ? c._columns : 12)
+            key += ";"
+        }
+        return key
+    }
+    property string _cachedRowLayoutKey: ""
+    property var _cachedCardsSource: null
+    property var _cachedRows: []
+    property var rows: flow._cachedRows
 
     width: parent ? parent.width : Screen.width
     implicitHeight: column.height
     height: implicitHeight
 
-    // rev is unused here beyond forcing a re-pack when card visibility
-    // conditions change with entity state.
-    function packRows(list, colCount, rev) {
+    onRowLayoutKeyChanged: flow.repackRows()
+    onCardsChanged: flow.repackRows()
+    onColumnsChanged: flow.repackRows()
+    Component.onCompleted: flow.repackRows()
+
+    function repackRows() {
+        var key = flow.rowLayoutKey + "|" + String(flow.columns)
+        var cardsRef = flow.cards
+        if (key === flow._cachedRowLayoutKey && flow._cachedRows.length
+                && cardsRef === flow._cachedCardsSource)
+            return
+        flow._cachedRowLayoutKey = key
+        flow._cachedCardsSource = cardsRef
+        flow._cachedRows = flow.packRows(flow.cards, flow.columns)
+    }
+
+    function packRows(list, colCount) {
         var src = list || []
         var packed = []
         var row = []

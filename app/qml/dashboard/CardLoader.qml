@@ -13,6 +13,9 @@ Loader {
     property int unitWidth: parent ? parent.width : width
     readonly property int rowUnit: Theme.itemSizeSmall
     readonly property int minHeight: {
+        // Grid square: true forces each cell to match its computed width.
+        if (card && card._square)
+            return Math.round(loader.width)
         var rows = (card && card._rows) ? Number(card._rows) : 0
         if (rows <= 0)
             return 0
@@ -29,7 +32,12 @@ Loader {
     property bool sourceReady: false
 
     visible: cardIsVisible
-    height: Math.max(loader.naturalHeight, loader.rowHeight, loader.fillHeight)
+    height: {
+        // Force a true square cell; do not let taller content stretch the row.
+        if (card && card._square)
+            return Math.round(loader.width)
+        return Math.max(loader.naturalHeight, loader.rowHeight, loader.fillHeight)
+    }
     width: {
         var cols = (card && card._columns) ? card._columns : 12
         var span = Math.min(loader.columns, Math.max(1, cols))
@@ -44,12 +52,15 @@ Loader {
     function loadCard() {
         if (!loader.sourceReady)
             return
+        var fill = Math.max(loader.fillHeight, loader.rowHeight)
+        if (card && card._square)
+            fill = Math.round(loader.width)
         loader.setSource(loader.cardSource, {
                              "card": loader.card,
                              "dashboard": loader.dashboard,
                              "hassClient": loader.hassClient,
                              "mdiIcons": loader.mdiIcons,
-                             "fillHeight": Math.max(loader.fillHeight, loader.rowHeight),
+                             "fillHeight": fill,
                              "minContentHeight": loader.minHeight
                          })
     }
@@ -70,6 +81,8 @@ Loader {
         item.mdiIcons = Qt.binding(function() { return loader.mdiIcons })
         item.width = Qt.binding(function() { return loader.width })
         item.fillHeight = Qt.binding(function() {
+            if (loader.card && loader.card._square)
+                return Math.round(loader.width)
             return Math.max(loader.fillHeight, loader.rowHeight)
         })
         if (item.minContentHeight !== undefined)

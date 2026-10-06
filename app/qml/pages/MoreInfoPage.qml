@@ -19,10 +19,24 @@ Page {
                                         && Math.abs(page.latitude) <= 90
                                         && Math.abs(page.longitude) <= 180
                                         && !(page.latitude === 0 && page.longitude === 0)
+    readonly property var lightGroupMembers: page.lightMemberIds(page.entityId)
     readonly property var relatedIds: {
         if (!dashboard || page.rev < 0 || !page.entityId.length)
             return []
-        return dashboard.relatedEntities(page.entityId) || []
+        var related = dashboard.relatedEntities(page.entityId) || []
+        var members = page.lightGroupMembers
+        if (!members.length)
+            return related
+        var skip = {}
+        for (var i = 0; i < members.length; ++i)
+            skip[String(members[i])] = true
+        var out = []
+        for (var j = 0; j < related.length; ++j) {
+            var id = String(related[j] || "")
+            if (id.length && !skip[id])
+                out.push(id)
+        }
+        return out
     }
     readonly property var relatedControls: {
         var ids = page.relatedIds
@@ -40,6 +54,16 @@ Page {
     readonly property bool showHistoryTimeline: page.entityId.length > 0
                                                 && page.domain !== "camera"
                                                 && !page.numericHistory
+    readonly property var lightColorSwatches: [
+        { "r": 255, "g": 0, "b": 0 },
+        { "r": 255, "g": 128, "b": 0 },
+        { "r": 255, "g": 220, "b": 0 },
+        { "r": 0, "g": 200, "b": 0 },
+        { "r": 0, "g": 200, "b": 220 },
+        { "r": 0, "g": 80, "b": 255 },
+        { "r": 140, "g": 0, "b": 255 },
+        { "r": 255, "g": 0, "b": 160 }
+    ]
     property int clockTick: 0
 
     Timer {
@@ -182,19 +206,32 @@ Page {
                 }
             }
 
-            Slider {
+            Loader {
                 width: parent.width
-                visible: page.domain === "light" && page.on
-                minimumValue: 0
-                maximumValue: 100
-                value: {
-                    var b = (dashboard && page.rev >= 0)
-                            ? Number(dashboard.attribute(page.entityId, "brightness")) : 0
-                    return b ? Math.round(b * 100 / 255) : 0
+                active: page.domain === "light"
+                sourceComponent: lightControlsComp
+                onLoaded: {
+                    item.targetId = Qt.binding(function() { return page.entityId })
+                    item.showMemberHeader = false
                 }
-                label: qsTr("Brightness")
-                onReleased: dashboard.callService("light", "turn_on",
-                                                  { "brightness_pct": Math.round(value) }, page.entityId)
+            }
+
+            SectionHeader {
+                text: qsTr("Lights")
+                visible: page.lightGroupMembers.length > 0
+            }
+
+            Repeater {
+                model: page.lightGroupMembers
+                Loader {
+                    width: column.width
+                    property string memberId: String(modelData || "")
+                    sourceComponent: lightControlsComp
+                    onLoaded: {
+                        item.targetId = Qt.binding(function() { return memberId })
+                        item.showMemberHeader = true
+                    }
+                }
             }
 
             Row {
@@ -316,6 +353,204 @@ Page {
             stream: dashboard ? dashboard.cameraStream : null
             entityId: page.entityId
             active: page.status === PageStatus.Active
+        }
+    }
+
+    Component {
+        id: lightControlsComp
+        Column {
+            id: controls
+            width: parent ? parent.width : Screen.width
+            spacing: Theme.paddingSmall
+            property string targetId: ""
+            property bool showMemberHeader: false
+            readonly property int rev: page.rev
+            readonly property bool on: dashboard && controls.rev >= 0 && controls.targetId.length
+                                      ? dashboard.isOn(controls.targetId) : false
+            readonly property bool supportsBrightness: page.lightIsDimmable(controls.targetId)
+            readonly property bool supportsColorTemp: page.lightHasColorTemp(controls.targetId)
+            readonly property bool supportsColor: page.lightHasColor(controls.targetId)
+            readonly property int minKelvin: page.lightColorTempMinK(controls.targetId)
+            readonly property int maxKelvin: page.lightColorTempMaxK(controls.targetId)
+            readonly property var colorChoices: page.lightColorChoicesFor(controls.targetId)
+
+            BackgroundItem {
+                id: memberHeader
+                width: parent.width
+                height: visible ? Theme.itemSizeSmall : 0
+                visible: controls.showMemberHeader && controls.targetId.length > 0
+                onClicked: {
+                    if (!controls.targetId.length || controls.targetId === page.entityId)
+                        return
+                    pageStack.push(Qt.resolvedUrl("MoreInfoPage.qml"), {
+                                       hassClient: page.hassClient,
+                                       mdiIcons: page.mdiIcons,
+                                       entityId: controls.targetId
+                                   })
+                }
+
+                Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.horizontalPageMargin
+                    anchors.rightMargin: Theme.horizontalPageMargin
+                    spacing: Theme.paddingSmall
+
+                    Item {
+                        y: (parent.height - height) / 2
+                        width: Theme.iconSizeSmall
+                        height: Theme.iconSizeSmall
+
+                        MdiIcon {
+                            anchors.fill: parent
+                            mdiIcons: page.mdiIcons
+                            name: (dashboard && controls.rev >= 0 && controls.targetId.length)
+                                  ? dashboard.entityIcon(controls.targetId) : ""
+                            iconColor: controls.on ? Theme.highlightColor : Theme.primaryColor
+                            width: Theme.iconSizeSmall
+                            opacity: (dashboard && controls.rev >= 0 && controls.targetId.length
+                                      && dashboard.isPending(controls.targetId)) ? 0.55 : 1.0
+                        }
+
+                        PendingIndicator {
+                            anchors.centerIn: parent
+                            dashboard: page.dashboard
+                            entityId: controls.targetId
+                        }
+                    }
+
+                    Label {
+                        y: (parent.height - height) / 2
+                        width: Math.max(0, parent.width - Theme.iconSizeSmall - Theme.paddingSmall
+                                        - memberToggle.width - Theme.paddingSmall)
+                        text: (dashboard && controls.rev >= 0 && controls.targetId.length)
+                              ? dashboard.friendlyName(controls.targetId) : controls.targetId
+                        truncationMode: TruncationMode.Fade
+                        font.pixelSize: Theme.fontSizeSmall
+                        color: Theme.primaryColor
+                    }
+
+                    Switch {
+                        id: memberToggle
+                        y: (parent.height - height) / 2
+                        automaticCheck: false
+                        checked: controls.on
+                        onClicked: {
+                            if (dashboard && controls.targetId.length)
+                                dashboard.toggle(controls.targetId)
+                        }
+                    }
+                }
+            }
+
+            Slider {
+                width: parent.width
+                visible: controls.supportsBrightness && controls.on
+                minimumValue: 0
+                maximumValue: 100
+                value: {
+                    var b = (dashboard && controls.rev >= 0 && controls.targetId.length)
+                            ? Number(dashboard.attribute(controls.targetId, "brightness")) : 0
+                    return b ? Math.round(b * 100 / 255) : 0
+                }
+                label: qsTr("Brightness")
+                onReleased: {
+                    if (dashboard && controls.targetId.length)
+                        dashboard.callService("light", "turn_on",
+                                              { "brightness_pct": Math.round(value) },
+                                              controls.targetId)
+                }
+            }
+
+            Slider {
+                id: temperature
+                width: parent.width
+                visible: controls.supportsColorTemp && controls.on
+                minimumValue: controls.minKelvin
+                maximumValue: controls.maxKelvin
+                stepSize: 50
+                valueText: Math.round(value) + " K"
+                label: qsTr("Temperature")
+
+                Binding {
+                    target: temperature
+                    property: "value"
+                    value: {
+                        var k = page.lightCurrentKelvin(controls.targetId)
+                        if (k <= 0)
+                            return (temperature.minimumValue + temperature.maximumValue) / 2
+                        return k
+                    }
+                    when: !temperature.down
+                }
+
+                onReleased: {
+                    if (dashboard && controls.targetId.length)
+                        dashboard.callService("light", "turn_on",
+                                              { "color_temp_kelvin": Math.round(value) },
+                                              controls.targetId)
+                }
+            }
+
+            Column {
+                width: parent.width
+                spacing: Theme.paddingSmall
+                visible: controls.supportsColor && controls.on
+
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    color: Theme.secondaryColor
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    text: qsTr("Color")
+                }
+
+                Row {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2 * Theme.horizontalPageMargin
+                    spacing: Theme.paddingSmall
+
+                    Repeater {
+                        model: controls.colorChoices
+                        delegate: Rectangle {
+                            readonly property int swatchCount: controls.colorChoices.length
+                            width: {
+                                var n = swatchCount
+                                var gap = Theme.paddingSmall
+                                if (n <= 0)
+                                    return Theme.iconSizeSmall
+                                return Math.max(Theme.iconSizeSmall,
+                                                Math.floor((parent.width - (n - 1) * gap) / n))
+                            }
+                            height: width
+                            radius: Theme.paddingSmall
+                            color: Qt.rgba(modelData.r / 255,
+                                           modelData.g / 255,
+                                           modelData.b / 255, 1)
+                            property bool selected: page.lightColorSwatchSelected(controls.targetId,
+                                                                                  modelData)
+                            property bool isWhite: modelData.r === 255
+                                                   && modelData.g === 255
+                                                   && modelData.b === 255
+                            border.width: selected ? 3 : (isWhite ? 1 : 0)
+                            border.color: selected
+                                          ? (isWhite ? "#222222" : "#FFFFFF")
+                                          : "#80FFFFFF"
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    if (dashboard && controls.targetId.length)
+                                        dashboard.callService("light", "turn_on",
+                                                              { "rgb_color": [modelData.r,
+                                                                              modelData.g,
+                                                                              modelData.b] },
+                                                              controls.targetId)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -461,6 +696,227 @@ Page {
             return false
         var features = Number(dashboard.attribute(page.entityId, "supported_features"))
         return (features & 1) === 1
+    }
+
+    function lightSupportedColorModes(id) {
+        if (!dashboard || page.rev < 0 || !id)
+            return []
+        var modes = dashboard.attribute(id, "supported_color_modes")
+        if (!modes || !modes.length)
+            return []
+        var out = []
+        for (var i = 0; i < modes.length; ++i) {
+            var mode = String(modes[i] || "")
+            if (mode.length)
+                out.push(mode)
+        }
+        return out
+    }
+
+    function lightModesContain(id, wanted) {
+        var modes = page.lightSupportedColorModes(id)
+        for (var i = 0; i < wanted.length; ++i) {
+            for (var j = 0; j < modes.length; ++j) {
+                if (modes[j] === wanted[i])
+                    return true
+            }
+        }
+        return false
+    }
+
+    function lightIsDimmable(id) {
+        if (!dashboard || page.rev < 0 || !id)
+            return false
+        var modes = page.lightSupportedColorModes(id)
+        for (var i = 0; i < modes.length; ++i) {
+            if (modes[i] !== "onoff")
+                return true
+        }
+        var brightness = dashboard.attribute(id, "brightness")
+        if (brightness !== undefined && brightness !== null && isFinite(Number(brightness)))
+            return true
+        var features = Number(dashboard.attribute(id, "supported_features"))
+        return (features & 1) !== 0
+    }
+
+    function lightHasColorTemp(id) {
+        if (!dashboard || page.rev < 0 || !id)
+            return false
+        if (page.lightModesContain(id, ["color_temp"]))
+            return true
+        var features = Number(dashboard.attribute(id, "supported_features"))
+        return (features & 2) !== 0
+    }
+
+    function lightHasColor(id) {
+        if (!dashboard || page.rev < 0 || !id)
+            return false
+        if (page.lightModesContain(id, ["hs", "xy", "rgb", "rgbw", "rgbww"]))
+            return true
+        var features = Number(dashboard.attribute(id, "supported_features"))
+        return (features & 16) !== 0
+    }
+
+    function lightColorChoicesFor(id) {
+        var list = []
+        var src = page.lightColorSwatches
+        for (var i = 0; i < src.length; ++i)
+            list.push(src[i])
+        if (!page.lightHasColorTemp(id))
+            list.push({ "r": 255, "g": 255, "b": 255 })
+        return list
+    }
+
+    function lightMiredsToKelvin(mireds) {
+        var m = Number(mireds)
+        if (!isFinite(m) || m <= 0)
+            return 0
+        return Math.max(1000, Math.min(10000, Math.round(1000000 / m)))
+    }
+
+    function lightColorTempRangeK(id) {
+        var minK = 0
+        var maxK = 0
+        if (dashboard && page.rev >= 0 && id) {
+            minK = Number(dashboard.attribute(id, "min_color_temp_kelvin"))
+            maxK = Number(dashboard.attribute(id, "max_color_temp_kelvin"))
+            if (!isFinite(minK) || minK <= 0 || !isFinite(maxK) || maxK <= 0) {
+                var minMireds = Number(dashboard.attribute(id, "min_mireds"))
+                var maxMireds = Number(dashboard.attribute(id, "max_mireds"))
+                if ((!isFinite(minK) || minK <= 0) && isFinite(maxMireds) && maxMireds > 0)
+                    minK = page.lightMiredsToKelvin(maxMireds)
+                if ((!isFinite(maxK) || maxK <= 0) && isFinite(minMireds) && minMireds > 0)
+                    maxK = page.lightMiredsToKelvin(minMireds)
+            }
+        }
+        if (!isFinite(minK) || minK <= 0)
+            minK = 2000
+        if (!isFinite(maxK) || maxK <= 0)
+            maxK = 6500
+        if (minK > maxK) {
+            var tmp = minK
+            minK = maxK
+            maxK = tmp
+        }
+        return { min: Math.round(minK), max: Math.round(maxK) }
+    }
+
+    function lightColorTempMinK(id) {
+        return page.lightColorTempRangeK(id).min
+    }
+
+    function lightColorTempMaxK(id) {
+        return page.lightColorTempRangeK(id).max
+    }
+
+    function lightCurrentKelvin(id) {
+        if (!dashboard || page.rev < 0 || !id)
+            return 0
+        var k = Number(dashboard.attribute(id, "color_temp_kelvin"))
+        if (isFinite(k) && k > 0)
+            return Math.round(k)
+        var mireds = Number(dashboard.attribute(id, "color_temp"))
+        if (isFinite(mireds) && mireds > 0)
+            return page.lightMiredsToKelvin(mireds)
+        return 0
+    }
+
+    function lightCurrentRgb(id) {
+        if (!dashboard || page.rev < 0 || !id)
+            return null
+        var rgb = dashboard.attribute(id, "rgb_color")
+        if (rgb && rgb.length >= 3) {
+            return {
+                r: Math.max(0, Math.min(255, Math.round(Number(rgb[0]) || 0))),
+                g: Math.max(0, Math.min(255, Math.round(Number(rgb[1]) || 0))),
+                b: Math.max(0, Math.min(255, Math.round(Number(rgb[2]) || 0)))
+            }
+        }
+        var hs = dashboard.attribute(id, "hs_color")
+        if (!hs || hs.length < 2)
+            return null
+        var hue = ((Number(hs[0]) % 360) + 360) % 360
+        var sat = Math.max(0, Math.min(100, Number(hs[1]))) / 100
+        var c = sat
+        var x = c * (1 - Math.abs((hue / 60) % 2 - 1))
+        var r = 0, g = 0, b = 0
+        if (hue < 60) { r = c; g = x }
+        else if (hue < 120) { r = x; g = c }
+        else if (hue < 180) { g = c; b = x }
+        else if (hue < 240) { g = x; b = c }
+        else if (hue < 300) { r = x; b = c }
+        else { r = c; b = x }
+        return {
+            r: Math.round(r * 255),
+            g: Math.round(g * 255),
+            b: Math.round(b * 255)
+        }
+    }
+
+    function lightColorSwatchSelected(id, swatch) {
+        if (!swatch || !dashboard || page.rev < 0 || !id)
+            return false
+        var mode = String(dashboard.attribute(id, "color_mode") || "")
+        if (mode === "color_temp")
+            return false
+        var rgb = page.lightCurrentRgb(id)
+        if (!rgb)
+            return false
+        return Math.abs(rgb.r - swatch.r) < 40
+                && Math.abs(rgb.g - swatch.g) < 40
+                && Math.abs(rgb.b - swatch.b) < 40
+    }
+
+    function normalizeEntityIdList(raw) {
+        var out = []
+        if (raw === undefined || raw === null)
+            return out
+        if (typeof raw === "string") {
+            if (raw.length)
+                out.push(raw)
+            return out
+        }
+        if (!raw.length)
+            return out
+        for (var i = 0; i < raw.length; ++i) {
+            var item = raw[i]
+            if (item === undefined || item === null)
+                continue
+            if (typeof item === "string") {
+                if (item.length)
+                    out.push(item)
+                continue
+            }
+            if (typeof item === "object") {
+                var entity = String(item.entity || item.entity_id || "")
+                if (entity.length)
+                    out.push(entity)
+            }
+        }
+        return out
+    }
+
+    function lightMemberIds(groupId) {
+        if (!dashboard || page.rev < 0 || !groupId)
+            return []
+        if (dashboard.domainOf(groupId) !== "light")
+            return []
+        var ids = page.normalizeEntityIdList(dashboard.attribute(groupId, "entity_id"))
+        var out = []
+        var seen = {}
+        for (var i = 0; i < ids.length; ++i) {
+            var id = String(ids[i] || "")
+            if (!id || id === groupId || seen[id])
+                continue
+            if (dashboard.domainOf(id) !== "light")
+                continue
+            var st = dashboard.entity(id)
+            if (!st || !st.state)
+                continue
+            seen[id] = true
+            out.push(id)
+        }
+        return out
     }
 
     function coordNumber(value) {

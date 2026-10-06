@@ -38,3 +38,4 @@ app/translations/.fill-cache/
 # CI build scratch trees
 .ci-work-*/
 RPMS/
+.resume.sh

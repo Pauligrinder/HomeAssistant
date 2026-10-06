@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.1
+Version:    0.4.2
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,14 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Tue Oct 06 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.2-1
+- Edit dashboard from the native pulley opens that dashboard in the webview
+  in edit mode, for administrators on storage-mode dashboards only.
+- More-info lights: brightness, color temperature, color, and group members.
+- Picture-card titles and grid layout survive opening More info; entity rows
+  show action buttons.
+- Keep a separate webview blur snapshot per dashboard and for Settings.
+
 * Wed Sep 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.1-1
 - Native Silica Lovelace is the default home screen; empty or custom-HTML
   dashboards offer a switch back to webview-based dashboards.

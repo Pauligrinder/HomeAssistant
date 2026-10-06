@@ -58,7 +58,6 @@ class HassClient : public QObject
     Q_PROPERTY(QString deviceName READ deviceName NOTIFY deviceNameChanged)
     Q_PROPERTY(bool mobileAppRegistered READ mobileAppRegistered NOTIFY mobileAppRegisteredChanged)
     Q_PROPERTY(bool pushConnected READ pushConnected NOTIFY pushConnectedChanged)
-    Q_PROPERTY(QString dashboardSnapshotPath READ dashboardSnapshotPath CONSTANT)
     Q_PROPERTY(SensorCoordinator *sensors READ sensors CONSTANT)
     Q_PROPERTY(WidgetCoordinator *widget READ widget CONSTANT)
     Q_PROPERTY(LovelaceCoordinator *lovelace READ lovelace CONSTANT)
@@ -106,7 +105,7 @@ public:
     QString deviceName() const;
     bool mobileAppRegistered() const;
     bool pushConnected() const;
-    QString dashboardSnapshotPath() const;
+    Q_INVOKABLE QString dashboardSnapshotPath(const QString &key) const;
     SensorCoordinator *sensors() const;
     WidgetCoordinator *widget() const;
     LovelaceCoordinator *lovelace() const;
@@ -154,8 +153,8 @@ public slots:
     void updateNetworkState(bool wifiReady, bool wifiConnected, const QString &ssid);
     void applyEndpointNow();
     void refreshAccessToken();
-    void rememberDashboardSnapshot(const QString &baseUrl);
-    bool dashboardSnapshotMatches(const QString &baseUrl) const;
+    Q_INVOKABLE void rememberDashboardSnapshot(const QString &baseUrl, const QString &key);
+    Q_INVOKABLE bool dashboardSnapshotMatches(const QString &baseUrl, const QString &key) const;
     void clearDashboardSnapshot();
     void notifyAppForegrounded();
     void notifyDashboardReady();

@@ -327,6 +327,46 @@ QString snapshotMetaPath()
     return cacheDirectory() + QStringLiteral("/dashboard-snapshot.url");
 }
 
+QString snapshotDirectory()
+{
+    const QString dir = cacheDirectory() + QStringLiteral("/dashboard-snapshots");
+    QDir().mkpath(dir);
+    return dir;
+}
+
+QString sanitizeSnapshotKey(const QString &key)
+{
+    QString path = key.trimmed();
+    if (path.startsWith(QLatin1Char('/')))
+        path = path.mid(1);
+    if (path.endsWith(QLatin1Char('/')) && path.size() > 1)
+        path.chop(1);
+    if (path.isEmpty())
+        path = QStringLiteral("lovelace");
+
+    // Settings root aliases share one snapshot.
+    if (path == QLatin1String("config") || path == QLatin1String("config/dashboard"))
+        path = QStringLiteral("config");
+
+    QString out;
+    out.reserve(path.size());
+    for (int i = 0; i < path.size(); ++i) {
+        const QChar c = path.at(i);
+        if (c.isLetterOrNumber()) {
+            out.append(c.toLower());
+        } else if (!out.isEmpty() && !out.endsWith(QLatin1Char('-'))) {
+            out.append(QLatin1Char('-'));
+        }
+    }
+    while (out.endsWith(QLatin1Char('-')))
+        out.chop(1);
+    if (out.isEmpty())
+        out = QStringLiteral("lovelace");
+    if (out.size() > 96)
+        out = out.left(96);
+    return out;
+}
+
 QString sanitizeUiLanguage(const QString &language)
 {
     QString tag = language.trimmed();
@@ -690,13 +730,15 @@ bool HassClient::preloadWebViewEmbed()
     return handle != nullptr;
 }
 
-QString HassClient::dashboardSnapshotPath() const
+QString HassClient::dashboardSnapshotPath(const QString &key) const
 {
-    return cacheDirectory() + QStringLiteral("/dashboard-snapshot.png");
+    const QString safe = sanitizeSnapshotKey(key);
+    return snapshotDirectory() + QLatin1Char('/') + safe + QStringLiteral(".png");
 }
 
-void HassClient::rememberDashboardSnapshot(const QString &baseUrl)
+void HassClient::rememberDashboardSnapshot(const QString &baseUrl, const QString &key)
 {
+    Q_UNUSED(key);
     QSaveFile file(snapshotMetaPath());
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return;
@@ -704,18 +746,23 @@ void HassClient::rememberDashboardSnapshot(const QString &baseUrl)
     file.commit();
 }
 
-bool HassClient::dashboardSnapshotMatches(const QString &baseUrl) const
+bool HassClient::dashboardSnapshotMatches(const QString &baseUrl, const QString &key) const
 {
     Q_UNUSED(baseUrl);
     // Cleared on sign-out. Do not require an exact base URL match — that
     // dropped the blur after internal/external switches and QUrl rebuilds.
-    return QFile::exists(dashboardSnapshotPath());
+    return QFile::exists(dashboardSnapshotPath(key));
 }
 
 void HassClient::clearDashboardSnapshot()
 {
-    QFile::remove(dashboardSnapshotPath());
+    QFile::remove(cacheDirectory() + QStringLiteral("/dashboard-snapshot.png"));
     QFile::remove(snapshotMetaPath());
+    QDir dir(snapshotDirectory());
+    const QStringList files = dir.entryList(QStringList() << QStringLiteral("*.png"),
+                                            QDir::Files);
+    for (int i = 0; i < files.size(); ++i)
+        dir.remove(files.at(i));
 }
 
 QVariantMap HassClient::readLocalImage(const QString &path) const
