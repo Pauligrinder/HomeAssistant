@@ -11,6 +11,26 @@ CardChrome {
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     contentTopMargin: 0
     contentBottomMargin: 0
+    contentHorizontalMargin: 0
+    readonly property bool lightAmbience: Theme.colorScheme === Theme.DarkOnLight
+    readonly property bool showName: !card || card.show_name !== false
+    readonly property bool showState: !card || card.show_state !== false
+    readonly property bool showOverlay: root.showName || root.showState
+    readonly property string nameText: {
+        var _ = root.rev
+        if (card && card.name !== undefined && card.name !== null
+                && String(card.name).length)
+            return String(card.name)
+        if (root.entityId.length && dashboard && root.rev >= 0)
+            return dashboard.friendlyName(root.entityId)
+        return root.entityId
+    }
+    readonly property string stateText: {
+        var _ = root.rev
+        if (!root.entityId.length || !dashboard || root.rev < 0)
+            return ""
+        return dashboard.formatState(root.entityId)
+    }
 
     function mediaPath() {
         if (!dashboard)
@@ -42,8 +62,6 @@ CardChrome {
         return match[2] === "%" ? value / 100 : value
     }
 
-    // A full hue turn is 1.0 for HueSaturation, and its saturation and
-    // lightness are offsets around 0 rather than CSS multipliers.
     readonly property real filterHue: (root.cssAmount(root.stateFilter, "hue-rotate", 0) % 360) / 360
     readonly property real filterSaturation: Math.max(-1, Math.min(1,
             root.cssAmount(root.stateFilter, "saturate", 1) - 1
@@ -60,10 +78,10 @@ CardChrome {
                 root.imageUrl = fileUrl
         }
         onEntityChanged: {
+            // Signal arg is also named entityId — compare against the card's.
             if (entityId === root.entityId)
                 root.refresh()
         }
-        onStatesRevisionChanged: root.refresh()
     }
 
     function refresh() {
@@ -83,54 +101,83 @@ CardChrome {
 
     Item {
         id: pictureArea
-        x: -Theme.paddingMedium
         width: root.width
-        height: Math.max(Theme.itemSizeExtraLarge, width * 0.5)
+        height: root.fillHeight > 0
+                ? root.fillHeight
+                : Math.max(Theme.itemSizeExtraLarge, width * 0.5)
 
-        Image {
-            id: picture
+        // Default path: RoundedImage (no cached FBO over the footer).
+        RoundedImage {
             anchors.fill: parent
-            fillMode: Image.PreserveAspectCrop
+            visible: root.stateFilter.length === 0
             source: root.imageUrl
-            visible: false
+            cornerRadius: root.radius
+            roundBottom: !root.showOverlay
+            fillMode: Image.PreserveAspectCrop
         }
 
-        Loader {
-            id: filterLoader
+        // Filtered path only when state_filter is set.
+        Item {
             anchors.fill: parent
-            active: root.stateFilter.length > 0 && root.imageUrl.length > 0
-            source: Qt.resolvedUrl("../PictureFilter.qml")
-            visible: false
-            onLoaded: {
-                item.source = picture
-                item.filterHue = Qt.binding(function() { return root.filterHue })
-                item.filterSaturation = Qt.binding(function() { return root.filterSaturation })
-                item.filterLightness = Qt.binding(function() { return root.filterLightness })
+            visible: root.stateFilter.length > 0
+
+            Image {
+                id: picture
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectCrop
+                source: root.imageUrl
+                visible: false
+            }
+
+            Loader {
+                id: filterLoader
+                anchors.fill: parent
+                active: root.stateFilter.length > 0 && root.imageUrl.length > 0
+                source: Qt.resolvedUrl("../PictureFilter.qml")
+                visible: false
+                onLoaded: {
+                    item.source = picture
+                    item.filterHue = Qt.binding(function() { return root.filterHue })
+                    item.filterSaturation = Qt.binding(function() { return root.filterSaturation })
+                    item.filterLightness = Qt.binding(function() { return root.filterLightness })
+                }
+            }
+
+            Rectangle {
+                id: pictureMask
+                anchors.fill: parent
+                radius: root.radius
+                visible: false
+
+                // Square the bottom under the footer so no dark crescent shows.
+                Rectangle {
+                    visible: root.showOverlay
+                    y: parent.height - root.radius
+                    width: parent.width
+                    height: root.radius
+                    color: parent.color
+                }
+            }
+
+            OpacityMask {
+                anchors.fill: parent
+                source: filterLoader.item ? filterLoader.item : picture
+                maskSource: pictureMask
+                opacity: root.filterOpacity
+                cached: false
             }
         }
 
-        Rectangle {
-            id: pictureMask
-            anchors.fill: parent
-            radius: root.radius
-            visible: false
-        }
-
-        OpacityMask {
-            anchors.fill: parent
-            source: filterLoader.item ? filterLoader.item : picture
-            maskSource: pictureMask
-            opacity: root.filterOpacity
-            cached: true
-        }
-
+        // Flat bar — no radius/cover strip (that stacked into a darker band).
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             height: overlay.height + 2 * Theme.paddingSmall
-            color: "black"
-            opacity: overlay.visible ? 0.45 : 0
+            visible: root.showOverlay
+            z: 10
+            color: root.lightAmbience ? "#FFFFFF" : "#000000"
+            opacity: 0.55
         }
 
         Column {
@@ -139,29 +186,23 @@ CardChrome {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.margins: Theme.paddingSmall
-            visible: nameLabel.visible || stateLabel.visible
+            visible: root.showOverlay
+            z: 11
 
             Label {
-                id: nameLabel
                 width: parent.width
-                visible: !card || card.show_name !== false
-                text: {
-                    if (card && card.name)
-                        return String(card.name)
-                    return (dashboard && root.rev >= 0)
-                            ? dashboard.friendlyName(entityId) : entityId
-                }
-                color: "white"
+                visible: root.showName
+                text: root.nameText
+                color: root.lightAmbience ? "#111111" : "#FFFFFF"
                 truncationMode: TruncationMode.Fade
+                font.pixelSize: Theme.fontSizeSmall
             }
 
             Label {
-                id: stateLabel
                 width: parent.width
-                visible: !card || card.show_state !== false
-                text: (dashboard && root.rev >= 0)
-                      ? dashboard.formatState(entityId) : ""
-                color: "white"
+                visible: root.showState
+                text: root.stateText
+                color: root.lightAmbience ? "#333333" : "#F0F0F0"
                 font.pixelSize: Theme.fontSizeExtraSmall
                 truncationMode: TruncationMode.Fade
             }

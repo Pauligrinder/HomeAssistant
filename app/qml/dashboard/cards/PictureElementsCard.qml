@@ -10,10 +10,86 @@ CardChrome {
     readonly property int rev: dashboard ? dashboard.statesRevision : 0
     contentTopMargin: 0
     contentBottomMargin: 0
+    contentHorizontalMargin: 0
+    // Sailfish DarkOnLight = light ambience (dark text); LightOnDark = dark.
+    readonly property bool lightAmbience: Theme.colorScheme === Theme.DarkOnLight
+    readonly property string footerEntityId: {
+        if (card && card.entity)
+            return String(card.entity)
+        if (card && card.image_entity)
+            return String(card.image_entity)
+        if (card && card.camera_image)
+            return String(card.camera_image)
+        return ""
+    }
+    // Keep the last good title. onCardChanged can briefly see an empty map
+    // after MoreInfo and would otherwise wipe the footer.
+    property string heldTitle: ""
+    readonly property string footerTitle: {
+        var t = root.resolveFooterTitle()
+        return t.length ? t : root.heldTitle
+    }
+    readonly property bool showFooterTitle: root.footerTitle.length > 0
+    readonly property bool showFooterState: {
+        if (!root.footerEntityId.length || !dashboard || root.rev < 0)
+            return false
+        return !!(card && card.show_state === true)
+    }
+    readonly property bool showFooterName: {
+        if (!root.footerEntityId.length || !dashboard || root.rev < 0)
+            return false
+        return !!(card && card.show_name === true)
+            && !root.showFooterTitle
+    }
+    readonly property bool showFooter: root.showFooterTitle || root.showFooterName
+                                      || root.showFooterState
+
+    function resolveFooterTitle() {
+        if (!card)
+            return ""
+        if (dashboard && dashboard.cardTitle) {
+            var fromDash = dashboard.cardTitle(card)
+            if (fromDash && String(fromDash).length)
+                return String(fromDash)
+        }
+        if (card._helmsman_card_title !== undefined && card._helmsman_card_title !== null
+                && String(card._helmsman_card_title).length)
+            return String(card._helmsman_card_title)
+        if (card.title !== undefined && card.title !== null && String(card.title).length)
+            return String(card.title)
+        return ""
+    }
+
+    function rememberTitle() {
+        var t = root.resolveFooterTitle()
+        if (t.length)
+            root.heldTitle = t
+    }
+
+    onCardChanged: root.rememberTitle()
+    Component.onCompleted: root.rememberTitle()
 
     readonly property var flatElements: {
         var _ = root.rev
         return root.flattenElements((card && card.elements) ? card.elements : [])
+    }
+
+    function aspectRatioFromConfig() {
+        if (!card || !card.aspect_ratio)
+            return 0
+        var ar = String(card.aspect_ratio).trim()
+        if (!ar.length)
+            return 0
+        if (ar.indexOf("%") >= 0) {
+            var pct = parseFloat(ar)
+            return isFinite(pct) && pct > 0 ? 100 / pct : 0
+        }
+        var parts = ar.replace("x", ":").split(":")
+        var a = parseFloat(parts[0])
+        var b = parts.length > 1 ? parseFloat(parts[1]) : 1
+        if (isFinite(a) && isFinite(b) && b !== 0)
+            return a / b
+        return 0
     }
 
     function mediaPath() {
@@ -85,8 +161,10 @@ CardChrome {
             if (path === root.mediaPath())
                 root.imageUrl = fileUrl
         }
-        onStatesRevisionChanged: root.refresh()
-        onEntityChanged: root.refresh()
+        onEntityChanged: {
+            if (entityId === root.footerEntityId)
+                root.refresh()
+        }
     }
 
     function refresh() {
@@ -108,16 +186,28 @@ CardChrome {
         id: stage
         x: -Theme.paddingMedium
         width: root.width
-        height: background.aspectRatio > 0
-                ? width / background.aspectRatio
-                : Math.max(Theme.itemSizeExtraLarge, width * 0.66)
+        height: {
+            // Square grid / forced fill: occupy the chrome height.
+            if (root.fillHeight > 0)
+                return root.fillHeight
+            var configured = root.aspectRatioFromConfig()
+            if (configured > 0)
+                return width / configured
+            if (background.aspectRatio > 0)
+                return width / background.aspectRatio
+            return Math.max(Theme.itemSizeExtraLarge, width * 0.66)
+        }
 
         RoundedImage {
             id: background
             anchors.fill: parent
             source: root.imageUrl
-            cornerRadius: root.radius
-            fillMode: Image.PreserveAspectFit
+            // cornerRadius 0 avoids OpacityMask layer recomposits that can
+            // paint over the footer after MoreInfo / media refresh. CardChrome
+            // already clips to the card radius.
+            cornerRadius: 0
+            fillMode: root.fillHeight > 0 ? Image.PreserveAspectCrop
+                                          : Image.PreserveAspectFit
         }
 
         Repeater {
@@ -370,6 +460,58 @@ CardChrome {
                         font.pixelSize: Theme.fontSizeExtraSmall
                         text: (el && el.title) ? String(el.title) : ""
                     }
+                }
+            }
+        }
+
+        Item {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: footerColumn.height + 2 * Theme.paddingSmall
+            visible: root.showFooter
+            z: 10
+
+            Rectangle {
+                anchors.fill: parent
+                radius: root.radius
+                color: root.lightAmbience ? "#FFFFFF" : "#000000"
+                opacity: 0.55
+
+                // Cover the top rounded corners so the bar stays flush under the image.
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: parent.radius
+                    color: parent.color
+                }
+            }
+
+            Column {
+                id: footerColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: Theme.paddingSmall
+
+                Label {
+                    width: parent.width
+                    visible: root.showFooterTitle
+                    text: root.footerTitle
+                    color: root.lightAmbience ? "#111111" : "#FFFFFF"
+                    truncationMode: TruncationMode.Fade
+                    font.pixelSize: Theme.fontSizeSmall
+                }
+
+                Label {
+                    width: parent.width
+                    visible: root.showFooterState
+                    text: (dashboard && root.rev >= 0 && root.footerEntityId.length)
+                          ? dashboard.formatState(root.footerEntityId) : ""
+                    color: root.lightAmbience ? "#333333" : "#F0F0F0"
+                    font.pixelSize: Theme.fontSizeExtraSmall
+                    truncationMode: TruncationMode.Fade
                 }
             }
         }

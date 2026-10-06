@@ -1,6 +1,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Pickers 1.0
+import QtGraphicalEffects 1.0
 import "../components"
 
 Page {
@@ -23,6 +24,8 @@ Page {
     property double lastBackgroundedAt: 0
     property bool appActive: Qt.application.active
     property bool capturingSnapshot: false
+    property int snapshotReadyAttempts: 0
+    property int snapshotStableCount: 0
     property int snapshotRevision: 1
     property bool snapshotUsable: false
     property string lastLoadedBase: ""
@@ -93,11 +96,11 @@ Page {
             return qsTr("Loading…")
         if (!page.tokensInjected)
             return qsTr("Preparing session...")
+        var loadingLabel = page.startedAtConfig ? qsTr("Loading Settings…")
+                                                : qsTr("Loading dashboard…")
         if (dashboardView && dashboardView.loading && dashboardView.loadProgress > 0)
-            return qsTr("Loading dashboard… %1%").arg(dashboardView.loadProgress)
-        if (page.readyCheckRunning)
-            return qsTr("Loading dashboard…")
-        return qsTr("Loading dashboard…")
+            return loadingLabel + " " + dashboardView.loadProgress + "%"
+        return loadingLabel
     }
     // Leave the Silica edge-swipe free while the frontend can go back on its
     // own (settings subpages, add-on history). Pop the page only at the URL
@@ -276,7 +279,10 @@ Page {
         resumeProbeTimer.stop()
         resumeProbeStartTimer.stop()
         openedPathTimer.stop()
-        snapshotDelayTimer.stop()
+        snapshotSettleTimer.stop()
+        snapshotReadyTimer.stop()
+        page.snapshotReadyAttempts = 0
+        page.snapshotStableCount = 0
         page.overlayBackgroundColor = page.fallbackOverlayBackground
         page.overlayTextColor = page.fallbackOverlayText
         readyCheckTimer.stop()
@@ -457,6 +463,7 @@ Page {
             hassClient.notifyDashboardReady()
         // Navigate only after the dashboard is on screen. Doing this during
         // the ready-check hangs Gecko on external/reverse-proxy origins.
+        // Snapshot capture waits until path navigation + painted content settle.
         openedPathTimer.restart()
     }
 
@@ -468,8 +475,10 @@ Page {
             return
         }
         var want = page.startPath || ""
-        if (!want.length)
+        if (!want.length) {
+            page.scheduleSnapshotCapture()
             return
+        }
         var script = "return (function(){"
                 + "try{"
                 + "  var want=" + page.jsString(want) + ";"
@@ -484,7 +493,10 @@ Page {
                 + "  return 'moved';"
                 + "}catch(e){return 'skip';}"
                 + "})();"
-        page.runViewJavaScript(script)
+        page.runViewJavaScript(
+                    script,
+                    function() { page.scheduleSnapshotCapture() },
+                    function() { page.scheduleSnapshotCapture() })
     }
 
     function navigateDefaultPanelOnce() {
@@ -512,17 +524,108 @@ Page {
 
         page.runViewJavaScript(
                     script,
-                    function() { snapshotDelayTimer.restart() },
-                    function() { snapshotDelayTimer.restart() })
+                    function() { page.scheduleSnapshotCapture() },
+                    function() { page.scheduleSnapshotCapture() })
+    }
+
+    function snapshotKey() {
+        if (page.startedAtConfig || page.isConfigHomePath(page.startPath))
+            return "/config"
+        var path = page.webPath(page.startPath)
+        return path.length ? path : "/lovelace"
     }
 
     function refreshSnapshotState() {
         // The PNG is cleared on sign-out. Show it whenever it exists so the
         // blur still appears after an internal↔external (or host:port) change.
+        var key = page.snapshotKey()
         page.snapshotUsable = !!(hassClient
-                                 && hassClient.dashboardSnapshotPath
-                                 && hassClient.dashboardSnapshotMatches(hassClient.baseUrl))
+                                 && hassClient.dashboardSnapshotMatches(hassClient.baseUrl, key))
         page.snapshotRevision += 1
+    }
+
+    function scheduleSnapshotCapture() {
+        if (page.skipFrontendChrome || !page.dashboardReady)
+            return
+        snapshotSettleTimer.stop()
+        snapshotReadyTimer.stop()
+        page.snapshotReadyAttempts = 0
+        page.snapshotStableCount = 0
+        // Let path changes and first paint settle before probing content.
+        snapshotSettleTimer.restart()
+    }
+
+    function pollSnapshotReady() {
+        if (!page.dashboardReady || page.capturingSnapshot)
+            return
+        if (!hassClient || !hassClient.loggedIn || !dashboardView)
+            return
+
+        page.snapshotReadyAttempts += 1
+        if (page.snapshotReadyAttempts > 40) {
+            snapshotReadyTimer.stop()
+            page.captureDashboardSnapshot()
+            return
+        }
+
+        var script = "return (function(){"
+                + "try{"
+                + "  if(document.readyState!=='complete'&&document.readyState!=='interactive')return 'wait';"
+                + "  var ha=document.querySelector('home-assistant');"
+                + "  if(!ha||!ha.shadowRoot)return 'wait';"
+                + "  function find(root,sel,depth){"
+                + "    if(!root||depth<0)return null;"
+                + "    var el=root.querySelector(sel);"
+                + "    if(el)return el;"
+                + "    var nodes=root.querySelectorAll('*');"
+                + "    for(var i=0;i<nodes.length;i++){"
+                + "      if(nodes[i].shadowRoot){"
+                + "        var hit=find(nodes[i].shadowRoot,sel,depth-1);"
+                + "        if(hit)return hit;"
+                + "      }"
+                + "    }"
+                + "    return null;"
+                + "  }"
+                + "  var root=ha.shadowRoot;"
+                + "  if(find(root,'hass-loading-screen',6))return 'wait';"
+                + "  if(find(root,'hui-view',8)||find(root,'hui-masonry-view',8)"
+                + "     ||find(root,'hui-panel-view',8)||find(root,'hui-card',10)"
+                + "     ||find(root,'ha-card',10))"
+                + "    return 'ready';"
+                + "  if(find(root,'ha-config-dashboard',8)||find(root,'ha-config-section',8)"
+                + "     ||find(root,'ha-config-navigation',8)||find(root,'ha-settings-row',10)"
+                + "     ||find(root,'ha-config-entry-row',10))"
+                + "    return 'ready';"
+                + "  if(find(root,'iframe',6)||find(root,'webview',6))"
+                + "    return 'ready';"
+                + "  return 'wait';"
+                + "}catch(e){return 'wait';}"
+                + "})();"
+
+        page.runViewJavaScript(
+                    script,
+                    function(result) {
+                        if (!page.dashboardReady || page.capturingSnapshot)
+                            return
+                        if (result === "ready") {
+                            page.snapshotStableCount += 1
+                            // Require two consecutive ready polls so cards/layout
+                            // are not mid-transition when we grab the frame.
+                            if (page.snapshotStableCount >= 2) {
+                                if (dashboardView && dashboardView.loading) {
+                                    page.snapshotStableCount = 1
+                                    return
+                                }
+                                snapshotReadyTimer.stop()
+                                page.captureDashboardSnapshot()
+                            }
+                            return
+                        }
+                        page.snapshotStableCount = 0
+                    },
+                    function() {
+                        page.snapshotStableCount = 0
+                    })
     }
 
     function captureDashboardSnapshot() {
@@ -532,21 +635,28 @@ Page {
             return
         if (!dashboardView || dashboardView.width < 8 || dashboardView.height < 8)
             return
+        if (dashboardView.loading) {
+            page.snapshotStableCount = 1
+            if (!snapshotReadyTimer.running)
+                snapshotReadyTimer.start()
+            return
+        }
 
         page.capturingSnapshot = true
+        var key = page.snapshotKey()
         dashboardView.grabToImage(function(result) {
             page.capturingSnapshot = false
             if (!result)
                 return
-            var path = hassClient.dashboardSnapshotPath
+            var path = hassClient.dashboardSnapshotPath(key)
             if (!result.saveToFile(path)) {
                 console.log("Helmsman: failed to save dashboard snapshot")
                 return
             }
-            hassClient.rememberDashboardSnapshot(hassClient.baseUrl)
+            hassClient.rememberDashboardSnapshot(hassClient.baseUrl, key)
             page.refreshSnapshotState()
-        }, Qt.size(Math.max(48, Math.round(dashboardView.width / 6)),
-                   Math.max(48, Math.round(dashboardView.height / 6))))
+        }, Qt.size(Math.max(64, Math.round(dashboardView.width / 3)),
+                   Math.max(64, Math.round(dashboardView.height / 3))))
     }
 
     function beginReadyCheck() {
@@ -1218,10 +1328,20 @@ Page {
     }
 
     Timer {
-        id: snapshotDelayTimer
-        interval: 900
+        id: snapshotSettleTimer
+        interval: 800
         repeat: false
-        onTriggered: page.captureDashboardSnapshot()
+        onTriggered: {
+            snapshotReadyTimer.start()
+            page.pollSnapshotReady()
+        }
+    }
+
+    Timer {
+        id: snapshotReadyTimer
+        interval: 400
+        repeat: true
+        onTriggered: page.pollSnapshotReady()
     }
 
     Timer {
@@ -1328,6 +1448,7 @@ Page {
         color: page.overlayBackgroundColor
         visible: !page.dashboardReady
         z: 2
+        readonly property bool snapshotReady: snapshotImage.status === Image.Ready
 
         Image {
             id: snapshotImage
@@ -1335,16 +1456,24 @@ Page {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             cache: false
-            visible: status === Image.Ready
+            visible: false
             source: page.snapshotUsable
-                    ? ("file://" + hassClient.dashboardSnapshotPath + "?" + page.snapshotRevision)
+                    ? ("file://" + hassClient.dashboardSnapshotPath(page.snapshotKey())
+                       + "?" + page.snapshotRevision)
                     : ""
+        }
+
+        FastBlur {
+            anchors.fill: parent
+            source: snapshotImage
+            radius: 48
+            visible: loadingOverlay.snapshotReady
         }
 
         Rectangle {
             anchors.fill: parent
-            color: page.overlayBackgroundColor
-            opacity: snapshotImage.status === Image.Ready ? 0.55 : 1.0
+            color: loadingOverlay.snapshotReady ? "#000000" : page.overlayBackgroundColor
+            opacity: loadingOverlay.snapshotReady ? 0.32 : 1.0
         }
 
         Column {
@@ -1363,7 +1492,7 @@ Page {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
-                color: page.overlayTextColor
+                color: loadingOverlay.snapshotReady ? "#f2f2f2" : page.overlayTextColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.loadStatusText
             }

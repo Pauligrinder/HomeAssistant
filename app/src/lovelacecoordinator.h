@@ -74,6 +74,9 @@ public:
     Q_INVOKABLE QString normalizedUrlPath(const QString &path) const;
     Q_INVOKABLE QVariantList viewsForPath(const QString &path) const;
     Q_INVOKABLE bool pathConfigReady(const QString &path) const;
+    // Home Assistant shows dashboard edit only for admins, and ?edit=1
+    // enters edit mode only when the dashboard mode is "storage".
+    Q_INVOKABLE bool canEditDashboard(const QString &path) const;
     QVariantMap currentConfig() const;
     QVariantList views() const;
     int currentViewIndex() const;
@@ -243,6 +246,7 @@ private:
     void applyStateChanged(const QVariantMap &event);
     void applyDashboards(const QVariant &result);
     void applyPanels(const QVariant &result);
+    bool stampDashboardModes();
     void rebuildSwitcherItems();
     void applyConfig(const QVariant &result);
     void commitConfig(const QVariantMap &config);

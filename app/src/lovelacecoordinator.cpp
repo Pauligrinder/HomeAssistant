@@ -324,6 +324,21 @@ QVariantMap panelByPath(const QString &path, const QVariantMap &panels)
     return QVariantMap();
 }
 
+// Lovelace edit mode is on the dashboard list for extra dashboards, and on
+// the panel config for the built-in one (panel key "lovelace").
+QString panelConfigMode(const QString &path, const QVariantMap &panels)
+{
+    const QString key = path.isEmpty() ? QStringLiteral("lovelace") : path;
+    const QVariantMap panel = panelByPath(key, panels);
+    if (panel.isEmpty())
+        return QString();
+    const QString fromConfig = panel.value(QStringLiteral("config")).toMap()
+            .value(QStringLiteral("mode")).toString();
+    if (!fromConfig.isEmpty())
+        return fromConfig;
+    return panel.value(QStringLiteral("mode")).toString();
+}
+
 QString iframeUrlFromPanel(const QVariantMap &panel)
 {
     if (panel.value(QStringLiteral("component_name")).toString() != QLatin1String("iframe"))
@@ -670,6 +685,43 @@ bool LovelaceCoordinator::pathConfigReady(const QString &path) const
         return !m_viewsByPath.value(key).isEmpty() || m_configByPath.contains(key);
     return key == m_currentUrlPath && m_configLoaded;
 }
+
+bool LovelaceCoordinator::canEditDashboard(const QString &path) const
+{
+    if (!m_userIsAdmin)
+        return false;
+    const QString key = normalizeDashboardPath(path);
+    QString mode;
+    for (int i = 0; i < m_dashboards.size(); ++i) {
+        const QVariantMap dash = m_dashboards.at(i).toMap();
+        if (dashboardUrlPath(dash) != key)
+            continue;
+        mode = dash.value(QStringLiteral("mode")).toString();
+        if (!mode.isEmpty())
+            break;
+    }
+    if (mode.isEmpty())
+        mode = panelConfigMode(key, m_panels);
+    return mode == QLatin1String("storage");
+}
+
+bool LovelaceCoordinator::stampDashboardModes()
+{
+    bool changed = false;
+    for (int i = 0; i < m_dashboards.size(); ++i) {
+        QVariantMap dash = m_dashboards.at(i).toMap();
+        if (!dash.value(QStringLiteral("mode")).toString().isEmpty())
+            continue;
+        const QString mode = panelConfigMode(dashboardUrlPath(dash), m_panels);
+        if (mode.isEmpty())
+            continue;
+        dash.insert(QStringLiteral("mode"), mode);
+        m_dashboards[i] = dash;
+        changed = true;
+    }
+    return changed;
+}
+
 QString LovelaceCoordinator::userId() const { return m_userId; }
 bool LovelaceCoordinator::userIsAdmin() const { return m_userIsAdmin; }
 QString LovelaceCoordinator::userName() const { return m_userName; }
@@ -1469,6 +1521,7 @@ void LovelaceCoordinator::applyDashboards(const QVariant &result)
         withDefault.append(dash);
     }
     m_dashboards = withDefault;
+    stampDashboardModes();
     emit dashboardsChanged();
     rebuildSwitcherItems();
 }
@@ -1476,6 +1529,8 @@ void LovelaceCoordinator::applyDashboards(const QVariant &result)
 void LovelaceCoordinator::applyPanels(const QVariant &result)
 {
     m_panels = result.toMap();
+    if (stampDashboardModes())
+        emit dashboardsChanged();
     rebuildSwitcherItems();
 }
 
@@ -1848,10 +1903,39 @@ QVariantMap LovelaceCoordinator::decorateCard(const QVariantMap &card) const
     out.insert(QStringLiteral("_columns"), gridColumnsOf(card));
     out.insert(QStringLiteral("_rows"), gridRowsOf(card));
     const QString type = card.value(QStringLiteral("type")).toString();
+    if (type == QLatin1String("picture-elements") || type == QLatin1String("picture")) {
+        const QString title = card.value(QStringLiteral("title")).toString().trimmed();
+        if (!title.isEmpty())
+            out.insert(QStringLiteral("_helmsman_card_title"), title);
+    }
     if (type == QLatin1String("grid")
             || type == QLatin1String("vertical-stack")
             || type == QLatin1String("horizontal-stack")) {
-        out.insert(QStringLiteral("cards"), decorateCards(variantListOf(card.value(QStringLiteral("cards")))));
+        if (type == QLatin1String("grid")) {
+            int cols = card.value(QStringLiteral("columns")).toInt();
+            if (cols < 1)
+                cols = 3;
+            const int span = qMax(1, 12 / cols);
+            const bool square = card.value(QStringLiteral("square")).toBool();
+            const QVariantList inner = variantListOf(card.value(QStringLiteral("cards")));
+            QVariantList decorated;
+            decorated.reserve(inner.size());
+            for (const QVariant &entry : inner) {
+                QVariantMap child = decorateCard(entry.toMap());
+                const int childCols = child.value(QStringLiteral("_columns")).toInt();
+                if (childCols <= 0 || childCols == 12)
+                    child.insert(QStringLiteral("_columns"), span);
+                if (square) {
+                    child.insert(QStringLiteral("_square"), true);
+                    if (child.value(QStringLiteral("_rows")).toInt() <= 0)
+                        child.insert(QStringLiteral("_rows"), 1);
+                }
+                decorated.append(child);
+            }
+            out.insert(QStringLiteral("cards"), decorated);
+        } else {
+            out.insert(QStringLiteral("cards"), decorateCards(variantListOf(card.value(QStringLiteral("cards")))));
+        }
     }
     if (type == QLatin1String("conditional")) {
         const QVariantMap nested = card.value(QStringLiteral("card")).toMap();
@@ -2013,6 +2097,11 @@ QString LovelaceCoordinator::formatState(const QString &entityId) const
         return QStringLiteral("Unavailable");
     if (state == QLatin1String("unknown"))
         return QStringLiteral("Unknown");
+    if (domainOfEntity(entityId) == QLatin1String("script")) {
+        if (state == QLatin1String("on"))
+            return QCoreApplication::translate("Helmsman", "Running");
+        return QCoreApplication::translate("Helmsman", "Run");
+    }
     if (!unit.isEmpty())
         return state + QLatin1Char(' ') + unit;
     QString pretty = state;

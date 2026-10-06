@@ -213,6 +213,17 @@ Page {
                        })
     }
 
+    function openEditDashboard() {
+        if (!dashboard || !dashboard.canEditDashboard(page.boundPath))
+            return
+        var path = page.boundPath.length ? ("/" + page.boundPath) : "/lovelace"
+        var viewPath = (page.boundView && page.boundView.path)
+                ? String(page.boundView.path) : ""
+        if (viewPath.length)
+            path += "/" + encodeURIComponent(viewPath)
+        page.openWeb(path + "?edit=1")
+    }
+
     function consumePendingWebPath() {
         if (!dashboard || !dashboard.pendingWebPath.length)
             return
@@ -387,6 +398,20 @@ Page {
         clip: true
 
         PullDownMenu {
+            MenuItem {
+                text: qsTr("Edit dashboard")
+                visible: {
+                    if (!dashboard)
+                        return false
+                    // These reads keep the binding live as the user and the
+                    // dashboard mode arrive.
+                    dashboard.userIsAdmin
+                    dashboard.dashboards
+                    dashboard.switcherItems
+                    return dashboard.canEditDashboard(page.boundPath)
+                }
+                onClicked: page.openEditDashboard()
+            }
             MenuItem {
                 text: qsTr("Change dashboard")
                 visible: !!(dashboard && dashboard.switcherItems

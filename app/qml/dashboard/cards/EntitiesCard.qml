@@ -58,12 +58,41 @@ CardChrome {
                                       ? dashboard.isToggleable(row.entityId) : false
             // Prefer entity-id prefix so scripts still get a Run control before
             // states arrive (domainOf alone is fine, but keep this resilient).
-            readonly property bool isScript: row.entityId.indexOf("script.") === 0
-            readonly property bool showRunButton: row.isScript
+            readonly property bool isScript: {
+                if (row.entityId.indexOf("script.") === 0)
+                    return true
+                if (!dashboard || !row.entityId.length || root.rev < 0)
+                    return false
+                return dashboard.domainOf(row.entityId) === "script"
+            }
+            // Lovelace entities "button" rows render an action chip (default Run).
+            readonly property bool showActionButton: rowType === "button"
+            readonly property string actionButtonText: {
+                if (entry && entry.action_name !== undefined && entry.action_name !== null
+                        && String(entry.action_name).length)
+                    return String(entry.action_name)
+                return qsTr("Run")
+            }
+            readonly property bool showRunText: row.isScript
                     && rowType === "entity" && row.entityId.length > 0
             readonly property bool showToggle: row.toggleable && !row.isScript
-            readonly property bool showState: row.entityId.length > 0
+            readonly property bool showState: rowType === "entity" && row.entityId.length > 0
                     && !row.toggleable && !row.isScript
+
+            function runRowAction() {
+                if (!dashboard)
+                    return
+                var confirm = entry.confirmation
+                if (confirm === undefined && entry.tap_action)
+                    confirm = entry.tap_action.confirmation
+                if (rowType === "button") {
+                    dashboard.performAction(root.mergeConfirmation(entry.tap_action || { "action": "toggle" },
+                                                                   confirm), row.entityId)
+                    return
+                }
+                dashboard.performAction(root.mergeConfirmation({ "action": "toggle" }, confirm),
+                                       row.entityId)
+            }
 
             // Collapse when visibility/conditions fail or the entity is registry-hidden.
             visible: {
@@ -79,9 +108,8 @@ CardChrome {
                     dashboard.performAction({ "action": "url", "url_path": entry.url }, "")
                     return
                 }
-                if (rowType === "button" && dashboard) {
-                    dashboard.performAction(root.mergeConfirmation(entry.tap_action || { "action": "toggle" },
-                                                                   entry.confirmation), row.entityId)
+                if (row.showActionButton || row.showRunText) {
+                    row.runRowAction()
                     return
                 }
                 if (row.entityId.length && dashboard)
@@ -114,6 +142,8 @@ CardChrome {
             Row {
                 visible: rowType !== "divider" && rowType !== "section"
                 anchors.fill: parent
+                anchors.leftMargin: 0
+                anchors.rightMargin: 0
                 spacing: Theme.paddingSmall
 
                 Item {
@@ -149,15 +179,13 @@ CardChrome {
                 }
 
                 Label {
+                    id: nameLabel
                     y: (parent.height - height) / 2
-                    // The name gets whatever the icon, state and switch leave,
-                    // so nothing is pushed past the edge of the card.
+                    // Leave room for trailing state / Run / toggle; do not bind
+                    // to their widths here or the Row can push them off-card.
                     width: Math.max(0, parent.width - rowIconBox.width - Theme.paddingSmall
-                                    - (stateLabel.visible
-                                       ? stateLabel.width + Theme.paddingSmall : 0)
-                                    - (runButton.visible
-                                       ? runButton.width + Theme.paddingSmall : 0)
-                                    - (toggle.visible ? toggle.width + Theme.paddingSmall : 0))
+                                    - trailingBox.width
+                                    - (trailingBox.width > 0 ? Theme.paddingSmall : 0))
                     text: {
                         if (entry.name)
                             return entry.name
@@ -172,50 +200,68 @@ CardChrome {
                     color: Theme.primaryColor
                 }
 
-                Label {
-                    id: stateLabel
+                Item {
+                    id: trailingBox
                     y: (parent.height - height) / 2
-                    visible: row.showState
-                    // Long states keep at most part of the row for themselves.
-                    width: Math.min(implicitWidth, row.width * 0.45)
-                    horizontalAlignment: Text.AlignRight
-                    text: (dashboard && row.entityId.length && root.rev >= 0)
-                          ? dashboard.formatState(row.entityId) : ""
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    color: Theme.secondaryColor
-                    truncationMode: TruncationMode.Fade
-                }
-
-                Button {
-                    id: runButton
-                    y: (parent.height - height) / 2
-                    visible: row.showRunButton
-                    preferredWidth: Theme.buttonWidthExtraSmall
-                    height: Theme.itemSizeExtraSmall
-                    text: qsTr("Run")
-                    onClicked: {
-                        var confirm = entry.confirmation
-                        if (confirm === undefined && entry.tap_action)
-                            confirm = entry.tap_action.confirmation
-                        dashboard.performAction(root.mergeConfirmation({ "action": "toggle" }, confirm),
-                                               row.entityId)
+                    height: parent.height
+                    width: {
+                        if (actionButton.visible)
+                            return actionButton.width
+                        if (toggle.visible)
+                            return toggle.width
+                        if (stateLabel.visible)
+                            return Math.min(stateLabel.implicitWidth, row.width * 0.45)
+                        return 0
                     }
-                }
 
-                Switch {
-                    id: toggle
-                    y: (parent.height - height) / 2
-                    visible: row.showToggle
-                    automaticCheck: false
-                    // root.rev is read so the switch follows entity updates.
-                    checked: (row.showToggle && root.rev >= 0)
-                             ? dashboard.isOn(row.entityId) : false
-                    onClicked: {
-                        var confirm = entry.confirmation
-                        if (confirm === undefined && entry.tap_action)
-                            confirm = entry.tap_action.confirmation
-                        dashboard.performAction(root.mergeConfirmation({ "action": "toggle" }, confirm),
-                                               row.entityId)
+                    Button {
+                        id: actionButton
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        visible: row.showActionButton
+                        preferredWidth: Theme.buttonWidthExtraSmall
+                        height: Theme.itemSizeExtraSmall
+                        text: row.actionButtonText
+                        onClicked: row.runRowAction()
+                    }
+
+                    Label {
+                        id: stateLabel
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        visible: row.showState || row.showRunText
+                        width: Math.min(implicitWidth, row.width * 0.45)
+                        horizontalAlignment: Text.AlignRight
+                        text: {
+                            if (row.showRunText) {
+                                if (dashboard && root.rev >= 0 && dashboard.isOn(row.entityId))
+                                    return qsTr("Running")
+                                return qsTr("Run")
+                            }
+                            return (dashboard && row.entityId.length && root.rev >= 0)
+                                   ? dashboard.formatState(row.entityId) : ""
+                        }
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        truncationMode: TruncationMode.Fade
+                    }
+
+                    Switch {
+                        id: toggle
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        visible: row.showToggle
+                        automaticCheck: false
+                        // root.rev is read so the switch follows entity updates.
+                        checked: (row.showToggle && root.rev >= 0)
+                                 ? dashboard.isOn(row.entityId) : false
+                        onClicked: {
+                            var confirm = entry.confirmation
+                            if (confirm === undefined && entry.tap_action)
+                                confirm = entry.tap_action.confirmation
+                            dashboard.performAction(root.mergeConfirmation({ "action": "toggle" }, confirm),
+                                                   row.entityId)
+                        }
                     }
                 }
             }
