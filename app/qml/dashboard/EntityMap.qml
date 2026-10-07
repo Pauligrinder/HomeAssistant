@@ -258,7 +258,10 @@ Item {
     }
     onMarkersChanged: root.scheduleMarkers()
     onAutoFitChanged: root.scheduleMarkers()
-    Component.onCompleted: root.scheduleMarkers()
+    Component.onCompleted: {
+        root.beenActive = Qt.application.state === Qt.ApplicationActive
+        root.scheduleMarkers()
+    }
 
     Connections {
         target: Qt.application
@@ -409,8 +412,9 @@ Item {
                         id: avatar
                         anchors.fill: parent
                         source: model.imageUrl
+                        // One side only, so the photo keeps its aspect and the
+                        // circle can center-crop it. Both sides squash it.
                         sourceSize.width: root.avatarSize * 2
-                        sourceSize.height: root.avatarSize * 2
                         fillMode: Image.PreserveAspectCrop
                         cornerRadius: width / 2
                     }

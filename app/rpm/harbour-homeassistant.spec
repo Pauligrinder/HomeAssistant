@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.6
+Version:    0.4.7
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,11 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.7-1
+- Pictures redraw the first time the app returns from the background.
+- Rounded pictures, including map faces, are scaled and center-cropped
+  instead of showing the top-left corner of the photo.
+
 * Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.6-1
 - Pictures load on the first open. Returning from the background still redraws
   them after Sailfish drops their textures, without clearing the source while

@@ -32,6 +32,8 @@ Item {
     // active at launch is not a resume.
     property bool textureLost: false
     property bool canvasSeen: false
+    // Plain value, not a binding. Pictures are created while the app is
+    // already active, so the first return from the background has to count.
     property bool beenActive: false
 
     onSourceChanged: {
@@ -40,6 +42,7 @@ Item {
             image.source = source
     }
     Component.onCompleted: {
+        beenActive = Qt.application.state === Qt.ApplicationActive
         if (image && String(image.source) !== String(source))
             image.source = source
     }
@@ -151,18 +154,20 @@ Item {
             ctx.closePath()
             ctx.clip()
 
+            // drawImage reloads the file itself. A source rectangle in the
+            // Image's implicit pixels (after sourceSize) samples the top-left
+            // of that file. Scale the whole picture into a destination rect
+            // instead, so the crop is centered.
             if (root.fillMode === Image.PreserveAspectFit) {
                 var fit = Math.min(width / iw, height / ih)
-                var dw = iw * fit
-                var dh = ih * fit
-                ctx.drawImage(image, (width - dw) / 2, (height - dh) / 2, dw, dh)
+                var fw = iw * fit
+                var fh = ih * fit
+                ctx.drawImage(image, (width - fw) / 2, (height - fh) / 2, fw, fh)
             } else if (root.fillMode === Image.PreserveAspectCrop) {
                 var crop = Math.max(width / iw, height / ih)
-                var sw = width / crop
-                var sh = height / crop
-                ctx.drawImage(image,
-                              (iw - sw) / 2, (ih - sh) / 2, sw, sh,
-                              0, 0, width, height)
+                var cw = iw * crop
+                var ch = ih * crop
+                ctx.drawImage(image, (width - cw) / 2, (height - ch) / 2, cw, ch)
             } else {
                 ctx.drawImage(image, 0, 0, width, height)
             }
