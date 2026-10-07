@@ -6,7 +6,7 @@ CardChrome {
     id: root
     tapEnabled: false
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     readonly property string titleText: {
         if (card && card.title && String(card.title).length)
             return String(card.title)

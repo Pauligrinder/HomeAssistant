@@ -16,7 +16,7 @@
   <context>
     <name>BadgeChip</name>
     <message>
-      <location filename="../qml/dashboard/BadgeChip.qml" line="40" />
+      <location filename="../qml/dashboard/BadgeChip.qml" line="49" />
       <source>Run</source>
       <translation>运行</translation>
     </message>
@@ -147,13 +147,13 @@
   <context>
     <name>EntitiesCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="74" />
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="239" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="96" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="261" />
       <source>Run</source>
       <translation>运行</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="238" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="260" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
@@ -198,13 +198,13 @@
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="144" />
-      <source>Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Use search to filter every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In the preview, drag a favorite to reorder it, or drop it on the bin to remove it.</source>
-      <translation>为事件视图选择灯光、开关、脚本、AC、传感器和图表。 使用搜索来过滤每个列表 。 点击灯光,开关,或AC切换它,持有亮度/颜色的灯光,或 AC 模式,温度,风扇,和风扇的灯光,或 点击脚本的运行和取消. 传感器以最后24小时作为卡片背景显示其当前值. Graphs是已经发布今天/明天系列的传感器,如Nordpool电价. 在预览中,拖动一个最喜欢的重排顺序,或者将其扔到垃圾桶上删除.</translation>
+      <source>Select entities to show in the Events View widget when enabled</source>
+      <translation>选择在 Events View 小组件启用时显示的实体</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="145" />
-      <source>Choose lights, switches, scripts, ACs, and sensors for the app cover. Use search to filter the lists. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>为应用封面选择灯光,开关,脚本,AC,传感器. 使用搜索过滤列表 。 如果有超过适合的,使用封面箭头来更改页面. 敲灯,开关,或AC切换,或脚本运行. 传感器只是显示其当前值,没有封面按钮.</translation>
+      <source>Select entities to show on the app cover</source>
+      <translation>选择在应用封面上显示的实体</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="148" />
@@ -316,42 +316,42 @@
   <context>
     <name>FeatureBar</name>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="70" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="79" />
       <source>On</source>
       <translation>开</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="90" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="99" />
       <source>Brightness</source>
       <translation>亮度</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="217" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="226" />
       <source>Unlock</source>
       <translation>解锁</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="219" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="228" />
       <source>Run</source>
       <translation>运行</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="220" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
       <source>Open</source>
       <translation>打开</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Lock</source>
       <translation>锁定</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Close</source>
       <translation>关闭</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="418" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="427" />
       <source>Color temperature</source>
       <translation>颜色温度</translation>
     </message>
@@ -387,7 +387,7 @@
   <context>
     <name>GlanceCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="154" />
+      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="176" />
       <source>Run</source>
       <translation>运行</translation>
     </message>
@@ -453,43 +453,43 @@
       <translation>English</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2940" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3016" />
       <source>Running %1</source>
       <translation>正在运行 %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2942" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3018" />
       <source>Wants to run %1</source>
       <translation>想要运行 %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2944" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3020" />
       <source>Wants to perform this action</source>
       <translation>想要执行此操作</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2103" />
-      <location filename="../src/lovelacecoordinator.cpp" line="2951" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2179" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3027" />
       <source>Run</source>
       <translation>运行</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2102" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2178" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2952" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3028" />
       <source>Allow</source>
       <translation>允许</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2955" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3031" />
       <source>Cancel</source>
       <translation>取消</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2956" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3032" />
       <source>Deny</source>
       <translation>拒绝</translation>
     </message>
@@ -636,13 +636,13 @@
   <context>
     <name>HistoryChart</name>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="194" />
-      <location filename="../qml/dashboard/HistoryChart.qml" line="198" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="211" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="215" />
       <source>Unknown</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="196" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="213" />
       <source>Unavailable</source>
       <translation type="unfinished" />
     </message>
@@ -813,103 +813,103 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="84" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="93" />
       <source>Restart stream</source>
       <translation>重启流</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="151" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="160" />
       <source>History</source>
       <translation>历史</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="162" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="171" />
       <source>Last changed</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="168" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="177" />
       <source>Last updated</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="196" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="649" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="205" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="658" />
       <source>Run</source>
       <translation>运行</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn off</source>
       <translation>关闭</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn on</source>
       <translation>打开</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="455" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="464" />
       <source>Brightness</source>
       <translation>亮度</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="264" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="273" />
       <source>Open</source>
       <translation>打开</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="220" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="229" />
       <source>Lights</source>
       <translation>灯</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="277" />
       <source>Stop</source>
       <translation>停止</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="272" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="281" />
       <source>Close</source>
       <translation>关闭</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="285" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="294" />
       <source>Position</source>
       <translation>位置</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="299" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="308" />
       <source>Value</source>
       <translation>值</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="305" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="314" />
       <source>Controls</source>
       <translation>控制</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="315" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="324" />
       <source>Sensors</source>
       <translation>传感器</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="325" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="334" />
       <source>Related</source>
       <translation>相关</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="335" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="344" />
       <source>Attributes</source>
       <translation>属性</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="472" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="481" />
       <source>Temperature</source>
       <translation>温度</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="504" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="513" />
       <source>Color</source>
       <translation>颜色</translation>
     </message>
@@ -998,11 +998,6 @@
       <translation>Helmsman 设置</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="136" />
-      <source>Use full URLs including the scheme. Internal is often http:// on LAN; external is often https://.</source>
-      <translation>使用包括方案在内的完整 URL 。 内部经常是http://在局域网上;外部经常是https://.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="288" />
       <source>Language</source>
       <translation>语言</translation>
@@ -1038,6 +1033,11 @@
       <translation>连接</translation>
     </message>
     <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="136" />
+      <source>Use full URLs. Internal is usually http://&lt;ip-address&gt;:&lt;port&gt;, external something like https://example.io.nabu.casa</source>
+      <translation>请使用完整 URL。内部地址通常是 http://&lt;ip-address&gt;:&lt;port&gt;，外部地址例如 https://example.io.nabu.casa</translation>
+    </message>
+    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="152" />
       <source>Testing internal...</source>
       <translation>测试内部...</translation>
@@ -1061,11 +1061,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="186" />
       <source>Test external</source>
       <translation>测试外部</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="213" />
-      <source>If you only have one address, put it in External URL and leave Internal URL empty. Helmsman will not switch between addresses in that case.</source>
-      <translation>如果您只有一个地址, 请将其放入外部 URL 并留空 。 在这样的情况下,Helmsman不会在地址之间切换.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="220" />
@@ -1128,11 +1123,6 @@
       <translation>界面</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="307" />
-      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.</source>
-      <translation type="unfinished" />
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="368" />
       <source>Events View and Cover</source>
       <translation>Events View 与封面</translation>
@@ -1153,11 +1143,6 @@
       <translation>在应用封面上显示通知</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="389" />
-      <source>Tint the cover with the latest Home Assistant alert. Turn this off to keep cover favorites visible.</source>
-      <translation>以最新的Home Assistant警报点缀封面. 关上这个 保持覆盖最爱可见。</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="304" />
       <source>Native dashboard</source>
       <translation>原生仪表板</translation>
@@ -1166,6 +1151,16 @@
       <location filename="../qml/pages/SettingsPage.qml" line="34" />
       <source>System</source>
       <translation>System</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="213" />
+      <source>To only use one address (and disable the switching logic), put the address in the external field.</source>
+      <translation>若只使用一个地址（并关闭切换逻辑），请把地址填在外部地址栏。</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="307" />
+      <source>Render your dashboards natively instead of using the Home Assistant web UI. On by default. Unimplemented things still open in the webview.</source>
+      <translation>以原生方式显示仪表板，而不是使用 Home Assistant 的网页界面。默认开启。尚未实现的内容仍会在 webview 中打开。</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="314" />
@@ -1181,31 +1176,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="357" />
       <source>Restart Helmsman to apply the selected engine.</source>
       <translation>重新启动Helmsman应用所选引擎.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="358" />
-      <source>Used for the Home Assistant web UI. ESR153 appears when sailfish-browser-next153 is installed; Atlantic when Atlantic Browser is installed.</source>
-      <translation>用于Home Assistant网络UI. ESR153在安装帆鱼-浏览器-next153时出现;大西洋在安装大西洋浏览器时出现.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="399" />
-      <source>Pick lights, switches, scripts, ACs, and sensors for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>选择灯光,开关,脚本,AC,和传感器作为应用封面. 敲灯,开关,或AC切换,或脚本运行. 传感器只是显示其当前值,没有封面按钮.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="404" />
-      <source>Choose cover favorites</source>
-      <translation>选择封面收藏</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="417" />
-      <source>Pick lights, switches, scripts, ACs, sensors, and graphs for the Events View. Search on the favorites page filters every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In Events View favorites, drag a preview card to reorder it, or drop it on the bin to remove it.</source>
-      <translation>为事件视图选择灯光、开关、脚本、AC、传感器和图表。 搜索最爱的页面过滤每个列表 。 点击灯光,开关,或AC切换它,持有亮度/颜色的灯光,或 AC 模式,温度,风扇,和风扇的灯光,或 点击脚本的运行和取消. 传感器以最后24小时作为卡片背景显示其当前值. Graphs是已经发布今天/明天系列的传感器,如Nordpool电价. 在“事件视图”中,拖动预览卡重新排序,或将预览卡扔到垃圾桶上删除。</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="422" />
-      <source>Choose Events View favorites</source>
-      <translation>选择 Events View 收藏</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="436" />
@@ -1308,29 +1278,14 @@
       <translation>更新速度与电池使用平衡. GPS没有继续运行 。</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="589" />
-      <source>Request own location if older than</source>
-      <translation>若位置旧于此则自行请求</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="595" />
       <source>%1 min</source>
       <translation>%1 分钟</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="617" />
-      <source>Uses location updates from other apps when they request GPS. Helmsman only turns GPS on itself if the last fix is older than this.</source>
-      <translation>当其他应用程序请求GPS时使用其位置更新. Helmsman只开启GPS本身,如果最后的修补比这个老.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="623" />
       <source>Mark home on internal connection</source>
       <translation>通过内部连接时标记为在家</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="626" />
-      <source>Report home without using GPS while connected through the internal URL. Helmsman includes the Home zone coordinates so the device shows on the map, and repeats that update so Home Assistant does not time out to away. When disabled, no location is sent on that connection.</source>
-      <translation>通过内部 URL 连接时不使用 GPS 报告家 。 Helmsman包含Home区坐标,因此设备在地图上显示,并重复更新,因此Home Assistant不会超时离开. 禁用时, 该连接上没有发送位置 。</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="642" />
@@ -1346,6 +1301,51 @@
       <location filename="../qml/pages/SettingsPage.qml" line="509" />
       <source>Refresh sensor config</source>
       <translation>刷新传感器配置</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="358" />
+      <source>Choose which engine the webviews should be rendered in. Stock/ESR153/Atlantic are supported if installed</source>
+      <translation>选择用来渲染 webview 的引擎。若已安装，则支持 Stock/ESR153/Atlantic</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="389" />
+      <source>If this is enabled, notifications take over the app cover until dismissed</source>
+      <translation>启用后，通知会占据应用封面，直到被关闭</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="399" />
+      <source>Select entities to show on the app cover</source>
+      <translation>选择在应用封面上显示的实体</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="404" />
+      <source>Manage app cover entities</source>
+      <translation>管理应用封面实体</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="417" />
+      <source>Select entities to show in the Events View widget when enabled.</source>
+      <translation>选择在 Events View 小组件启用时显示的实体。</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="422" />
+      <source>Manage events view entities</source>
+      <translation>管理 Events View 实体</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="589" />
+      <source>Get a location fix if older than</source>
+      <translation>若位置旧于此则重新定位</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="617" />
+      <source>Helmsman only turns GPS on itself if the last fix is older than this - otherwise it uses fixes requested by other apps</source>
+      <translation>仅当上次定位早于此时间时，Helmsman 才会自行打开 GPS，否则使用其他应用请求的定位</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="626" />
+      <source>Always reports the location as 'home' when connected to the internal host</source>
+      <translation>连接到内部主机时，始终把位置报告为 'home'</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="667" />

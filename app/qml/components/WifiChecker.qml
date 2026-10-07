@@ -10,6 +10,9 @@ Item {
     property string ssid: ""
     property bool connected: false
     property bool ready: false
+    // Only the app-level instance should run the slow fallback poll; page
+    // checkers rely on ConnMan signals (and share state via HassClient).
+    property bool fallbackPoll: false
 
     signal networkChanged()
 
@@ -57,9 +60,11 @@ Item {
         function propertyChanged() { checker.refresh() }
     }
 
+    // ConnMan signals cover normal changes. A slow fallback catches missed
+    // updates without waking the process every few seconds.
     Timer {
-        interval: 5000
-        running: true
+        interval: 60000
+        running: checker.fallbackPoll
         repeat: true
         onTriggered: checker.refresh()
     }

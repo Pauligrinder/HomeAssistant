@@ -16,7 +16,7 @@
   <context>
     <name>BadgeChip</name>
     <message>
-      <location filename="../qml/dashboard/BadgeChip.qml" line="40" />
+      <location filename="../qml/dashboard/BadgeChip.qml" line="49" />
       <source>Run</source>
       <translation>Jookse</translation>
     </message>
@@ -147,13 +147,13 @@
   <context>
     <name>EntitiesCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="74" />
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="239" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="96" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="261" />
       <source>Run</source>
       <translation>Jookse</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="238" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="260" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
@@ -198,13 +198,13 @@
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="144" />
-      <source>Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Use search to filter every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In the preview, drag a favorite to reorder it, or drop it on the bin to remove it.</source>
-      <translation>Valige sündmuste vaate tuled, lülitid, skriptid, vahelduvvoolud, andurid ja graafikud. Kasuta otsingut iga nimekirja filtreerimiseks. Puudutage valgust, lülitit või vahelduvvoolu selle lülitamiseks, hoidke valgust heleduse / värvi või vahelduvvoolu režiimi, temperatuuri, ventilaatori ja tiivikute jaoks või puudutage skripti Run ja Loobu. Andurid näitavad oma praegust väärtust viimase 24 tunniga kaardi taustana. Graafikud on andurid, mis juba avaldavad täna / homme seeria, näiteks Nordpool elektrihinnad. Eelvaatluses lohista lemmik selle ümber järjestamiseks või kukuta see prügikasti, et see eemaldada.</translation>
+      <source>Select entities to show in the Events View widget when enabled</source>
+      <translation>Vali olemid, mida näidatakse Events View vidinas, kui see on sees</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="145" />
-      <source>Choose lights, switches, scripts, ACs, and sensors for the app cover. Use search to filter the lists. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>Valige rakenduse kaane jaoks tuled, lülitid, skriptid, vahelduvvoolud ja andurid. Nimekirjade filtreerimiseks kasutatakse otsingut. Kui on rohkem kui sobib, kasutage lehe vahetamiseks kaanenoole. Puudutage valgust, lülitit või AC-d selle lülitamiseks või skripti selle käivitamiseks. Andurid näitavad lihtsalt oma praegust väärtust ja neil pole kattenuppu.</translation>
+      <source>Select entities to show on the app cover</source>
+      <translation>Vali olemid, mida näidatakse rakenduse kaanel</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="148" />
@@ -316,42 +316,42 @@
   <context>
     <name>FeatureBar</name>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="70" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="79" />
       <source>On</source>
       <translation>On</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="90" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="99" />
       <source>Brightness</source>
       <translation>Heledus</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="217" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="226" />
       <source>Unlock</source>
       <translation>Vabastage</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="219" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="228" />
       <source>Run</source>
       <translation>Jookse</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="220" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
       <source>Open</source>
       <translation>Avage</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Lock</source>
       <translation>Lukusta</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Close</source>
       <translation>Sulge</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="418" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="427" />
       <source>Color temperature</source>
       <translation>Värvitemperatuur</translation>
     </message>
@@ -387,7 +387,7 @@
   <context>
     <name>GlanceCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="154" />
+      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="176" />
       <source>Run</source>
       <translation>Jookse</translation>
     </message>
@@ -453,43 +453,43 @@
       <translation>English</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2940" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3016" />
       <source>Running %1</source>
       <translation>%1 töötab</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2942" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3018" />
       <source>Wants to run %1</source>
       <translation>Soovib käivitada %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2944" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3020" />
       <source>Wants to perform this action</source>
       <translation>Soovib seda toimingut sooritada</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2103" />
-      <location filename="../src/lovelacecoordinator.cpp" line="2951" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2179" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3027" />
       <source>Run</source>
       <translation>Jookse</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2102" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2178" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2952" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3028" />
       <source>Allow</source>
       <translation>Luba</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2955" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3031" />
       <source>Cancel</source>
       <translation>Tühistage</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2956" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3032" />
       <source>Deny</source>
       <translation>Eita</translation>
     </message>
@@ -636,13 +636,13 @@
   <context>
     <name>HistoryChart</name>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="194" />
-      <location filename="../qml/dashboard/HistoryChart.qml" line="198" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="211" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="215" />
       <source>Unknown</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="196" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="213" />
       <source>Unavailable</source>
       <translation type="unfinished" />
     </message>
@@ -813,103 +813,103 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="84" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="93" />
       <source>Restart stream</source>
       <translation>Taaskäivita voog</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="151" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="160" />
       <source>History</source>
       <translation>Ajalugu</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="162" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="171" />
       <source>Last changed</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="168" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="177" />
       <source>Last updated</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="196" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="649" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="205" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="658" />
       <source>Run</source>
       <translation>Jookse</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn off</source>
       <translation>Lülita välja</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn on</source>
       <translation>Pöörake</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="455" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="464" />
       <source>Brightness</source>
       <translation>Heledus</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="264" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="273" />
       <source>Open</source>
       <translation>Avage</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="220" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="229" />
       <source>Lights</source>
       <translation>Tuled</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="277" />
       <source>Stop</source>
       <translation>Lõpeta</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="272" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="281" />
       <source>Close</source>
       <translation>Sulge</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="285" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="294" />
       <source>Position</source>
       <translation>Asukoht</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="299" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="308" />
       <source>Value</source>
       <translation>Väärtus</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="305" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="314" />
       <source>Controls</source>
       <translation>Kontrollid</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="315" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="324" />
       <source>Sensors</source>
       <translation>Andurid</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="325" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="334" />
       <source>Related</source>
       <translation>Seotud</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="335" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="344" />
       <source>Attributes</source>
       <translation>Atribuudid</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="472" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="481" />
       <source>Temperature</source>
       <translation>temperatuur</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="504" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="513" />
       <source>Color</source>
       <translation>Värv</translation>
     </message>
@@ -998,11 +998,6 @@
       <translation>Helmsman seadistused</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="136" />
-      <source>Use full URLs including the scheme. Internal is often http:// on LAN; external is often https://.</source>
-      <translation>Kasutage täielikke URL-e, sealhulgas skeemi. Sisemine on sageli http:// kohtvõrgus; väline on sageli https://.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="288" />
       <source>Language</source>
       <translation>Keel</translation>
@@ -1038,6 +1033,11 @@
       <translation>Ühendus</translation>
     </message>
     <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="136" />
+      <source>Use full URLs. Internal is usually http://&lt;ip-address&gt;:&lt;port&gt;, external something like https://example.io.nabu.casa</source>
+      <translation>Kasuta täielikke URL-e. Sisemine on tavaliselt http://&lt;ip-address&gt;:&lt;port&gt;, väline näiteks https://example.io.nabu.casa</translation>
+    </message>
+    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="152" />
       <source>Testing internal...</source>
       <translation>Sisemine testimine...</translation>
@@ -1061,11 +1061,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="186" />
       <source>Test external</source>
       <translation>Katseväline</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="213" />
-      <source>If you only have one address, put it in External URL and leave Internal URL empty. Helmsman will not switch between addresses in that case.</source>
-      <translation>Kui teil on ainult üks aadress, pange see välisele URL-ile ja jätke sisemine URL tühjaks. Helmsman ei vaheta sellisel juhul aadresse.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="220" />
@@ -1128,11 +1123,6 @@
       <translation>Liides</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="307" />
-      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.</source>
-      <translation type="unfinished" />
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="368" />
       <source>Events View and Cover</source>
       <translation>Sündmuste vaade ja kaanepilt</translation>
@@ -1153,11 +1143,6 @@
       <translation>Märguannete näitamine rakenduse kaanel</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="389" />
-      <source>Tint the cover with the latest Home Assistant alert. Turn this off to keep cover favorites visible.</source>
-      <translation>Lisage kate viimase Home Assistant hoiatusega. Lülitage see välja, et kaane lemmikud oleksid nähtavad.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="304" />
       <source>Native dashboard</source>
       <translation>Native armatuurlaud</translation>
@@ -1166,6 +1151,16 @@
       <location filename="../qml/pages/SettingsPage.qml" line="34" />
       <source>System</source>
       <translation>System</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="213" />
+      <source>To only use one address (and disable the switching logic), put the address in the external field.</source>
+      <translation>Kui soovid kasutada ainult ühte aadressi (ja lülitada vahetamise loogika välja), sisesta aadress välisesse välja.</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="307" />
+      <source>Render your dashboards natively instead of using the Home Assistant web UI. On by default. Unimplemented things still open in the webview.</source>
+      <translation>Kuvab juhtpaneelid natiivselt Home Assistanti veebiliidese asemel. Vaikimisi sees. Teostamata asjad avanevad endiselt webview’s.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="314" />
@@ -1181,31 +1176,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="357" />
       <source>Restart Helmsman to apply the selected engine.</source>
       <translation>Taaskäivitage Helmsman valitud mootori rakendamiseks.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="358" />
-      <source>Used for the Home Assistant web UI. ESR153 appears when sailfish-browser-next153 is installed; Atlantic when Atlantic Browser is installed.</source>
-      <translation>Kasutatakse Home Assistant veebikasutajaliidese jaoks. ESR153 ilmub siis, kui purikala-brauser-next153 on paigaldatud; Atlandi ookeanil, kui on paigaldatud Atlantic Browser.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="399" />
-      <source>Pick lights, switches, scripts, ACs, and sensors for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>Valige valgustid, lülitid, skriptid, vahelduvvoolud ja andurid rakenduse katte jaoks. Puudutage valgust, lülitit või AC-d selle lülitamiseks või skripti selle käivitamiseks. Andurid näitavad lihtsalt oma praegust väärtust ja neil pole kattenuppu.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="404" />
-      <source>Choose cover favorites</source>
-      <translation>Vali kaane lemmikud</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="417" />
-      <source>Pick lights, switches, scripts, ACs, sensors, and graphs for the Events View. Search on the favorites page filters every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In Events View favorites, drag a preview card to reorder it, or drop it on the bin to remove it.</source>
-      <translation>Valige sündmuste vaate jaoks tuled, lülitid, skriptid, vahelduvvoolud, andurid ja graafikud. Otsing lemmikute lehel filtreerib iga nimekirja. Puudutage valgust, lülitit või vahelduvvoolu selle lülitamiseks, hoidke valgust heleduse / värvi või vahelduvvoolu režiimi, temperatuuri, ventilaatori ja tiivikute jaoks või puudutage skripti Run ja Loobu. Andurid näitavad oma praegust väärtust viimase 24 tunniga kaardi taustana. Graafikud on andurid, mis juba avaldavad täna / homme seeria, näiteks Nordpool elektrihinnad. Sündmuste vaatamise lemmikutes lohista eelvaatluse kaart, et see uuesti tellida, või kukuta see prügikasti, et see eemaldada.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="422" />
-      <source>Choose Events View favorites</source>
-      <translation>Sündmuste vaate lemmikute valimine</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="436" />
@@ -1308,29 +1278,14 @@
       <translation>Uuendamise kiiruse ja aku kasutamise tasakaal. GPS ei tööta.</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="589" />
-      <source>Request own location if older than</source>
-      <translation>Oma asukoha taotlemine, kui see on vanem kui</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="595" />
       <source>%1 min</source>
       <translation>%1 min</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="617" />
-      <source>Uses location updates from other apps when they request GPS. Helmsman only turns GPS on itself if the last fix is older than this.</source>
-      <translation>Kasutab GPS-i taotlemisel teiste rakenduste asukohavärskendusi. Helmsman lülitab GPS-i sisse ainult siis, kui viimane parandus on sellest vanem.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="623" />
       <source>Mark home on internal connection</source>
       <translation>Kodu märkimine siseühenduses</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="626" />
-      <source>Report home without using GPS while connected through the internal URL. Helmsman includes the Home zone coordinates so the device shows on the map, and repeats that update so Home Assistant does not time out to away. When disabled, no location is sent on that connection.</source>
-      <translation>Teatage kodust ilma GPS-i kasutamata, kui olete sisemise URL-i kaudu ühendatud. Helmsman sisaldab Home tsooni koordinaate, nii et seade näitab kaardil, ja kordab seda värskendust, nii et Home Assistant ei aegu. Kui see on keelatud, ei saa selle ühenduse kohta asukohta saata.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="642" />
@@ -1346,6 +1301,51 @@
       <location filename="../qml/pages/SettingsPage.qml" line="509" />
       <source>Refresh sensor config</source>
       <translation>Anduri seadistuse värskendamine</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="358" />
+      <source>Choose which engine the webviews should be rendered in. Stock/ESR153/Atlantic are supported if installed</source>
+      <translation>Vali mootor, millega webview’sid kuvatakse. Stock/ESR153/Atlantic on toetatud, kui need on paigaldatud</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="389" />
+      <source>If this is enabled, notifications take over the app cover until dismissed</source>
+      <translation>Kui see on sees, võtavad teatised rakenduse kaane üle, kuni need suletakse</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="399" />
+      <source>Select entities to show on the app cover</source>
+      <translation>Vali olemid, mida näidatakse rakenduse kaanel</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="404" />
+      <source>Manage app cover entities</source>
+      <translation>Halda rakenduse kaane olemeid</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="417" />
+      <source>Select entities to show in the Events View widget when enabled.</source>
+      <translation>Vali olemid, mida näidatakse Events View vidinas, kui see on sees.</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="422" />
+      <source>Manage events view entities</source>
+      <translation>Halda Events View olemeid</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="589" />
+      <source>Get a location fix if older than</source>
+      <translation>Hangi asukoht, kui see on vanem kui</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="617" />
+      <source>Helmsman only turns GPS on itself if the last fix is older than this - otherwise it uses fixes requested by other apps</source>
+      <translation>Helmsman lülitab GPS-i ise sisse ainult siis, kui viimane asukoht on sellest vanem – muidu kasutab teiste rakenduste küsitud asukohti</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="626" />
+      <source>Always reports the location as 'home' when connected to the internal host</source>
+      <translation>Teatab asukoha alati olekuna 'home', kui ühendus on sisemise hostiga</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="667" />

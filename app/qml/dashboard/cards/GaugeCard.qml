@@ -5,7 +5,7 @@ import ".."
 CardChrome {
     id: root
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     readonly property double value: {
         var s = (dashboard && root.rev >= 0) ? dashboard.entityState(entityId) : "0"
         return Number(s)

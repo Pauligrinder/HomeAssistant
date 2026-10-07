@@ -431,6 +431,7 @@ ApplicationWindow
 
     WifiChecker {
         id: appWifi
+        fallbackPoll: true
         onNetworkChanged: {
             hassClientInstance.updateNetworkState(appWifi.ready, appWifi.connected, appWifi.ssid)
         }

@@ -221,7 +221,7 @@ CardChrome {
 
     Timer {
         interval: 5 * 60 * 1000
-        running: true
+        running: Qt.application.active
         repeat: true
         onTriggered: root.syncWeek()
     }

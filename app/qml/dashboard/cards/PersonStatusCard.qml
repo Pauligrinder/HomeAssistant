@@ -14,7 +14,7 @@ CardChrome {
             return String(card.battery_entity)
         return card && card.google_battery ? String(card.google_battery) : ""
     }
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     property string imageUrl: ""
     property string requestedPath: ""
 

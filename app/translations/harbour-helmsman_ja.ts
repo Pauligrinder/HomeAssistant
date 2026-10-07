@@ -16,7 +16,7 @@
   <context>
     <name>BadgeChip</name>
     <message>
-      <location filename="../qml/dashboard/BadgeChip.qml" line="40" />
+      <location filename="../qml/dashboard/BadgeChip.qml" line="49" />
       <source>Run</source>
       <translation>実行</translation>
     </message>
@@ -147,13 +147,13 @@
   <context>
     <name>EntitiesCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="74" />
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="239" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="96" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="261" />
       <source>Run</source>
       <translation>実行</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="238" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="260" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
@@ -198,13 +198,13 @@
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="144" />
-      <source>Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Use search to filter every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In the preview, drag a favorite to reorder it, or drop it on the bin to remove it.</source>
-      <translation>イベントビューのライト、スイッチ、スクリプト、AC、センサー、グラフを選択します。 すべてのリストをフィルタリングするために検索を使用します。 光をタップします。, スイッチ, または AC それを切り替える, 明るさ/色またはモードのための AC の光を保持します。, 温度, ファン, そして消えます, または実行とキャンセルのためのスクリプトをタップ. センサーはカードの背景として最後の24時間と現在の値を示します。 グラフは、Nordpool電気価格など、現在/tomorrowシリーズを既に公開しているセンサーです。 プレビューでは、お気に入りをドラッグして並べ替えたり、ビンにドロップして削除します。</translation>
+      <source>Select entities to show in the Events View widget when enabled</source>
+      <translation>有効なときに Events View ウィジェットに表示するエンティティを選ぶ</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="145" />
-      <source>Choose lights, switches, scripts, ACs, and sensors for the app cover. Use search to filter the lists. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>アプリカバーのライト、スイッチ、スクリプト、AC、センサーを選択します。 検索を使用してリストをフィルタリングします。 フィット以上の場合は、カバー矢印を使用してページを変更します。 光をタップします。, スイッチ, AC それを切り替える, またはスクリプトを実行します。. センサーは、現在の値を表示し、カバーボタンがありません。</translation>
+      <source>Select entities to show on the app cover</source>
+      <translation>アプリのカバーに表示するエンティティを選ぶ</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="148" />
@@ -316,42 +316,42 @@
   <context>
     <name>FeatureBar</name>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="70" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="79" />
       <source>On</source>
       <translation>オン</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="90" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="99" />
       <source>Brightness</source>
       <translation>明るさ</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="217" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="226" />
       <source>Unlock</source>
       <translation>解錠</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="219" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="228" />
       <source>Run</source>
       <translation>実行</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="220" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
       <source>Open</source>
       <translation>開く</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Lock</source>
       <translation>施錠</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Close</source>
       <translation>閉じる</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="418" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="427" />
       <source>Color temperature</source>
       <translation>色温度</translation>
     </message>
@@ -387,7 +387,7 @@
   <context>
     <name>GlanceCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="154" />
+      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="176" />
       <source>Run</source>
       <translation>実行</translation>
     </message>
@@ -453,43 +453,43 @@
       <translation>English</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2940" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3016" />
       <source>Running %1</source>
       <translation>実行中 %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2942" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3018" />
       <source>Wants to run %1</source>
       <translation>%1 を実行しようとしています</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2944" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3020" />
       <source>Wants to perform this action</source>
       <translation>この操作を実行しようとしています</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2103" />
-      <location filename="../src/lovelacecoordinator.cpp" line="2951" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2179" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3027" />
       <source>Run</source>
       <translation>実行</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2102" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2178" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2952" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3028" />
       <source>Allow</source>
       <translation>許可</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2955" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3031" />
       <source>Cancel</source>
       <translation>キャンセル</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2956" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3032" />
       <source>Deny</source>
       <translation>拒否</translation>
     </message>
@@ -636,13 +636,13 @@
   <context>
     <name>HistoryChart</name>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="194" />
-      <location filename="../qml/dashboard/HistoryChart.qml" line="198" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="211" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="215" />
       <source>Unknown</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="196" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="213" />
       <source>Unavailable</source>
       <translation type="unfinished" />
     </message>
@@ -813,103 +813,103 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="84" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="93" />
       <source>Restart stream</source>
       <translation>ストリームを再起動</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="151" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="160" />
       <source>History</source>
       <translation>履歴</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="162" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="171" />
       <source>Last changed</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="168" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="177" />
       <source>Last updated</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="196" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="649" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="205" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="658" />
       <source>Run</source>
       <translation>実行</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn off</source>
       <translation>オフにする</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn on</source>
       <translation>オンにする</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="455" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="464" />
       <source>Brightness</source>
       <translation>明るさ</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="264" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="273" />
       <source>Open</source>
       <translation>開く</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="220" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="229" />
       <source>Lights</source>
       <translation>ライト</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="277" />
       <source>Stop</source>
       <translation>停止</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="272" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="281" />
       <source>Close</source>
       <translation>閉じる</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="285" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="294" />
       <source>Position</source>
       <translation>位置</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="299" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="308" />
       <source>Value</source>
       <translation>値</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="305" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="314" />
       <source>Controls</source>
       <translation>操作</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="315" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="324" />
       <source>Sensors</source>
       <translation>センサー</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="325" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="334" />
       <source>Related</source>
       <translation>関連</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="335" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="344" />
       <source>Attributes</source>
       <translation>属性</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="472" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="481" />
       <source>Temperature</source>
       <translation>温度</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="504" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="513" />
       <source>Color</source>
       <translation>色</translation>
     </message>
@@ -998,11 +998,6 @@
       <translation>Helmsman の設定</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="136" />
-      <source>Use full URLs including the scheme. Internal is often http:// on LAN; external is often https://.</source>
-      <translation>スキームを含むフルURLを使用します。 内部は、多くの場合、LAN上で http:// です。外部は https:// です。</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="288" />
       <source>Language</source>
       <translation>言語</translation>
@@ -1038,6 +1033,11 @@
       <translation>接続</translation>
     </message>
     <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="136" />
+      <source>Use full URLs. Internal is usually http://&lt;ip-address&gt;:&lt;port&gt;, external something like https://example.io.nabu.casa</source>
+      <translation>完全な URL を使ってください。内部は通常 http://&lt;ip-address&gt;:&lt;port&gt;、外部は例えば https://example.io.nabu.casa です</translation>
+    </message>
+    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="152" />
       <source>Testing internal...</source>
       <translation>内部のテスト...</translation>
@@ -1061,11 +1061,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="186" />
       <source>Test external</source>
       <translation>外部をテスト</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="213" />
-      <source>If you only have one address, put it in External URL and leave Internal URL empty. Helmsman will not switch between addresses in that case.</source>
-      <translation>1つのアドレスしかない場合、外部URLに置き、内部URLを空にします。 Helmsmanは、その場合のアドレス間で切り替えません。</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="220" />
@@ -1128,11 +1123,6 @@
       <translation>インターフェース</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="307" />
-      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.</source>
-      <translation type="unfinished" />
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="368" />
       <source>Events View and Cover</source>
       <translation>Events View とカバー</translation>
@@ -1153,11 +1143,6 @@
       <translation>アプリカバーに通知を表示</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="389" />
-      <source>Tint the cover with the latest Home Assistant alert. Turn this off to keep cover favorites visible.</source>
-      <translation>最新のHome Assistantアラートでカバーをタッチします。 カバーのお気に入りを見えるようにするには、このをオフにします。</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="304" />
       <source>Native dashboard</source>
       <translation>ネイティブダッシュボード</translation>
@@ -1166,6 +1151,16 @@
       <location filename="../qml/pages/SettingsPage.qml" line="34" />
       <source>System</source>
       <translation>System</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="213" />
+      <source>To only use one address (and disable the switching logic), put the address in the external field.</source>
+      <translation>アドレスを一つだけ使う（切り替え処理を無効にする）場合は、外部の欄に入力してください。</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="307" />
+      <source>Render your dashboards natively instead of using the Home Assistant web UI. On by default. Unimplemented things still open in the webview.</source>
+      <translation>Home Assistant のウェブ UI ではなく、ダッシュボードをネイティブに表示します。既定でオンです。未実装のものは引き続き webview で開きます。</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="314" />
@@ -1181,31 +1176,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="357" />
       <source>Restart Helmsman to apply the selected engine.</source>
       <translation>選択したエンジンを適用するHelmsmanを再起動します。</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="358" />
-      <source>Used for the Home Assistant web UI. ESR153 appears when sailfish-browser-next153 is installed; Atlantic when Atlantic Browser is installed.</source>
-      <translation>Home Assistant Web UI に使用されます。 ESR153 は、Sailfish-browser-next153 がインストールされると表示されます。大西洋大西洋のブラウザがインストールされているとき。</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="399" />
-      <source>Pick lights, switches, scripts, ACs, and sensors for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>アプリカバー用のライト、スイッチ、スクリプト、AC、センサーをピックアップします。 光をタップします。, スイッチ, AC それを切り替える, またはスクリプトを実行します。. センサーは、現在の値を表示し、カバーボタンがありません。</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="404" />
-      <source>Choose cover favorites</source>
-      <translation>カバーのお気に入りを選択</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="417" />
-      <source>Pick lights, switches, scripts, ACs, sensors, and graphs for the Events View. Search on the favorites page filters every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In Events View favorites, drag a preview card to reorder it, or drop it on the bin to remove it.</source>
-      <translation>イベントビューのライト、スイッチ、スクリプト、AC、センサー、グラフを選択します。 お気に入りのページフィルターをリストごとに検索します。 光をタップします。, スイッチ, または AC それを切り替える, 明るさ/色またはモードのための AC の光を保持します。, 温度, ファン, そして消えます, または実行とキャンセルのためのスクリプトをタップ. センサーはカードの背景として最後の24時間と現在の値を示します。 グラフは、Nordpool電気価格など、現在/tomorrowシリーズを既に公開しているセンサーです。 イベントでお気に入りを表示したり、プレビューカードをドラッグして並べ替えたり、ビンにドロップして削除します。</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="422" />
-      <source>Choose Events View favorites</source>
-      <translation>Events View のお気に入りを選択</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="436" />
@@ -1308,29 +1278,14 @@
       <translation>更新速度とバッテリー使用のバランス。 走行中のGPSは保持されません。</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="589" />
-      <source>Request own location if older than</source>
-      <translation>この時間より古い場合は自分で位置を取得</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="595" />
       <source>%1 min</source>
       <translation>%1 分</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="617" />
-      <source>Uses location updates from other apps when they request GPS. Helmsman only turns GPS on itself if the last fix is older than this.</source>
-      <translation>GPSを要求するとき、他のアプリから位置の更新を使用します。 最後の修正がこれよりも古い場合、Helmsmanはそれ自体にGPSだけを回します。</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="623" />
       <source>Mark home on internal connection</source>
       <translation>内部接続時に在宅にする</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="626" />
-      <source>Report home without using GPS while connected through the internal URL. Helmsman includes the Home zone coordinates so the device shows on the map, and repeats that update so Home Assistant does not time out to away. When disabled, no location is sent on that connection.</source>
-      <translation>内部 URL を介して接続しながら、GPS を使用せずに自宅をレポートします。 Helmsman には、マップ上にデバイスが表示されているため、ホーム ゾーンの座標が組み込まれており、Home Assistant が離脱しないため、更新が繰り返されます。 無効にすると、その接続に場所が送られません。</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="642" />
@@ -1346,6 +1301,51 @@
       <location filename="../qml/pages/SettingsPage.qml" line="509" />
       <source>Refresh sensor config</source>
       <translation>センサー設定を更新</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="358" />
+      <source>Choose which engine the webviews should be rendered in. Stock/ESR153/Atlantic are supported if installed</source>
+      <translation>webview を描画するエンジンを選びます。インストールされていれば Stock/ESR153/Atlantic に対応します</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="389" />
+      <source>If this is enabled, notifications take over the app cover until dismissed</source>
+      <translation>有効にすると、通知を閉じるまでアプリのカバーを通知が占めます</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="399" />
+      <source>Select entities to show on the app cover</source>
+      <translation>アプリのカバーに表示するエンティティを選ぶ</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="404" />
+      <source>Manage app cover entities</source>
+      <translation>アプリのカバーのエンティティを管理</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="417" />
+      <source>Select entities to show in the Events View widget when enabled.</source>
+      <translation>有効なときに Events View ウィジェットに表示するエンティティを選ぶ。</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="422" />
+      <source>Manage events view entities</source>
+      <translation>Events View のエンティティを管理</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="589" />
+      <source>Get a location fix if older than</source>
+      <translation>これより古ければ位置を取得</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="617" />
+      <source>Helmsman only turns GPS on itself if the last fix is older than this - otherwise it uses fixes requested by other apps</source>
+      <translation>Helmsman は最後の位置がこれより古いときだけ自分で GPS をオンにします。それ以外は他のアプリが取得した位置を使います</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="626" />
+      <source>Always reports the location as 'home' when connected to the internal host</source>
+      <translation>内部ホストに接続しているときは、位置を常に 'home' として報告します</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="667" />

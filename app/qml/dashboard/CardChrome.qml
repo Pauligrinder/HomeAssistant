@@ -7,12 +7,12 @@ Rectangle {
     property var dashboard
     property var hassClient
     property var mdiIcons
-    // The coordinator's entity accessors are plain slots with no change
-    // notification, so a binding that only calls them never re-runs. Cards
-    // read a revision counter (this, or their own rev) inside those bindings
-    // so Home Assistant state updates reach the UI. Removing those reads
-    // silently freezes the card at its first value.
-    property int statesRevision: dashboard ? dashboard.statesRevision : 0
+    // Accessors have no NOTIFY. statesRevision bumps only for visibility /
+    // filter / pending changes; entityTick covers this card's primary entity
+    // so content still refreshes without rebinding the whole dashboard.
+    property int entityTick: 0
+    readonly property int statesRevision: (dashboard ? dashboard.statesRevision : 0)
+                                          + entityTick
     property bool tapEnabled: true
     property bool showBackground: true
     property int fillHeight: 0
@@ -52,6 +52,15 @@ Rectangle {
     }
     visible: !dashboard || !card || (statesRevision >= 0 && dashboard.cardVisible(card))
     clip: true
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            if (chrome.trackedEntityId.length
+                    && entityId === chrome.trackedEntityId)
+                chrome.entityTick++
+        }
+    }
 
     // Lovelace lets a card rename the entity it shows, and that name has to win
     // over the friendly name coming from Home Assistant.

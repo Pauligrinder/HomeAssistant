@@ -7,10 +7,16 @@ CardChrome {
     tapEnabled: false
     property string imageUrl: ""
     property string requestedPath: ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int listTick: 0
+    readonly property int rev: root.statesRevision + listTick
     contentTopMargin: 0
     contentBottomMargin: 0
     contentHorizontalMargin: 0
+
+    Connections {
+        target: dashboard
+        onEntityChanged: root.listTick++
+    }
     // Sailfish DarkOnLight = light ambience (dark text); LightOnDark = dark.
     readonly property bool lightAmbience: Theme.colorScheme === Theme.DarkOnLight
     readonly property string footerEntityId: {

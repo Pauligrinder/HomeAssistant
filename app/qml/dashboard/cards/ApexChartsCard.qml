@@ -7,7 +7,7 @@ import ".."
 CardChrome {
     id: root
     tapEnabled: false
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     readonly property var series: (card && card.series) ? card.series : []
     property date now: new Date()
     readonly property date rangeStart: chartStart()
@@ -202,6 +202,10 @@ CardChrome {
         height: (card && card.apex_config && card.apex_config.chart
                  && card.apex_config.chart.height)
                 ? Number(card.apex_config.chart.height) : 320
+        // Same as HistoryChart: keep the painted frame across backgrounding,
+        // then redraw from the series already on the card when we return.
+        renderTarget: Canvas.Image
+        renderStrategy: Canvas.Immediate
 
         onPaint: {
             // Reading rev makes state attribute changes repaint the chart.
@@ -318,12 +322,23 @@ CardChrome {
             onRevChanged: chart.requestPaint()
             onNowChanged: chart.requestPaint()
         }
+        Connections {
+            target: Qt.application
+            onStateChanged: {
+                if (Qt.application.state === Qt.ApplicationActive)
+                    root.now = new Date()
+            }
+        }
+        onAvailableChanged: {
+            if (available)
+                requestPaint()
+        }
         Component.onCompleted: requestPaint()
     }
 
     Timer {
         interval: 30000
-        running: true
+        running: Qt.application.active
         repeat: true
         onTriggered: root.now = new Date()
     }

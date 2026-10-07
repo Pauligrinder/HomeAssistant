@@ -16,7 +16,7 @@
   <context>
     <name>BadgeChip</name>
     <message>
-      <location filename="../qml/dashboard/BadgeChip.qml" line="40" />
+      <location filename="../qml/dashboard/BadgeChip.qml" line="49" />
       <source>Run</source>
       <translation>Palaist</translation>
     </message>
@@ -147,13 +147,13 @@
   <context>
     <name>EntitiesCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="74" />
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="239" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="96" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="261" />
       <source>Run</source>
       <translation>Palaist</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="238" />
+      <location filename="../qml/dashboard/cards/EntitiesCard.qml" line="260" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
@@ -198,13 +198,13 @@
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="144" />
-      <source>Choose lights, switches, scripts, ACs, sensors, and graphs for the Events View. Use search to filter every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In the preview, drag a favorite to reorder it, or drop it on the bin to remove it.</source>
-      <translation>Izvēlies gaismas, slēdžus, skriptus, maiņstrāvas, sensorus un grafikus notikumu skatam. Izmantot meklēšanu, lai filtrētu katru sarakstu. Piesitiet gaismai, slēdzim vai maiņstrāvai, lai to pārslēgtu, turiet gaismu spilgtumam/krāsai vai AC režīmam, temperatūrai, ventilatoram un vannām, vai piesitiet skriptam, lai palaistu un atceltu. Sensori parāda savu pašreizējo vērtību ar pēdējām 24 stundām kā kartes fonu. Diagrammas ir sensori, kas jau publicē šodien / rīt sērijas, piemēram, Nordpool elektroenerģijas cenas. Priekšskatījumā velciet favorītu, lai to pārkārtotu, vai nometiet to uz bina, lai to noņemtu.</translation>
+      <source>Select entities to show in the Events View widget when enabled</source>
+      <translation>Izvēlieties entītijas, kas tiek rādītas Events View logrīkā, kad tas ir ieslēgts</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="145" />
-      <source>Choose lights, switches, scripts, ACs, and sensors for the app cover. Use search to filter the lists. If there are more than fit, use the cover arrows to change page. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>Izvēlieties gaismas, slēdži, skripti, AC, un sensori lietotnes vāku. Izmantojiet meklēšanu sarakstu filtrēšanai. Ja ir vairāk nekā piemērots, izmantojiet vāku bultiņas, lai mainītu lapu. Lai to pārslēgtu, piesitiet gaismai, slēdzim vai maiņstrāvai, vai skriptam, lai to darbinātu. Sensori vienkārši parāda savu pašreizējo vērtību un nav aizsegpogu.</translation>
+      <source>Select entities to show on the app cover</source>
+      <translation>Izvēlieties entītijas, kas tiek rādītas lietotnes vākā</translation>
     </message>
     <message>
       <location filename="../qml/pages/EventsViewSettingsPage.qml" line="148" />
@@ -316,42 +316,42 @@
   <context>
     <name>FeatureBar</name>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="70" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="79" />
       <source>On</source>
       <translation>On</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="90" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="99" />
       <source>Brightness</source>
       <translation>Spilgtums</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="217" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="226" />
       <source>Unlock</source>
       <translation>Atslēgt</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="219" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="228" />
       <source>Run</source>
       <translation>Palaist</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="220" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="229" />
       <source>Open</source>
       <translation>Atvērt</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Lock</source>
       <translation>Slēgt</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="239" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="248" />
       <source>Close</source>
       <translation>Aizvērt</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/features/FeatureBar.qml" line="418" />
+      <location filename="../qml/dashboard/features/FeatureBar.qml" line="427" />
       <source>Color temperature</source>
       <translation>Krāsu temperatūra</translation>
     </message>
@@ -387,7 +387,7 @@
   <context>
     <name>GlanceCard</name>
     <message>
-      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="154" />
+      <location filename="../qml/dashboard/cards/GlanceCard.qml" line="176" />
       <source>Run</source>
       <translation>Palaist</translation>
     </message>
@@ -453,43 +453,43 @@
       <translation>English</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2940" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3016" />
       <source>Running %1</source>
       <translation>Darbojas %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2942" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3018" />
       <source>Wants to run %1</source>
       <translation>Vēlas palaist %1</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2944" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3020" />
       <source>Wants to perform this action</source>
       <translation>Vēlas veikt šo darbību</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2103" />
-      <location filename="../src/lovelacecoordinator.cpp" line="2951" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2179" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3027" />
       <source>Run</source>
       <translation>Palaist</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2102" />
+      <location filename="../src/lovelacecoordinator.cpp" line="2178" />
       <source>Running</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2952" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3028" />
       <source>Allow</source>
       <translation>Atļaut</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2955" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3031" />
       <source>Cancel</source>
       <translation>Atcelt</translation>
     </message>
     <message>
-      <location filename="../src/lovelacecoordinator.cpp" line="2956" />
+      <location filename="../src/lovelacecoordinator.cpp" line="3032" />
       <source>Deny</source>
       <translation>Aizliegt</translation>
     </message>
@@ -636,13 +636,13 @@
   <context>
     <name>HistoryChart</name>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="194" />
-      <location filename="../qml/dashboard/HistoryChart.qml" line="198" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="211" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="215" />
       <source>Unknown</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/dashboard/HistoryChart.qml" line="196" />
+      <location filename="../qml/dashboard/HistoryChart.qml" line="213" />
       <source>Unavailable</source>
       <translation type="unfinished" />
     </message>
@@ -813,103 +813,103 @@
   <context>
     <name>MoreInfoPage</name>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="84" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="93" />
       <source>Restart stream</source>
       <translation>Pārstartēt straumi</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="151" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="160" />
       <source>History</source>
       <translation>Vēsture</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="162" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="171" />
       <source>Last changed</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="168" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="177" />
       <source>Last updated</source>
       <translation type="unfinished" />
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="196" />
-      <location filename="../qml/pages/MoreInfoPage.qml" line="649" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="205" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="658" />
       <source>Run</source>
       <translation>Palaist</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn off</source>
       <translation>Izslēgt</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="197" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="206" />
       <source>Turn on</source>
       <translation>Ieslēgts</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="455" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="464" />
       <source>Brightness</source>
       <translation>Spilgtums</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="264" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="273" />
       <source>Open</source>
       <translation>Atvērt</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="220" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="229" />
       <source>Lights</source>
       <translation>Gaismas</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="268" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="277" />
       <source>Stop</source>
       <translation>Apturēt</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="272" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="281" />
       <source>Close</source>
       <translation>Aizvērt</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="285" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="294" />
       <source>Position</source>
       <translation>Pozīcija</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="299" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="308" />
       <source>Value</source>
       <translation>Vērtība</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="305" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="314" />
       <source>Controls</source>
       <translation>Kontrole</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="315" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="324" />
       <source>Sensors</source>
       <translation>Sensori</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="325" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="334" />
       <source>Related</source>
       <translation>Saistīts</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="335" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="344" />
       <source>Attributes</source>
       <translation>Atribūti</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="472" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="481" />
       <source>Temperature</source>
       <translation>Temperatūra</translation>
     </message>
     <message>
-      <location filename="../qml/pages/MoreInfoPage.qml" line="504" />
+      <location filename="../qml/pages/MoreInfoPage.qml" line="513" />
       <source>Color</source>
       <translation>Krāsa</translation>
     </message>
@@ -998,11 +998,6 @@
       <translation>Helmsman iestatījumi</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="136" />
-      <source>Use full URLs including the scheme. Internal is often http:// on LAN; external is often https://.</source>
-      <translation>Izmantot visus URL, ieskaitot shēmu. Iekšējs bieži ir http://par LAN; ārējs bieži ir https://.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="288" />
       <source>Language</source>
       <translation>Valoda</translation>
@@ -1038,6 +1033,11 @@
       <translation>Savienojums</translation>
     </message>
     <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="136" />
+      <source>Use full URLs. Internal is usually http://&lt;ip-address&gt;:&lt;port&gt;, external something like https://example.io.nabu.casa</source>
+      <translation>Izmantojiet pilnas URL. Iekšējā parasti ir http://&lt;ip-address&gt;:&lt;port&gt;, ārējā piemēram https://example.io.nabu.casa</translation>
+    </message>
+    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="152" />
       <source>Testing internal...</source>
       <translation>Pārbauda iekšējo...</translation>
@@ -1061,11 +1061,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="186" />
       <source>Test external</source>
       <translation>Ārējā pārbaude</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="213" />
-      <source>If you only have one address, put it in External URL and leave Internal URL empty. Helmsman will not switch between addresses in that case.</source>
-      <translation>Ja jums ir tikai viena adrese, ielieciet to ārējā URL un atstājiet Iekšējo URL tukšu. Šajā gadījumā Helmsman nemainīsies starp adresēm.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="220" />
@@ -1128,11 +1123,6 @@
       <translation>Saskarne</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="307" />
-      <source>Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.</source>
-      <translation type="unfinished" />
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="368" />
       <source>Events View and Cover</source>
       <translation>Notikumu skats un vāks</translation>
@@ -1153,11 +1143,6 @@
       <translation>Rādīt paziņojumus uz programmas vāka</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="389" />
-      <source>Tint the cover with the latest Home Assistant alert. Turn this off to keep cover favorites visible.</source>
-      <translation>Uzrakstiet vāku ar jaunāko Home Assistant brīdinājumu. Izslēdziet šo, lai vāka favorīti būtu redzami.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="304" />
       <source>Native dashboard</source>
       <translation>Iekšējais panelis</translation>
@@ -1166,6 +1151,16 @@
       <location filename="../qml/pages/SettingsPage.qml" line="34" />
       <source>System</source>
       <translation>System</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="213" />
+      <source>To only use one address (and disable the switching logic), put the address in the external field.</source>
+      <translation>Lai izmantotu tikai vienu adresi (un izslēgtu pārslēgšanas loģiku), ievadiet adresi ārējā laukā.</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="307" />
+      <source>Render your dashboards natively instead of using the Home Assistant web UI. On by default. Unimplemented things still open in the webview.</source>
+      <translation>Rāda paneļus natīvi, nevis Home Assistant tīmekļa saskarnē. Pēc noklusējuma ieslēgts. Nerealizētais joprojām atveras webview.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="314" />
@@ -1181,31 +1176,6 @@
       <location filename="../qml/pages/SettingsPage.qml" line="357" />
       <source>Restart Helmsman to apply the selected engine.</source>
       <translation>Pārstartēt Helmsman, lai pielietotu izvēlēto dzinēju.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="358" />
-      <source>Used for the Home Assistant web UI. ESR153 appears when sailfish-browser-next153 is installed; Atlantic when Atlantic Browser is installed.</source>
-      <translation>Izmanto Home Assistant tīmekļa UI. ESR153 parādās, uzstādot jahtu-browser-next153; Atlantic, kad ir uzstādīts Atlantijas pārlūks.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="399" />
-      <source>Pick lights, switches, scripts, ACs, and sensors for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.</source>
-      <translation>Izvēlieties gaismas, slēdži, skripti, AC, un sensori lietotnes vāku. Lai to pārslēgtu, piesitiet gaismai, slēdzim vai maiņstrāvai, vai skriptam, lai to darbinātu. Sensori vienkārši parāda savu pašreizējo vērtību un nav aizsegpogu.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="404" />
-      <source>Choose cover favorites</source>
-      <translation>Izvēlieties vāka favorītus</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="417" />
-      <source>Pick lights, switches, scripts, ACs, sensors, and graphs for the Events View. Search on the favorites page filters every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In Events View favorites, drag a preview card to reorder it, or drop it on the bin to remove it.</source>
-      <translation>Izvēlieties gaismas, slēdži, skripti, maiņstrāvas, sensori, un grafiki Events View. Meklēt favorītu lapā filtrē katru sarakstu. Piesitiet gaismai, slēdzim vai maiņstrāvai, lai to pārslēgtu, turiet gaismu spilgtumam/krāsai vai AC režīmam, temperatūrai, ventilatoram un vannām, vai piesitiet skriptam, lai palaistu un atceltu. Sensori parāda savu pašreizējo vērtību ar pēdējām 24 stundām kā kartes fonu. Diagrammas ir sensori, kas jau publicē šodien / rīt sērijas, piemēram, Nordpool elektroenerģijas cenas. Notikumos Skatīt favorītus, velciet priekšskatījuma karti, lai to pārkārtotu, vai nometiet to uz bina, lai to noņemtu.</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="422" />
-      <source>Choose Events View favorites</source>
-      <translation>Izvēlieties notikumu skata favorītus</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="436" />
@@ -1308,29 +1278,14 @@
       <translation>Atjaunināšanas ātruma un akumulatoru izmantošanas līdzsvars. GPS nedarbojas.</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="589" />
-      <source>Request own location if older than</source>
-      <translation>Pieprasīt savu atrašanās vietu, ja vecāks par</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="595" />
       <source>%1 min</source>
       <translation>%1 min</translation>
     </message>
     <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="617" />
-      <source>Uses location updates from other apps when they request GPS. Helmsman only turns GPS on itself if the last fix is older than this.</source>
-      <translation>Izmanto atrašanās vietas atjauninājumus no citām programmām, kad tās pieprasa GPS. Helmsman ieslēdz GPS tikai tad, ja pēdējais labojums ir vecāks par šo.</translation>
-    </message>
-    <message>
       <location filename="../qml/pages/SettingsPage.qml" line="623" />
       <source>Mark home on internal connection</source>
       <translation>Atzīmēt mājas pie iekšējā savienojuma</translation>
-    </message>
-    <message>
-      <location filename="../qml/pages/SettingsPage.qml" line="626" />
-      <source>Report home without using GPS while connected through the internal URL. Helmsman includes the Home zone coordinates so the device shows on the map, and repeats that update so Home Assistant does not time out to away. When disabled, no location is sent on that connection.</source>
-      <translation>Ziņot mājās, neizmantojot GPS, kamēr pieslēgts caur iekšējo URL. Helmsman ietver Mājas zonas koordinātas, lai ierīce parāda kartē, un atkārto, ka atjaunināt, lai Home Assistant nav laika, lai prom. Ja atslēgts, šajā savienojumā netiek nosūtīta neviena vieta.</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="642" />
@@ -1346,6 +1301,51 @@
       <location filename="../qml/pages/SettingsPage.qml" line="509" />
       <source>Refresh sensor config</source>
       <translation>Atsvaidzināt devēja konfigurāciju</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="358" />
+      <source>Choose which engine the webviews should be rendered in. Stock/ESR153/Atlantic are supported if installed</source>
+      <translation>Izvēlieties dzinēju, ar kuru tiek attēloti webview. Stock/ESR153/Atlantic tiek atbalstīti, ja ir instalēti</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="389" />
+      <source>If this is enabled, notifications take over the app cover until dismissed</source>
+      <translation>Ja tas ir ieslēgts, paziņojumi pārņem lietotnes vāku, līdz tos aizver</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="399" />
+      <source>Select entities to show on the app cover</source>
+      <translation>Izvēlieties entītijas, kas tiek rādītas lietotnes vākā</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="404" />
+      <source>Manage app cover entities</source>
+      <translation>Pārvaldīt lietotnes vāka entītijas</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="417" />
+      <source>Select entities to show in the Events View widget when enabled.</source>
+      <translation>Izvēlieties entītijas, kas tiek rādītas Events View logrīkā, kad tas ir ieslēgts.</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="422" />
+      <source>Manage events view entities</source>
+      <translation>Pārvaldīt Events View entītijas</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="589" />
+      <source>Get a location fix if older than</source>
+      <translation>Iegūt atrašanās vietu, ja tā ir vecāka par</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="617" />
+      <source>Helmsman only turns GPS on itself if the last fix is older than this - otherwise it uses fixes requested by other apps</source>
+      <translation>Helmsman ieslēdz GPS pats tikai tad, ja pēdējā atrašanās vieta ir vecāka par šo — citādi izmanto citu lietotņu pieprasītās vietas</translation>
+    </message>
+    <message>
+      <location filename="../qml/pages/SettingsPage.qml" line="626" />
+      <source>Always reports the location as 'home' when connected to the internal host</source>
+      <translation>Vienmēr ziņo atrašanās vietu kā 'home', kad ir savienots ar iekšējo resursdatoru</translation>
     </message>
     <message>
       <location filename="../qml/pages/SettingsPage.qml" line="667" />

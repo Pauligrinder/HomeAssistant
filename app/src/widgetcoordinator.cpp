@@ -3,6 +3,8 @@
 #include "appsettings.h"
 #include "mdiiconrenderer.h"
 
+#include <QCoreApplication>
+#include <QGuiApplication>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -41,6 +43,7 @@ const char *kClientName = "Helmsman";
 const char *kDbusService = "org.helmsman.harbour-helmsman";
 const char *kDbusPath = "/widget";
 const int kPollIntervalMs = 8000;
+const int kBackgroundPollIntervalMs = 60 * 1000;
 const int kHistoryIntervalMs = 5 * 60 * 1000;
 // Never fetch states straight from start()/configure(): those run inside the
 // login reply handler and during endpoint switches, where an immediate request
@@ -1003,6 +1006,7 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     , m_ignoreSslErrors(false)
     , m_busy(false)
     , m_active(false)
+    , m_appActive(true)
     , m_dbusRegistered(false)
     , m_loadingSelected(false)
     , m_tokenRejected(false)
@@ -1027,10 +1031,18 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     connect(&m_presenceConfirmTimer, SIGNAL(timeout()),
             this, SLOT(onPresenceConfirmTimeout()));
 
+    if (qobject_cast<QGuiApplication *>(QCoreApplication::instance())) {
+        QGuiApplication *gui = qobject_cast<QGuiApplication *>(QCoreApplication::instance());
+        m_appActive = gui->applicationState() == Qt::ApplicationActive;
+        connect(gui, SIGNAL(applicationStateChanged(Qt::ApplicationState)),
+                this, SLOT(onApplicationStateChanged(Qt::ApplicationState)));
+    }
+
     loadSelected();
     watchSelectedFile();
     registerDBus();
     loadWidgetPresence();
+    updatePollInterval();
 }
 
 WidgetCoordinator::~WidgetCoordinator()
@@ -1708,6 +1720,29 @@ void WidgetCoordinator::setEventsViewWidgetEnabled(bool enabled)
     m_eventsViewWidgetEnabled = enabled;
     persistWidgetPresence();
     emit eventsViewWidgetEnabledChanged();
+    updatePollInterval();
+}
+
+void WidgetCoordinator::updatePollInterval()
+{
+    const bool fast = m_appActive || m_eventsViewWidgetEnabled;
+    const int interval = fast ? kPollIntervalMs : kBackgroundPollIntervalMs;
+    if (m_pollTimer.interval() == interval)
+        return;
+    m_pollTimer.setInterval(interval);
+    if (m_pollTimer.isActive())
+        m_pollTimer.start();
+}
+
+void WidgetCoordinator::onApplicationStateChanged(Qt::ApplicationState state)
+{
+    const bool active = state == Qt::ApplicationActive;
+    if (m_appActive == active)
+        return;
+    m_appActive = active;
+    updatePollInterval();
+    if (m_appActive && m_active)
+        scheduleStates();
 }
 
 void WidgetCoordinator::persistWidgetPresence() const
@@ -2743,10 +2778,13 @@ void WidgetCoordinator::onSslErrors(QNetworkReply *reply, const QList<QSslError>
 
 void WidgetCoordinator::onPollTimeout()
 {
-    if (m_active) {
-        getStates();
+    if (!m_active)
+        return;
+    getStates();
+    // History is already rate-limited internally; skip the check entirely when
+    // backgrounded without an Events View presence to avoid wakeups.
+    if (m_appActive || m_eventsViewWidgetEnabled)
         fetchSensorHistory(false);
-    }
 }
 
 void WidgetCoordinator::onWidgetFileChanged(const QString &path)

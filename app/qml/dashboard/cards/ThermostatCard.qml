@@ -8,7 +8,7 @@ import ".."
 CardChrome {
     id: root
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
 
     function attr(name) {
         return (dashboard && root.rev >= 0) ? dashboard.attribute(entityId, name) : undefined

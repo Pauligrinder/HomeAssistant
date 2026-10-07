@@ -282,6 +282,9 @@ private:
     QVariantList normalizeViews(const QVariantMap &config) const;
     QVariantMap decorateCard(const QVariantMap &card) const;
     QVariantList decorateCards(const QVariantList &cards) const;
+    void rebuildConditionEntities();
+    void collectConditionEntities(const QVariant &value);
+    void collectEntitiesFromConditions(const QVariant &conditions);
     bool evalConditions(const QVariantList &conditions, bool matchAll) const;
     bool evalCondition(const QVariantMap &condition) const;
     QString defaultActionType(const QString &entityId, bool icon) const;
@@ -366,6 +369,11 @@ private:
     QVariantList m_areas;
     QVariantMap m_energyPrefs;
     QHash<QString, QVariantMap> m_entities;
+    // Entities referenced by visibility / conditional / filter rules. Only these
+    // (plus pending overlays) bump statesRevision on state_changed so the whole
+    // dashboard is not re-bound on every sensor tick.
+    QSet<QString> m_conditionEntities;
+    bool m_needsBroadStateBump;
     QHash<QString, QVariantMap> m_entityRegistry;
     QVariantMap m_entityComponentIcons;
     QVariantMap m_entityIcons;

@@ -6,7 +6,7 @@ CardChrome {
     id: root
     tapEnabled: false
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     property var events: []
 
     function fetchEvents() {
@@ -36,7 +36,7 @@ CardChrome {
 
     Timer {
         interval: 5 * 60 * 1000
-        running: true
+        running: Qt.application.active
         repeat: true
         onTriggered: root.fetchEvents()
     }

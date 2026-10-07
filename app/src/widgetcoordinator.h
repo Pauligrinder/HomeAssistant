@@ -12,6 +12,7 @@
 #include <QDateTime>
 #include <QSslError>
 #include <QList>
+#include <QGuiApplication>
 
 class QNetworkAccessManager;
 class QNetworkReply;
@@ -199,6 +200,7 @@ private slots:
     void onStartupTimeout();
     void onWidgetFileChanged(const QString &path);
     void onPresenceConfirmTimeout();
+    void onApplicationStateChanged(Qt::ApplicationState state);
 
 private:
     enum RequestKind {
@@ -238,6 +240,7 @@ private:
     void setEventsViewWidgetEnabled(bool enabled);
     void persistWidgetPresence() const;
     void loadWidgetPresence();
+    void updatePollInterval();
     QString notificationEntityId(const QString &tag) const;
     void emitWidgetPayloadChanged();
     void fetchSensorHistory(bool force);
@@ -256,6 +259,7 @@ private:
     bool m_ignoreSslErrors;
     bool m_busy;
     bool m_active;
+    bool m_appActive;
     bool m_dbusRegistered;
     bool m_loadingSelected;
     bool m_tokenRejected;
