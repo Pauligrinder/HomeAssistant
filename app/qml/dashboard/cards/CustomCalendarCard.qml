@@ -308,7 +308,7 @@ CardChrome {
             Label {
                 width: root.timeWidth
                 height: parent.height
-                text: qsTr("Time")
+                text: i18n.translation("time")
                 font.pixelSize: Theme.fontSizeTiny
                 verticalAlignment: Text.AlignVCenter
             }

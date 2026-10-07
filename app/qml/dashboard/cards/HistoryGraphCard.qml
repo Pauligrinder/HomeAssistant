@@ -126,7 +126,7 @@ CardChrome {
             }
             return true
         }
-        text: qsTr("No history")
+        text: i18n.translation("no_history")
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
         horizontalAlignment: Text.AlignHCenter

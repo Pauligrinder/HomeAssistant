@@ -46,7 +46,7 @@ Rectangle {
             return (pill.badge && typeof pill.badge === "object" && pill.badge.name)
                    ? String(pill.badge.name) : ""
         if (pill.entityId.indexOf("script.") === 0)
-            return qsTr("Run")
+            return i18n.translation("run")
         if (showState)
             return dashboard.formatState(pill.entityId)
         if (pill.badge && typeof pill.badge === "object" && pill.badge.name)

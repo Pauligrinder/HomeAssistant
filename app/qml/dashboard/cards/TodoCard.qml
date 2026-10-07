@@ -291,8 +291,8 @@ CardChrome {
             id: addField
             width: Math.max(Theme.itemSizeLarge,
                             parent.width - addButton.width - Theme.paddingSmall)
-            label: qsTr("Add item")
-            placeholderText: qsTr("Add item")
+            label: i18n.translation("add_item")
+            placeholderText: i18n.translation("add_item")
             inputMethodHints: Qt.ImhNoPredictiveText
             EnterKey.enabled: text.trim().length > 0
             EnterKey.iconSource: "image://theme/icon-m-add"
@@ -314,7 +314,7 @@ CardChrome {
         width: parent.width
         visible: root.totalCount === 0
         height: visible ? implicitHeight : 0
-        text: qsTr("No items")
+        text: i18n.translation("no_items")
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
     }
@@ -334,8 +334,8 @@ CardChrome {
             id: showCompletedLabel
             anchors.verticalCenter: parent.verticalCenter
             width: parent.width
-            text: root.showCompleted ? qsTr("Hide completed items")
-                                     : qsTr("Show completed items")
+            text: root.showCompleted ? i18n.translation("hide_completed_items")
+                                     : i18n.translation("show_completed_items")
             color: Theme.highlightColor
             font.pixelSize: Theme.fontSizeExtraSmall
         }

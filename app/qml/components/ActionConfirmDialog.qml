@@ -5,9 +5,9 @@ Dialog {
     id: dialog
     property var prompt: ({})
     readonly property string confirmText: (prompt && prompt.confirmText)
-                                          ? String(prompt.confirmText) : qsTr("Allow")
+                                          ? String(prompt.confirmText) : i18n.translation("allow")
     readonly property string dismissText: (prompt && prompt.dismissText)
-                                          ? String(prompt.dismissText) : qsTr("Deny")
+                                          ? String(prompt.dismissText) : i18n.translation("deny")
 
     DialogHeader {
         acceptText: dialog.confirmText

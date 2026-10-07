@@ -399,7 +399,7 @@ Page {
 
         PullDownMenu {
             MenuItem {
-                text: qsTr("Edit dashboard")
+                text: i18n.translation("edit_dashboard")
                 visible: {
                     if (!dashboard)
                         return false
@@ -413,17 +413,17 @@ Page {
                 onClicked: page.openEditDashboard()
             }
             MenuItem {
-                text: qsTr("Change dashboard")
+                text: i18n.translation("change_dashboard")
                 visible: !!(dashboard && dashboard.switcherItems
                             && dashboard.switcherItems.length > 1)
                 onClicked: page.openDashboardSwitcher()
             }
             MenuItem {
-                text: qsTr("Settings")
+                text: i18n.translation("settings")
                 onClicked: page.openSettings()
             }
             MenuItem {
-                text: qsTr("Refresh")
+                text: i18n.translation("refresh")
                 onClicked: {
                     if (dashboard)
                         dashboard.refresh()
@@ -555,12 +555,12 @@ Page {
                 horizontalAlignment: Text.AlignHCenter
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: qsTr("This dashboard is empty or uses custom HTML that the native renderer cannot show.")
+                text: i18n.translation("dashboard_unsupported")
             }
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Change to webview based dashboards")
+                text: i18n.translation("change_to_webview_based_dashboards")
                 onClicked: page.switchToWebviewDashboards()
             }
         }
@@ -573,7 +573,7 @@ Page {
             height: Theme.itemSizeLarge
             Label {
                 anchors.centerIn: parent
-                text: dashboard && dashboard.busy ? qsTr("Loading dashboard…") : qsTr("No views")
+                text: dashboard && dashboard.busy ? i18n.translation("loading_dashboard") : i18n.translation("no_views")
                 color: Theme.secondaryColor
             }
         }

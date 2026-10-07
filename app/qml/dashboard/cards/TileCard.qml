@@ -51,7 +51,7 @@ CardChrome {
                 visible: root.entityId.indexOf("script.") === 0
                 preferredWidth: Theme.buttonWidthExtraSmall
                 height: Theme.itemSizeExtraSmall
-                text: qsTr("Run")
+                text: i18n.translation("run")
                 onClicked: {
                     if (!dashboard || !root.entityId.length)
                         return

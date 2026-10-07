@@ -93,7 +93,7 @@ CardChrome {
                 if (entry && entry.action_name !== undefined && entry.action_name !== null
                         && String(entry.action_name).length)
                     return String(entry.action_name)
-                return qsTr("Run")
+                return i18n.translation("run")
             }
             readonly property bool showRunText: row.isScript
                     && rowType === "entity" && row.entityId.length > 0
@@ -257,8 +257,8 @@ CardChrome {
                         text: {
                             if (row.showRunText) {
                                 if (dashboard && root.rev >= 0 && dashboard.isOn(row.entityId))
-                                    return qsTr("Running")
-                                return qsTr("Run")
+                                    return i18n.translation("running")
+                                return i18n.translation("run")
                             }
                             return (dashboard && row.entityId.length && root.rev >= 0)
                                    ? dashboard.formatState(row.entityId) : ""

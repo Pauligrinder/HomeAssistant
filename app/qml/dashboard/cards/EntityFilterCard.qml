@@ -55,7 +55,7 @@ CardChrome {
                 visible: String(modelData).indexOf("script.") === 0
                 preferredWidth: Theme.buttonWidthExtraSmall
                 height: Theme.itemSizeExtraSmall
-                text: qsTr("Run")
+                text: i18n.translation("run")
                 onClicked: {
                     if (!dashboard)
                         return

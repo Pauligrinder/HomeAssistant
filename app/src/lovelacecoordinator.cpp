@@ -1,3 +1,4 @@
+#include "helmsmani18n.h"
 #include "lovelacecoordinator.h"
 #include "hasscamerastream.h"
 #include "hasswebsocket.h"
@@ -20,7 +21,6 @@
 #include <QDebug>
 #include <QSslError>
 #include <QTimer>
-#include <QCoreApplication>
 #include <algorithm>
 
 namespace {
@@ -2175,8 +2175,8 @@ QString LovelaceCoordinator::formatState(const QString &entityId) const
         return QStringLiteral("Unknown");
     if (domainOfEntity(entityId) == QLatin1String("script")) {
         if (state == QLatin1String("on"))
-            return QCoreApplication::translate("Helmsman", "Running");
-        return QCoreApplication::translate("Helmsman", "Run");
+            return HelmsmanI18n::instance()->translation(QStringLiteral("running"));
+        return HelmsmanI18n::instance()->translation(QStringLiteral("run"));
     }
     if (!unit.isEmpty())
         return state + QLatin1Char(' ') + unit;
@@ -3013,23 +3013,23 @@ QVariantMap LovelaceCoordinator::buildConfirmationPrompt(const QVariant &confirm
     const bool isScript = domainOfEntity(entityId) == QLatin1String("script");
     if (title.isEmpty()) {
         if (isScript && !name.isEmpty())
-            title = QCoreApplication::translate("Helmsman", "Running %1").arg(name);
+            title = HelmsmanI18n::instance()->translation(QStringLiteral("running_name")).arg(name);
         else if (!name.isEmpty())
-            title = QCoreApplication::translate("Helmsman", "Wants to run %1").arg(name);
+            title = HelmsmanI18n::instance()->translation(QStringLiteral("wants_to_run")).arg(name);
         else
-            title = QCoreApplication::translate("Helmsman", "Wants to perform this action");
+            title = HelmsmanI18n::instance()->translation(QStringLiteral("wants_to_perform_this_action"));
     }
 
     QString confirmText = map.value(QStringLiteral("confirm_text")).toString().trimmed();
     QString dismissText = map.value(QStringLiteral("dismiss_text")).toString().trimmed();
     if (confirmText.isEmpty())
         confirmText = isScript
-                ? QCoreApplication::translate("Helmsman", "Run")
-                : QCoreApplication::translate("Helmsman", "Allow");
+                ? HelmsmanI18n::instance()->translation(QStringLiteral("run"))
+                : HelmsmanI18n::instance()->translation(QStringLiteral("allow"));
     if (dismissText.isEmpty())
         dismissText = isScript
-                ? QCoreApplication::translate("Helmsman", "Cancel")
-                : QCoreApplication::translate("Helmsman", "Deny");
+                ? HelmsmanI18n::instance()->translation(QStringLiteral("cancel"))
+                : HelmsmanI18n::instance()->translation(QStringLiteral("deny"));
 
     QVariantMap prompt;
     prompt.insert(QStringLiteral("active"), true);

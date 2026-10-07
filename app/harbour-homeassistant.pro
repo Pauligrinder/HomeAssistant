@@ -4,12 +4,13 @@ CONFIG += sailfishapp
 QT += network websockets gui positioning dbus qml
 LIBS += -ldl
 
-VERSION = 0.4.3
+VERSION = 0.4.4
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
     src/appsettings.cpp \
     src/harbour-homeassistant.cpp \
+    src/helmsmani18n.cpp \
     src/helmsmanlog.cpp \
     src/hasscamerastream.cpp \
     src/hassclient.cpp \
@@ -22,6 +23,7 @@ SOURCES += \
 
 HEADERS += \
     src/appsettings.h \
+    src/helmsmani18n.h \
     src/helmsmanlog.h \
     src/hasscamerastream.h \
     src/hassclient.h \
@@ -49,15 +51,14 @@ DISTFILES += \
     eventsview/*.json \
     data/mdi/LICENSE.txt \
     sailjail/harbour-helmsman.profile \
-    translations/harbour-helmsman.ts \
-    translations/harbour-helmsman_*.ts
+    translations/*.json \
+    translations/README.md \
+    eventsview/i18n.js
 
-# i18n (see tools/build-qm.sh + docs/translations.md): qsTr()/translate()
-# catalogs compiled to .qm are installed beside qml/ and loaded in main().
-TRANSLATIONS += $$files(translations/harbour-helmsman_*.ts)
-
-transqm.files = translations/*.qm
-transqm.path = /usr/share/$${TARGET}/translations
+# i18n (see docs/translations.md): i18n.translation("key") looks up
+# translations/<lang>.json. English is en.json. Installed beside qml/.
+transjson.files = $$files(translations/*.json)
+transjson.path = /usr/share/$${TARGET}/translations
 
 icon86.files = icons/86x86/harbour-helmsman.png
 icon86.path = /usr/share/icons/hicolor/86x86/apps
@@ -68,7 +69,7 @@ icon128.path = /usr/share/icons/hicolor/128x128/apps
 icon172.files = icons/172x172/harbour-helmsman.png
 icon172.path = /usr/share/icons/hicolor/172x172/apps
 
-eventsWidgetQml.files = eventsview/HelmsmanEventsWidget.qml
+eventsWidgetQml.files = eventsview/HelmsmanEventsWidget.qml eventsview/i18n.js
 eventsWidgetQml.path = /usr/share/harbour-helmsman/eventsview
 
 eventsWidgetJson.files = eventsview/harbour-helmsman.json
@@ -77,4 +78,4 @@ eventsWidgetJson.path = /usr/share/lipstick/eventswidgets
 sailjailProfile.files = sailjail/harbour-helmsman.profile
 sailjailProfile.path = /etc/sailjail/permissions
 
-INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson sailjailProfile transqm
+INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson sailjailProfile transjson

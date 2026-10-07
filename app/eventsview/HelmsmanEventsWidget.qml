@@ -1,9 +1,14 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.DBus 2.0
+import "i18n.js" as I18n
 
 Item {
     id: root
+
+    function translation(key) {
+        return I18n.text(key)
+    }
 
     // The events view loader only sets the width, and takes its height from
     // implicitHeight, so the widget has to report its content height there.
@@ -18,7 +23,7 @@ Item {
 
     property var entities: []
     property string lastPayload: ""
-    property string errorText: qsTr("Helmsman must be running to show the widget")
+    property string errorText: translation("widget_needs_app")
     property bool appRunning: false
 
     // Card whose brightness / color / temperature controls are open.
@@ -76,11 +81,11 @@ Item {
                 root.errorText = ""
             } else {
                 root.entities = []
-                root.errorText = qsTr("Invalid widget data")
+                root.errorText = translation("invalid_widget_data")
             }
         } catch (e) {
             root.entities = []
-            root.errorText = qsTr("Widget unavailable")
+            root.errorText = translation("widget_unavailable")
         }
     }
 
@@ -98,8 +103,8 @@ Item {
         if (entity.kind === "graph" || entity.kind === "sensor")
             return root.graphLabel(entity)
         if (entity.dimmable === true && entity.on === true)
-            return qsTr("On · %1%").arg(Math.round(Number(entity.brightnessPct) || 0))
-        return entity.on === true ? qsTr("On") : qsTr("Off")
+            return translation("on_percent").arg(Math.round(Number(entity.brightnessPct) || 0))
+        return entity.on === true ? translation("on") : translation("off")
     }
 
     function formatGraphValue(value) {
@@ -144,17 +149,17 @@ Item {
 
     function climateLabel(entity) {
         if (!entity || entity.on !== true)
-            return qsTr("Off")
+            return translation("off")
         var mode = entity.hvacMode || entity.state || ""
         var label = ""
         if (mode === "fan_only")
-            label = qsTr("Fan")
+            label = translation("fan")
         else if (mode === "heat_cool")
-            label = qsTr("Heat/Cool")
+            label = translation("heat_cool")
         else if (mode === "off")
-            return qsTr("Off")
+            return translation("off")
         else if (!mode)
-            label = qsTr("On")
+            label = translation("on")
         else
             label = mode.charAt(0).toUpperCase() + mode.slice(1)
         var temp = entity.supportsTargetTemp === true ? root.formatTemp(entity) : ""
@@ -438,7 +443,7 @@ Item {
                              root.appRunning = false
                              root.lastPayload = ""
                              root.entities = []
-                             root.errorText = qsTr("Helmsman must be running to show the widget")
+                             root.errorText = translation("widget_needs_app")
                          })
     }
 
@@ -508,7 +513,7 @@ Item {
         Label {
             x: Theme.horizontalPageMargin
             width: parent.width - 2 * x
-            text: qsTr("Helmsman")
+            text: translation("helmsman")
             color: Theme.highlightColor
             font.pixelSize: Theme.fontSizeMedium
             font.family: Theme.fontFamilyHeading
@@ -522,10 +527,10 @@ Item {
                      && root.notificationEntities.length === 0
             text: {
                 if (!root.appRunning)
-                    return qsTr("Helmsman must be running to show the widget")
+                    return translation("widget_needs_app")
                 if (root.errorText.length > 0)
                     return root.errorText
-                return qsTr("No favorites selected yet.")
+                return translation("no_favorites_selected_yet")
             }
             color: Theme.secondaryColor
             font.pixelSize: Theme.fontSizeExtraSmall
@@ -760,10 +765,10 @@ Item {
                                             return root.stateLabel(modelData)
                                         return card.showScriptActions
                                                 ? ""
-                                                : qsTr("Tap for Run or Cancel")
+                                                : translation("tap_for_run_or_cancel")
                                     }
                                     if (card.hasAdjusters && card.available && !card.showAdjusters)
-                                        return root.stateLabel(modelData) + qsTr(" · hold to adjust")
+                                        return root.stateLabel(modelData) + translation("hold_to_adjust")
                                     return root.stateLabel(modelData)
                                 }
                                 text: labelText
@@ -778,13 +783,13 @@ Item {
 
                         Button {
                             width: (parent.width - parent.spacing) / 2
-                            text: qsTr("Run")
+                            text: translation("run")
                             onClicked: root.runScript(modelData)
                         }
 
                         Button {
                             width: (parent.width - parent.spacing) / 2
-                            text: qsTr("Cancel")
+                            text: translation("cancel")
                             onClicked: root.cancelScript(modelData)
                         }
                     }
@@ -798,7 +803,7 @@ Item {
                         maximumValue: 100
                         stepSize: 1
                         valueText: Math.round(value) + "%"
-                        label: qsTr("Brightness")
+                        label: translation("brightness")
 
                         Binding {
                             target: dimmer
@@ -823,7 +828,7 @@ Item {
                         maximumValue: Number(modelData.maxKelvin) || 6500
                         stepSize: 50
                         valueText: Math.round(value) + " K"
-                        label: qsTr("Temperature")
+                        label: translation("temperature")
 
                         Binding {
                             target: temperature
@@ -853,7 +858,7 @@ Item {
                             width: parent.width
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: qsTr("Color")
+                            text: translation("color")
                         }
 
                         Row {
@@ -936,7 +941,7 @@ Item {
                             minimumValue: Number(card.entity.minTemp) || 16
                             maximumValue: Number(card.entity.maxTemp) || 30
                             stepSize: Number(card.entity.tempStep) || 0.5
-                            label: qsTr("Temperature")
+                            label: translation("temperature")
                             valueText: {
                                 var step = Number(card.entity.tempStep) || 0.5
                                 var shown = step < 1
@@ -971,7 +976,7 @@ Item {
                             visible: card.entity.supportsFan === true
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: qsTr("Fan")
+                            text: translation("fan")
                         }
 
                         Row {
@@ -996,7 +1001,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: qsTr("Auto")
+                                    text: translation("auto")
                                 }
 
                                 MouseArea {
@@ -1050,7 +1055,7 @@ Item {
                             visible: card.entity.supportsVaneVertical === true
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: qsTr("Vertical vanes")
+                            text: translation("vertical_vanes")
                         }
 
                         Row {
@@ -1079,7 +1084,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: qsTr("Auto")
+                                    text: translation("auto")
                                 }
 
                                 MouseArea {
@@ -1104,7 +1109,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: qsTr("Swing")
+                                    text: translation("swing")
                                 }
 
                                 MouseArea {
@@ -1129,7 +1134,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: qsTr("Manual")
+                                    text: translation("manual")
                                 }
 
                                 // Reveals the level picker; the AC only changes
@@ -1193,7 +1198,7 @@ Item {
                             visible: card.entity.supportsVaneHorizontal === true
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: qsTr("Horizontal vanes")
+                            text: translation("horizontal_vanes")
                         }
 
                         Row {
@@ -1222,7 +1227,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: qsTr("Auto")
+                                    text: translation("auto")
                                 }
 
                                 MouseArea {
@@ -1247,7 +1252,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: qsTr("Swing")
+                                    text: translation("swing")
                                 }
 
                                 MouseArea {
@@ -1272,7 +1277,7 @@ Item {
                                     color: Theme.primaryColor
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     font.bold: parent.selected
-                                    text: qsTr("Manual")
+                                    text: translation("manual")
                                 }
 
                                 // Reveals the level picker; the AC only changes
@@ -1349,7 +1354,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 color: chooseFavorites.highlighted ? Theme.highlightColor : Theme.primaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: qsTr("Choose favorites")
+                text: translation("choose_favorites")
             }
         }
 
@@ -1367,8 +1372,8 @@ Item {
                 color: showMore.highlighted ? Theme.highlightColor : Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: root.expanded
-                      ? qsTr("Show less")
-                      : qsTr("Show more (%1)").arg(root.favoriteEntities.length - root.collapsedCount)
+                      ? translation("show_less")
+                      : translation("show_more").arg(root.favoriteEntities.length - root.collapsedCount)
             }
         }
     }
