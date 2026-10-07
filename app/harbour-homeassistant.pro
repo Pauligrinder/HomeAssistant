@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network websockets gui positioning dbus qml
 LIBS += -ldl
 
-VERSION = 0.4.4
+VERSION = 0.4.5
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
@@ -49,6 +49,7 @@ DISTFILES += \
     qml/eventsview/*.qml \
     eventsview/*.qml \
     eventsview/*.json \
+    eventsview/*.ts \
     data/mdi/LICENSE.txt \
     sailjail/harbour-helmsman.profile \
     translations/*.json \
@@ -75,7 +76,22 @@ eventsWidgetQml.path = /usr/share/harbour-helmsman/eventsview
 eventsWidgetJson.files = eventsview/harbour-helmsman.json
 eventsWidgetJson.path = /usr/share/lipstick/eventswidgets
 
+# Settings → Events view shows model.description only when qtTrId()
+# resolves description_id. The id must differ from the visible sentence,
+# and the catalog is /usr/share/translations/harbour-helmsman_eng_en.qm.
+EVENT_WIDGET_TS = $$PWD/eventsview/harbour-helmsman.ts
+EVENT_WIDGET_QM = $$OUT_PWD/harbour-helmsman_eng_en.qm
+eventswidget_qm.target = $$EVENT_WIDGET_QM
+eventswidget_qm.depends = $$EVENT_WIDGET_TS
+eventswidget_qm.commands = $$[QT_INSTALL_BINS]/lrelease -idbased $$EVENT_WIDGET_TS -qm $$EVENT_WIDGET_QM
+QMAKE_EXTRA_TARGETS += eventswidget_qm
+PRE_TARGETDEPS += $$EVENT_WIDGET_QM
+
+eventsWidgetQm.files = $$EVENT_WIDGET_QM
+eventsWidgetQm.path = /usr/share/translations
+eventsWidgetQm.CONFIG += no_check_exist
+
 sailjailProfile.files = sailjail/harbour-helmsman.profile
 sailjailProfile.path = /etc/sailjail/permissions
 
-INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson sailjailProfile transjson
+INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson eventsWidgetQm sailjailProfile transjson

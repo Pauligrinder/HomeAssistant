@@ -331,17 +331,46 @@ CoverBackground {
         opacity: cover.showingFavorites && cover.watermarkOn ? 0.34 : 0.22
         visible: (cover.showingNotification && cover.notificationIcon.length > 0)
                  || (cover.showingFavorites && cover.favoriteWatermarkPath.length > 0)
-        source: {
-            var path = cover.showingNotification ? cover.notificationIcon : cover.favoriteWatermarkPath
-            if (!path || path.length === 0)
-                return ""
-            if (path.indexOf("http://") === 0 || path.indexOf("https://") === 0
-                    || path.indexOf("file://") === 0)
-                return path
-            return "file://" + path
-        }
         fillMode: Image.PreserveAspectFit
+        cache: false
         z: 0
+        property string path: {
+            var icon = cover.showingNotification ? cover.notificationIcon
+                                                 : cover.favoriteWatermarkPath
+            if (!icon || icon.length === 0)
+                return ""
+            if (icon.indexOf("http://") === 0 || icon.indexOf("https://") === 0
+                    || icon.indexOf("file://") === 0)
+                return icon
+            return "file://" + icon
+        }
+        onPathChanged: iconWatermark.applyPath()
+        Component.onCompleted: iconWatermark.applyPath()
+        function applyPath() {
+            if (String(source) === path)
+                return
+            source = path
+        }
+        function reload() {
+            if (!path.length)
+                return
+            source = ""
+            source = path
+        }
+
+        Connections {
+            target: Qt.application
+            onStateChanged: {
+                if (Qt.application.state === Qt.ApplicationActive)
+                    coverIconReload.restart()
+            }
+        }
+
+        Timer {
+            id: coverIconReload
+            interval: 50
+            onTriggered: iconWatermark.reload()
+        }
     }
 
     // Idle status

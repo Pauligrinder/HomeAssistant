@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.4
+Version:    0.4.5
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -60,9 +60,17 @@ desktop-file-install --delete-original \
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 %{_datadir}/lipstick/eventswidgets/%{name}.json
+%{_datadir}/translations/%{name}_eng_en.qm
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.5-1
+- Events view settings describes the Helmsman widget under its switch.
+- Pictures, maps, camera streams, the cover, and Events view icons redraw
+  after the app returns from the background. Sailfish drops their OpenGL
+  textures, and an image that still says it is ready will not load again
+  until its source is assigned once more.
+
 * Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.4-1
 - Interface texts now come from one plain file per language, so a translation
   can be updated by editing the text next to its key.
