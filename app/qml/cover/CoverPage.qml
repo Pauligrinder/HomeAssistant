@@ -229,6 +229,9 @@ CoverBackground {
             id: homeCanvas
             anchors.fill: parent
             antialiasing: true
+            // Software target. The default is an OpenGL framebuffer, which
+            // never completes on some hybris GPUs and freezes the window.
+            renderTarget: Canvas.Image
 
             // Rounded-rect hole; used with destination-out for windows.
             function punchRoundRect(ctx, x, y, w, h, r) {

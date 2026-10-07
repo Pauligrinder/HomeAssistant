@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.2
+Version:    0.4.3
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -63,6 +63,13 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.3-1
+- Native dashboard no longer freezes on "Loading dashboard" when the phone
+  cannot create OpenGL framebuffers. Rounded pictures, map photos, the cover
+  glyph, and the calendar grid are drawn in software.
+- History and apex charts keep their last frame when the app is backgrounded.
+- Settings copy for the cover, Events View, and connection is shorter.
+
 * Tue Oct 06 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.2-1
 - Edit dashboard from the native pulley opens that dashboard in the webview
   in edit mode, for administrators on storage-mode dashboards only.
