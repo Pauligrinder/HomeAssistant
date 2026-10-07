@@ -102,7 +102,10 @@ CardChrome {
         }
     }
 
-    Component.onCompleted: root.refresh()
+    Component.onCompleted: {
+        root.beenActive = Qt.application.state === Qt.ApplicationActive
+        root.refresh()
+    }
 
     Timer {
         id: filterReload

@@ -33,7 +33,10 @@ Item {
     onActiveChanged: root.sync()
     onEntityIdChanged: root.sync()
     onStreamChanged: root.sync()
-    Component.onCompleted: root.sync()
+    Component.onCompleted: {
+        root.beenActive = Qt.application.state === Qt.ApplicationActive
+        root.sync()
+    }
     Component.onDestruction: {
         if (stream)
             stream.stop()

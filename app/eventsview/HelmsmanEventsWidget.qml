@@ -468,6 +468,7 @@ Item {
     }
 
     Component.onCompleted: {
+        root.beenActive = Qt.application.state === Qt.ApplicationActive
         root.pingWidgetPresent()
         if (active)
             refresh()

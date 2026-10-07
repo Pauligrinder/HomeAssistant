@@ -347,7 +347,10 @@ CoverBackground {
         property bool beenActive: false
         property bool textureLost: false
         onPathChanged: iconWatermark.applyPath()
-        Component.onCompleted: iconWatermark.applyPath()
+        Component.onCompleted: {
+            beenActive = Qt.application.state === Qt.ApplicationActive
+            iconWatermark.applyPath()
+        }
         function applyPath() {
             if (String(source) === path)
                 return

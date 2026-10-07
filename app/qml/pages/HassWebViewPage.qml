@@ -1452,6 +1452,7 @@ Page {
         property int imageEpoch: 0
         property bool textureLost: false
         property bool beenActive: false
+        Component.onCompleted: beenActive = Qt.application.state === Qt.ApplicationActive
 
         Image {
             id: snapshotImage
