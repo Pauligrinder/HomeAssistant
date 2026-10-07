@@ -1,5 +1,4 @@
 import QtQuick 2.6
-import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
 
 // Raster OSM tiles fetched through LovelaceCoordinator so the request has a
@@ -348,24 +347,14 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: model.imageUrl && model.imageUrl.length
 
-                    Image {
+                    RoundedImage {
                         id: avatar
                         anchors.fill: parent
                         source: model.imageUrl
                         sourceSize.width: root.avatarSize * 2
                         sourceSize.height: root.avatarSize * 2
                         fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        layer.enabled: status === Image.Ready
-                        layer.effect: OpacityMask { maskSource: avatarMask }
-                    }
-
-                    Rectangle {
-                        id: avatarMask
-                        anchors.fill: parent
-                        radius: width / 2
-                        visible: false
-                        layer.enabled: true
+                        cornerRadius: width / 2
                     }
 
                     Rectangle {

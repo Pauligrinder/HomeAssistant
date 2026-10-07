@@ -335,6 +335,9 @@ CardChrome {
 
             Canvas {
                 anchors.fill: parent
+                // Software target. The default OpenGL framebuffer does not
+                // complete on some hybris GPUs and freezes the dashboard.
+                renderTarget: Canvas.Image
                 onPaint: {
                     var ctx = getContext("2d")
                     ctx.clearRect(0, 0, width, height)
