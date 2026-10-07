@@ -1450,13 +1450,15 @@ Page {
         z: 2
         readonly property bool snapshotReady: snapshotImage.status === Image.Ready
         property int imageEpoch: 0
+        property bool textureLost: false
+        property bool beenActive: false
 
         Image {
             id: snapshotImage
             anchors.fill: parent
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
-            cache: false
+            cache: true
             visible: false
             source: page.snapshotUsable
                     ? ("file://" + hassClient.dashboardSnapshotPath(page.snapshotKey())
@@ -1477,9 +1479,15 @@ Page {
         Connections {
             target: Qt.application
             onStateChanged: {
-                if (Qt.application.state === Qt.ApplicationActive
-                        && loadingOverlay.visible && page.snapshotUsable)
-                    snapshotReload.restart()
+                if (Qt.application.state === Qt.ApplicationActive) {
+                    if (loadingOverlay.beenActive && loadingOverlay.textureLost
+                            && loadingOverlay.visible && page.snapshotUsable)
+                        snapshotReload.restart()
+                    loadingOverlay.beenActive = true
+                    loadingOverlay.textureLost = false
+                } else if (loadingOverlay.beenActive) {
+                    loadingOverlay.textureLost = true
+                }
             }
         }
 

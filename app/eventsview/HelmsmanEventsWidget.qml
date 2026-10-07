@@ -18,11 +18,11 @@ Item {
     height: implicitHeight
 
     property bool active: visible && eventsViewVisible
-    // Bumped after the events view (or the process) returns, so watermark
-    // images decode again. Sailfish has dropped their GL textures, and a
-    // Ready image will not reload a source that did not change.
+    // Bumped after the process returns from the background, so watermark
+    // images decode again. The first time the widget is shown is not a resume.
     property int imageEpoch: 0
-    property bool resumeImages: false
+    property bool textureLost: false
+    property bool beenActive: false
     property bool expanded: false
     property int collapsedCount: 2
 
@@ -473,17 +473,15 @@ Item {
             refresh()
     }
     Component.onDestruction: widgetIface.call("WidgetGone", [])
-    function scheduleImageReload() {
-        imageReload.restart()
-    }
 
     onActiveChanged: {
         if (active) {
             refresh()
-            if (root.resumeImages)
-                root.scheduleImageReload()
+            if (root.textureLost) {
+                root.textureLost = false
+                root.imageEpoch++
+            }
         } else {
-            root.resumeImages = true
             root.adjustEntityId = ""
             root.scriptEntityId = ""
         }
@@ -492,19 +490,15 @@ Item {
     Connections {
         target: Qt.application
         onStateChanged: {
-            if (Qt.application.state !== Qt.ApplicationActive)
-                root.resumeImages = true
-            else if (root.resumeImages && root.active)
-                root.scheduleImageReload()
-        }
-    }
-
-    Timer {
-        id: imageReload
-        interval: 50
-        onTriggered: {
-            root.resumeImages = false
-            root.imageEpoch++
+            if (Qt.application.state === Qt.ApplicationActive) {
+                if (root.beenActive && root.textureLost && root.active) {
+                    root.textureLost = false
+                    root.imageEpoch++
+                }
+                root.beenActive = true
+            } else if (root.beenActive) {
+                root.textureLost = true
+            }
         }
     }
 
@@ -715,7 +709,7 @@ Item {
                         visible: card.hasWatermarkGraph
                         fillMode: Image.Stretch
                         asynchronous: true
-                        cache: false
+                        cache: true
                         smooth: true
                         property string path: modelData.graphPath
                                               ? "file://" + modelData.graphPath
@@ -730,11 +724,19 @@ Item {
                         function reload() {
                             if (!path.length)
                                 return
-                            var async = asynchronous
-                            asynchronous = false
+                            graphRestore.next = path
                             source = ""
-                            source = path
-                            asynchronous = async
+                            graphRestore.restart()
+                        }
+                        Timer {
+                            id: graphRestore
+                            interval: 1
+                            property string next
+                            onTriggered: {
+                                if (next.length && String(graphImage.source).length === 0)
+                                    graphImage.source = next
+                                next = ""
+                            }
                         }
                         Connections {
                             target: root
@@ -751,7 +753,7 @@ Item {
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         asynchronous: true
-                        cache: false
+                        cache: true
                         opacity: (card.isGraph || card.isSensor || card.isNotification || card.isScript
                                   ? card.showScriptActions || card.isNotification || card.isGraph || card.isSensor
                                   : modelData.on === true) ? 0.34 : 0.22
@@ -769,16 +771,37 @@ Item {
                         function reload() {
                             if (!path.length)
                                 return
-                            var async = asynchronous
-                            asynchronous = false
+                            iconRestore.next = path
                             source = ""
-                            source = path
-                            asynchronous = async
+                            iconRestore.restart()
+                        }
+                        Timer {
+                            id: iconRestore
+                            interval: 1
+                            property string next
+                            onTriggered: {
+                                if (next.length && String(iconImage.source).length === 0)
+                                    iconImage.source = next
+                                next = ""
+                            }
                         }
                         Connections {
                             target: root
                             onImageEpochChanged: iconImage.reload()
                         }
+                    }
+
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        z: 1
+                        size: BusyIndicatorSize.Small
+                        running: {
+                            var img = card.hasWatermarkGraph ? graphImage : iconImage
+                            return img.path.length > 0
+                                    && img.status !== Image.Ready
+                                    && img.status !== Image.Error
+                        }
+                        visible: running
                     }
                 }
 

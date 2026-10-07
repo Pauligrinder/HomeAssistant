@@ -16,8 +16,10 @@ Item {
     property int zoom: 15
     // Map tiles are plain Images. After a backgrounding their textures are
     // gone and the source URL has not changed, so bump this to decode again.
+    // The first time the app becomes active is startup, not a resume.
     property int imageEpoch: 0
     property bool textureLost: false
+    property bool beenActive: false
     property int tileSize: 256
     property string tileKey: ""
     property real centerLat: NaN
@@ -258,22 +260,17 @@ Item {
     onAutoFitChanged: root.scheduleMarkers()
     Component.onCompleted: root.scheduleMarkers()
 
-    Timer {
-        id: tileReload
-        interval: 50
-        onTriggered: {
-            root.textureLost = false
-            root.imageEpoch++
-        }
-    }
-
     Connections {
         target: Qt.application
         onStateChanged: {
-            if (Qt.application.state !== Qt.ApplicationActive)
+            if (Qt.application.state === Qt.ApplicationActive) {
+                if (root.beenActive && root.textureLost)
+                    root.imageEpoch++
+                root.beenActive = true
+                root.textureLost = false
+            } else if (root.beenActive) {
                 root.textureLost = true
-            else if (root.textureLost)
-                tileReload.restart()
+            }
         }
     }
 
@@ -331,7 +328,7 @@ Item {
                 sourceSize.width: root.tileSize
                 sourceSize.height: root.tileSize
                 asynchronous: true
-                cache: false
+                cache: true
                 fillMode: Image.PreserveAspectCrop
                 x: Math.round((model.tx - root.lon2tile(root.viewLon, root.zoom))
                               * root.tileSize + root.width / 2)
@@ -348,15 +345,32 @@ Item {
                 function reload() {
                     if (!path.length)
                         return
-                    var async = asynchronous
-                    asynchronous = false
+                    restore.next = path
                     source = ""
-                    source = path
-                    asynchronous = async
+                    restore.restart()
+                }
+                Timer {
+                    id: restore
+                    interval: 1
+                    property string next
+                    onTriggered: {
+                        if (next.length && String(tile.source).length === 0)
+                            tile.source = next
+                        next = ""
+                    }
                 }
                 Connections {
                     target: root
                     onImageEpochChanged: tile.reload()
+                }
+
+                BusyIndicator {
+                    anchors.centerIn: parent
+                    running: tile.path.length > 0
+                             && tile.status !== Image.Ready
+                             && tile.status !== Image.Error
+                    visible: running
+                    size: BusyIndicatorSize.Small
                 }
             }
         }

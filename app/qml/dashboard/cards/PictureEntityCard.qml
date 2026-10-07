@@ -12,6 +12,7 @@ CardChrome {
     // framebuffer. Recreate that path after the GL context comes back.
     property bool filterLive: true
     property bool textureLost: false
+    property bool beenActive: false
     readonly property int rev: root.statesRevision
     contentTopMargin: 0
     contentBottomMargin: 0
@@ -105,10 +106,16 @@ CardChrome {
 
     Timer {
         id: filterReload
-        interval: 50
+        interval: 1
+        property url pending
         onTriggered: {
+            var url = pending
+            pending = ""
             root.textureLost = false
-            if (root.stateFilter.length === 0 || !picture.reload())
+            if (!url || String(url).length === 0 || String(picture.source).length > 0)
+                return
+            picture.source = url
+            if (root.stateFilter.length === 0)
                 return
             root.filterLive = false
             filterRestore.restart()
@@ -121,13 +128,29 @@ CardChrome {
         onTriggered: root.filterLive = true
     }
 
+    function reloadPicture() {
+        var url = String(root.imageUrl).length ? root.imageUrl : picture.source
+        if (!url || String(url).length === 0) {
+            textureLost = false
+            return
+        }
+        filterReload.pending = url
+        picture.source = ""
+        filterReload.restart()
+    }
+
     Connections {
         target: Qt.application
         onStateChanged: {
-            if (Qt.application.state !== Qt.ApplicationActive)
+            if (Qt.application.state === Qt.ApplicationActive) {
+                if (root.beenActive && root.textureLost && root.stateFilter.length > 0)
+                    root.reloadPicture()
+                else
+                    root.textureLost = false
+                root.beenActive = true
+            } else if (root.beenActive) {
                 root.textureLost = true
-            else if (root.textureLost)
-                filterReload.restart()
+            }
         }
     }
 
@@ -158,7 +181,7 @@ CardChrome {
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
-                cache: false
+                cache: true
                 visible: false
                 property url pictureUrl: root.imageUrl
                 function applyUrl() {
@@ -168,17 +191,17 @@ CardChrome {
                 }
                 onPictureUrlChanged: applyUrl()
                 Component.onCompleted: applyUrl()
-                function reload() {
-                    var url = picture.source
-                    if (!url || String(url).length === 0)
-                        return false
-                    var async = picture.asynchronous
-                    picture.asynchronous = false
-                    picture.source = ""
-                    picture.source = url
-                    picture.asynchronous = async
-                    return true
-                }
+            }
+
+            BusyIndicator {
+                anchors.centerIn: parent
+                z: 2
+                size: BusyIndicatorSize.Medium
+                running: root.stateFilter.length > 0
+                         && root.imageUrl.length > 0
+                         && picture.status !== Image.Ready
+                         && picture.status !== Image.Error
+                visible: running
             }
 
             Loader {

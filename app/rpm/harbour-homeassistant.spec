@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.5
+Version:    0.4.6
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,13 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.6-1
+- Pictures load on the first open. Returning from the background still redraws
+  them after Sailfish drops their textures, without clearing the source while
+  the first decode is in progress.
+- Each picture, map tile, cover watermark, and Events view icon shows its own
+  spinner while it is loading.
+
 * Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.5-1
 - Events view settings describes the Helmsman widget under its switch.
 - Pictures, maps, camera streams, the cover, and Events view icons redraw
