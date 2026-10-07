@@ -48,7 +48,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: qsTr("Home Assistant") }
+            PageHeader { title: i18n.translation("home_assistant") }
 
             Label {
                 anchors.left: parent.left
@@ -58,8 +58,8 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.hasSavedSession
-                      ? qsTr("A saved session was found. Retry restore, or sign in again on the configured address.")
-                      : qsTr("Configure your Home Assistant addresses, then connect to sign in.")
+                      ? i18n.translation("saved_session_found")
+                      : i18n.translation("configure_addresses")
             }
 
             Label {
@@ -71,14 +71,14 @@ Page {
                 font.pixelSize: Theme.fontSizeExtraSmall
                 text: {
                     if (!page.hasConfiguredUrls)
-                        return qsTr("No addresses configured yet.")
+                        return i18n.translation("no_addresses_configured_yet")
                     var lines = []
                     if (hassClient.internalUrl.length > 0)
-                        lines.push(qsTr("Internal: %1").arg(hassClient.internalUrl))
+                        lines.push(i18n.translation("internal").arg(hassClient.internalUrl))
                     if (hassClient.externalUrl.length > 0)
-                        lines.push(qsTr("External: %1").arg(hassClient.externalUrl))
+                        lines.push(i18n.translation("external").arg(hassClient.externalUrl))
                     if (hassClient.baseUrl.length > 0) {
-                        var using = qsTr("Using: %1").arg(hassClient.baseUrl)
+                        var using = i18n.translation("using").arg(hassClient.baseUrl)
                         if (hassClient.internalUrl.length > 0)
                             using += hassClient.usingInternalUrl ? " (internal)" : " (external)"
                         lines.push(using)
@@ -89,7 +89,7 @@ Page {
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Edit addresses")
+                text: i18n.translation("edit_addresses")
                 onClicked: pageStack.push(Qt.resolvedUrl("SettingsPage.qml"),
                                           { hassClient: hassClient })
             }
@@ -123,7 +123,7 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
                 visible: hassClient.restoringSession
-                text: qsTr("Restoring saved session...")
+                text: i18n.translation("restoring_saved_session")
             }
 
             BusyIndicator {
@@ -136,10 +136,10 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: {
                     if (hassClient.restoringSession)
-                        return qsTr("Restoring...")
+                        return i18n.translation("restoring")
                     if (page.hasSavedSession)
-                        return qsTr("Retry restore")
-                    return hassClient.busy ? qsTr("Connecting...") : qsTr("Connect")
+                        return i18n.translation("retry_restore")
+                    return hassClient.busy ? i18n.translation("connecting") : i18n.translation("connect")
                 }
                 enabled: page.hasConfiguredUrls
                          && !hassClient.busy
@@ -149,7 +149,7 @@ Page {
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Sign in again")
+                text: i18n.translation("sign_in_again")
                 visible: page.hasSavedSession
                 enabled: page.hasConfiguredUrls
                          && !hassClient.busy
@@ -161,7 +161,7 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
-                text: qsTr("App %1").arg(hassClient.appVersion)
+                text: i18n.translation("app").arg(hassClient.appVersion)
             }
         }
     }

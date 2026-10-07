@@ -91,13 +91,13 @@ Page {
     }
     property string loadStatusText: {
         if (page.webViewFailed)
-            return qsTr("Browser engine failed to load.")
+            return i18n.translation("browser_engine_failed_to_load")
         if (page.skipFrontendChrome)
-            return qsTr("Loading…")
+            return i18n.translation("loading")
         if (!page.tokensInjected)
-            return qsTr("Preparing session...")
-        var loadingLabel = page.startedAtConfig ? qsTr("Loading Settings…")
-                                                : qsTr("Loading dashboard…")
+            return i18n.translation("preparing_session")
+        var loadingLabel = page.startedAtConfig ? i18n.translation("loading_settings")
+                                                : i18n.translation("loading_dashboard")
         if (dashboardView && dashboardView.loading && dashboardView.loadProgress > 0)
             return loadingLabel + " " + dashboardView.loadProgress + "%"
         return loadingLabel
@@ -713,8 +713,8 @@ Page {
         // briefly shows a duplicate row under Companion app.
         if (!hassClient || !hassClient.nativeDashboardEnabled || page.isHome)
             return ""
-        var backName = qsTr("Back to dashboard")
-        var backDesc = qsTr("Return to the native dashboard")
+        var backName = i18n.translation("back_to_dashboard")
+        var backDesc = i18n.translation("return_to_the_native_dashboard")
         return "window.__helmsmanInstallSettingsExit=function(){"
                 + "try{"
                 + "  var backName=" + jsQuote(backName) + ";"
@@ -1500,7 +1500,7 @@ Page {
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: page.webViewFailed
-                text: qsTr("Open settings")
+                text: i18n.translation("open_settings")
                 onClicked: page.openSettings()
             }
         }
@@ -1509,7 +1509,7 @@ Page {
     Component {
         id: imagePickerComponent
         ImagePickerPage {
-            title: qsTr("Select picture")
+            title: i18n.translation("select_picture")
             property bool picked: false
             onSelectedContentPropertiesChanged: {
                 if (!selectedContentProperties || !selectedContentProperties.filePath)

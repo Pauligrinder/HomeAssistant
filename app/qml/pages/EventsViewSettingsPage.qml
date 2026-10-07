@@ -109,14 +109,14 @@ Page {
 
             PageHeader {
                 title: page.eventsViewMode
-                       ? qsTr("Events View favorites")
-                       : qsTr("Cover favorites")
+                       ? i18n.translation("events_view_favorites")
+                       : i18n.translation("cover_favorites")
             }
 
             SearchField {
                 id: searchField
                 width: parent.width
-                placeholderText: qsTr("Search name or entity id")
+                placeholderText: i18n.translation("search_name_or_entity_id")
                 onTextChanged: page.filterText = text
             }
 
@@ -141,11 +141,11 @@ Page {
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
                 text: page.eventsViewMode
-                      ? qsTr("Select entities to show in the Events View widget when enabled")
-                      : qsTr("Select entities to show on the app cover")
+                      ? i18n.translation("select_events_view_entities")
+                      : i18n.translation("select_cover_entities")
             }
 
-            SectionHeader { text: qsTr("Preview") }
+            SectionHeader { text: i18n.translation("preview") }
 
             EventsViewWidget {
                 id: preview
@@ -160,16 +160,16 @@ Page {
                              : hassClient.widget.widgetEntities)
                 statusText: {
                     if (!hassClient.loggedIn)
-                        return qsTr("Sign in to Home Assistant first.")
+                        return i18n.translation("sign_in_to_home_assistant_first")
                     if (!hassClient.widget)
-                        return qsTr("Widget unavailable.")
+                        return i18n.translation("widget_unavailable_sentence")
                     if (hassClient.widget && hassClient.widget.lastError.length > 0)
                         return hassClient.widget.lastError
                     var entities = page.eventsViewMode
                             ? hassClient.widget.eventsViewWidgetEntities
                             : hassClient.widget.widgetEntities
                     if (hassClient.widget && entities.length === 0)
-                        return qsTr("Nothing selected yet.")
+                        return i18n.translation("nothing_selected_yet")
                     return ""
                 }
                 onReorderRequested: {
@@ -203,25 +203,25 @@ Page {
                 visible: !page.hasPickableEntities
                          && !(hassClient.widget && hassClient.widget.lastError.length > 0)
                 text: hassClient.widget && hassClient.widget.busy
-                      ? qsTr("Loading…")
+                      ? i18n.translation("loading")
                       : (page.filterText.length > 0
-                         ? qsTr("No matching entities.")
+                         ? i18n.translation("no_matching_entities")
                          : (page.eventsViewMode
-                            ? qsTr("No lights, switches, scripts, ACs, sensors, or graphs found.")
-                            : qsTr("No lights, switches, scripts, ACs, or sensors found.")))
+                            ? i18n.translation("no_entities_with_graphs")
+                            : i18n.translation("no_entities")))
             }
 
             Repeater {
                 model: {
                     var items = [
-                        { "title": qsTr("Lights"), "kind": "light" },
-                        { "title": qsTr("Switches"), "kind": "switch" },
-                        { "title": qsTr("Air conditioners"), "kind": "climate" },
-                        { "title": qsTr("Scripts"), "kind": "script" }
+                        { "title": i18n.translation("lights"), "kind": "light" },
+                        { "title": i18n.translation("switches"), "kind": "switch" },
+                        { "title": i18n.translation("air_conditioners"), "kind": "climate" },
+                        { "title": i18n.translation("scripts"), "kind": "script" }
                     ]
                     if (page.eventsViewMode)
-                        items.push({ "title": qsTr("Graphs"), "kind": "graph" })
-                    items.push({ "title": qsTr("Sensors"), "kind": "sensor" })
+                        items.push({ "title": i18n.translation("graphs"), "kind": "graph" })
+                    items.push({ "title": i18n.translation("sensors"), "kind": "sensor" })
                     return items
                 }
                 delegate: Column {
@@ -243,9 +243,9 @@ Page {
                         font.pixelSize: Theme.fontSizeSmall
                         visible: kindGroup.entityKind === "sensor" && page.sensorListGated
                         text: page.filterText.length > 0
-                              ? qsTr("Too many sensors match (%1). Type more of the name or entity id.")
+                              ? i18n.translation("too_many_sensors")
                                     .arg(page.entitiesOfKind("sensor").length)
-                              : qsTr("Search to find sensors (%1)")
+                              : i18n.translation("search_to_find_sensors")
                                     .arg(page.unfilteredSensorCount)
                     }
 
@@ -325,7 +325,7 @@ Page {
                     visible: preview.dragging
                     color: Theme.primaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    text: preview.dragOverTrash ? qsTr("Release to remove") : qsTr("Drop here to remove")
+                    text: preview.dragOverTrash ? i18n.translation("release_to_remove") : i18n.translation("drop_here_to_remove")
                 }
             }
         }

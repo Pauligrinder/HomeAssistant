@@ -31,7 +31,7 @@ Page {
             if (list[i].id === id)
                 return list[i].name
         }
-        return id && id.length ? id : qsTr("System")
+        return id && id.length ? id : i18n.translation("system")
     }
 
     function bindEngineCombo() {
@@ -89,12 +89,12 @@ Page {
                 return
             if (endpoint === page.internalField.text) {
                 internalTestResult = success
-                        ? qsTr("Internal: %1").arg(message)
-                        : qsTr("Internal failed: %1").arg(message)
+                        ? i18n.translation("internal").arg(message)
+                        : i18n.translation("internal_failed").arg(message)
             } else if (endpoint === page.externalField.text) {
                 externalTestResult = success
-                        ? qsTr("External: %1").arg(message)
-                        : qsTr("External failed: %1").arg(message)
+                        ? i18n.translation("external").arg(message)
+                        : i18n.translation("external_failed").arg(message)
             }
             page.pendingTestUrl = ""
         }
@@ -112,7 +112,7 @@ Page {
             id: column
             width: parent.width
 
-            PageHeader { title: qsTr("Helmsman settings") }
+            PageHeader { title: i18n.translation("helmsman_settings") }
 
             ExpandingSectionGroup {
                 id: sections
@@ -121,7 +121,7 @@ Page {
 
                 ExpandingSection {
                     id: connectionSection
-                    title: qsTr("Connection")
+                    title: i18n.translation("connection")
 
                     content.sourceComponent: Column {
                         width: sections.width
@@ -133,13 +133,13 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("Use full URLs. Internal is usually http://<ip-address>:<port>, external something like https://example.io.nabu.casa")
+                            text: i18n.translation("url_format_help")
                         }
 
                         TextField {
                             id: internalField
                             width: parent.width
-                            label: qsTr("Internal URL")
+                            label: i18n.translation("internal_url")
                             placeholderText: "http://homeassistant.local"
                             text: hassClient.internalUrl
                             inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
@@ -149,7 +149,7 @@ Page {
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: page.pendingTestUrl === internalField.text
-                                  ? qsTr("Testing internal...") : qsTr("Test internal")
+                                  ? i18n.translation("testing_internal") : i18n.translation("test_internal")
                             enabled: internalField.text.length > 0
                                      && !hassClient.testingConnection
                                      && page.pendingTestUrl.length === 0
@@ -173,7 +173,7 @@ Page {
                         TextField {
                             id: externalField
                             width: parent.width
-                            label: qsTr("External URL")
+                            label: i18n.translation("external_url")
                             placeholderText: "https://example.ui.nabu.casa"
                             text: hassClient.externalUrl
                             inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
@@ -183,7 +183,7 @@ Page {
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: page.pendingTestUrl === externalField.text
-                                  ? qsTr("Testing external...") : qsTr("Test external")
+                                  ? i18n.translation("testing_external") : i18n.translation("test_external")
                             enabled: externalField.text.length > 0
                                      && !hassClient.testingConnection
                                      && page.pendingTestUrl.length === 0
@@ -210,14 +210,14 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("To only use one address (and disable the switching logic), put the address in the external field.")
+                            text: i18n.translation("single_address_help")
                         }
 
                         TextField {
                             id: ssidField
                             width: parent.width
                             visible: internalField.text.length > 0
-                            label: qsTr("Home Wi‑Fi SSID")
+                            label: i18n.translation("home_wi_fi_ssid")
                             placeholderText: wifi.ssid.length > 0 ? wifi.ssid : "MyHomeWifi"
                             text: hassClient.homeWifiSsid
                             inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
@@ -227,7 +227,7 @@ Page {
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
                             visible: internalField.text.length > 0
-                            text: qsTr("Use current Wi‑Fi")
+                            text: i18n.translation("use_current_wi_fi")
                             enabled: wifi.ssid.length > 0
                             onClicked: ssidField.text = wifi.ssid
                         }
@@ -240,18 +240,18 @@ Page {
                             font.pixelSize: Theme.fontSizeExtraSmall
                             visible: internalField.text.length > 0
                             text: wifi.ssid.length > 0
-                                  ? qsTr("Current Wi‑Fi: %1%2").arg(wifi.ssid).arg(
+                                  ? i18n.translation("current_wi_fi").arg(wifi.ssid).arg(
                                         hassClient.usingInternalUrl
-                                        ? qsTr(" · using internal")
-                                        : qsTr(" · using external"))
-                                  : qsTr("Not connected to Wi‑Fi")
+                                        ? i18n.translation("using_internal")
+                                        : i18n.translation("using_external"))
+                                  : i18n.translation("not_connected_to_wi_fi")
                         }
 
                         TextSwitch {
                             id: ignoreSslSwitch
-                            text: qsTr("Ignore certificate errors")
+                            text: i18n.translation("ignore_certificate_errors")
                             checked: hassClient.ignoreSslErrors
-                            description: qsTr("Needed for self-signed HTTPS certificates.")
+                            description: i18n.translation("ignore_certificate_help")
                             Component.onCompleted: page.ignoreSslSwitch = ignoreSslSwitch
                         }
 
@@ -263,10 +263,10 @@ Page {
                             font.pixelSize: Theme.fontSizeSmall
                             text: {
                                 if (!hassClient.mobileAppRegistered)
-                                    return qsTr("Notifications: registering device with Home Assistant…")
+                                    return i18n.translation("notifications_registering")
                                 if (hassClient.pushConnected)
-                                    return qsTr("Notifications: connected as %1").arg(hassClient.deviceName)
-                                return qsTr("Notifications: registered, reconnecting…")
+                                    return i18n.translation("notifications_connected_as").arg(hassClient.deviceName)
+                                return i18n.translation("notifications_reconnecting")
                             }
                         }
                         Item {
@@ -277,7 +277,7 @@ Page {
                 }
 
                 ExpandingSection {
-                    title: qsTr("Interface")
+                    title: i18n.translation("interface")
 
                     content.sourceComponent: Column {
                         width: sections.width
@@ -285,7 +285,7 @@ Page {
 
                         ValueButton {
                             width: parent.width
-                            label: qsTr("Language")
+                            label: i18n.translation("language")
                             value: page.languageNameFor(hassClient ? hassClient.uiLanguage : "")
                             onClicked: pageStack.push(Qt.resolvedUrl("LanguagePickerPage.qml"),
                                                       { hassClient: hassClient })
@@ -297,21 +297,21 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: qsTr("System follows your Home Assistant profile language when signed in, otherwise the phone language. Restart Helmsman after changing language.")
+                            text: i18n.translation("language_follows_system")
                         }
 
                         TextSwitch {
-                            text: qsTr("Native dashboard")
+                            text: i18n.translation("native_dashboard")
                             automaticCheck: false
                             checked: hassClient.nativeDashboardEnabled
-                            description: qsTr("Render your dashboards natively instead of using the Home Assistant web UI. On by default. Unimplemented things still open in the webview.")
+                            description: i18n.translation("native_dashboard_help")
                             onClicked: hassClient.nativeDashboardEnabled = !checked
                         }
 
                         ComboBox {
                             id: engineBox
                             width: parent.width
-                            label: qsTr("Browser engine")
+                            label: i18n.translation("browser_engine")
                             property bool engineReady: false
                             menu: ContextMenu {
                                 Repeater {
@@ -337,10 +337,10 @@ Page {
                                     return
                                 var dlg = pageStack.push(Qt.resolvedUrl("../components/ActionConfirmDialog.qml"), {
                                                              prompt: {
-                                                                 "title": qsTr("Restart Helmsman?"),
-                                                                 "text": qsTr("Switch the Home Assistant web UI to %1.").arg(page.engineNameFor(id)),
-                                                                 "confirmText": qsTr("Restart now"),
-                                                                 "dismissText": qsTr("Later")
+                                                                 "title": i18n.translation("restart_helmsman"),
+                                                                 "text": i18n.translation("switch_the_home_assistant_web_ui_to").arg(page.engineNameFor(id)),
+                                                                 "confirmText": i18n.translation("restart_now"),
+                                                                 "dismissText": i18n.translation("later")
                                                              }
                                                          })
                                 dlg.accepted.connect(function() { hassClient.restartApp() })
@@ -354,8 +354,8 @@ Page {
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
                             text: hassClient.webViewEngine !== hassClient.webViewEngineActive
-                                  ? qsTr("Restart Helmsman to apply the selected engine.")
-                                  : qsTr("Choose which engine the webviews should be rendered in. Stock/ESR153/Atlantic are supported if installed")
+                                  ? i18n.translation("restart_for_engine")
+                                  : i18n.translation("webview_engine_help")
                         }
                         Item {
                             width: 1
@@ -365,7 +365,7 @@ Page {
                 }
 
                 ExpandingSection {
-                    title: qsTr("Events View and Cover")
+                    title: i18n.translation("events_view_and_cover")
 
                     content.sourceComponent: Column {
                         width: sections.width
@@ -378,15 +378,15 @@ Page {
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
                             text: hassClient.widget && hassClient.widget.eventsViewWidgetEnabled
-                                  ? qsTr("The Helmsman Events View widget is on, so Home Assistant alerts show there instead of in the system notification list.")
-                                  : qsTr("If you enable the Helmsman widget in Settings → Events view, alerts show there instead of in the system notification list.")
+                                  ? i18n.translation("events_widget_on_help")
+                                  : i18n.translation("events_widget_off_help")
                         }
 
                         TextSwitch {
-                            text: qsTr("Show notifications on the app cover")
+                            text: i18n.translation("show_notifications_on_the_app_cover")
                             automaticCheck: false
                             checked: hassClient.coverNotificationsEnabled
-                            description: qsTr("If this is enabled, notifications take over the app cover until dismissed")
+                            description: i18n.translation("cover_notifications_help")
                             onClicked: hassClient.coverNotificationsEnabled = !checked
                         }
 
@@ -396,12 +396,12 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("Select entities to show on the app cover")
+                            text: i18n.translation("select_cover_entities")
                         }
 
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: qsTr("Manage app cover entities")
+                            text: i18n.translation("manage_app_cover_entities")
                             enabled: hassClient.loggedIn
                             onClicked: pageStack.push(Qt.resolvedUrl("EventsViewSettingsPage.qml"),
                                                       { hassClient: hassClient,
@@ -414,12 +414,12 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("Select entities to show in the Events View widget when enabled.")
+                            text: i18n.translation("select_events_view_entities_settings")
                         }
 
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: qsTr("Manage events view entities")
+                            text: i18n.translation("manage_events_view_entities")
                             enabled: hassClient.loggedIn
                             onClicked: pageStack.push(Qt.resolvedUrl("EventsViewSettingsPage.qml"),
                                                       { hassClient: hassClient,
@@ -433,7 +433,7 @@ Page {
                 }
 
                 ExpandingSection {
-                    title: qsTr("Sensors")
+                    title: i18n.translation("sensors")
 
                     content.sourceComponent: Column {
                         width: sections.width
@@ -445,7 +445,7 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("Choose which device sensors Helmsman reports to Home Assistant.")
+                            text: i18n.translation("choose_sensors_help")
                         }
 
                         Label {
@@ -455,7 +455,7 @@ Page {
                             color: Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeExtraSmall
                             visible: hassClient.sensors && hassClient.sensors.lastError.length > 0
-                            text: hassClient.sensors ? qsTr("Last error: %1").arg(hassClient.sensors.lastError) : ""
+                            text: hassClient.sensors ? i18n.translation("last_error").arg(hassClient.sensors.lastError) : ""
                         }
 
                         Label {
@@ -466,12 +466,12 @@ Page {
                             font.pixelSize: Theme.fontSizeExtraSmall
                             text: {
                                 if (!hassClient.sensors)
-                                    return qsTr("Sensors: unavailable")
+                                    return i18n.translation("sensors_unavailable")
                                 if (!hassClient.mobileAppRegistered)
-                                    return qsTr("Sensors: waiting for mobile_app registration…")
+                                    return i18n.translation("sensors_waiting")
                                 if (hassClient.sensors.active)
-                                    return qsTr("Sensors: reporting")
-                                return qsTr("Sensors: idle")
+                                    return i18n.translation("sensors_reporting")
+                                return i18n.translation("sensors_idle")
                             }
                         }
 
@@ -487,11 +487,11 @@ Page {
                                 description: {
                                     var bits = []
                                     if (modelData.disabled)
-                                        bits.push(qsTr("Disabled in Home Assistant"))
+                                        bits.push(i18n.translation("disabled_in_home_assistant"))
                                     if (modelData.state && modelData.state.length)
                                         bits.push(modelData.state)
                                     if (modelData.lastUpdated && modelData.lastUpdated.length)
-                                        bits.push(qsTr("updated %1").arg(modelData.lastUpdated))
+                                        bits.push(i18n.translation("updated").arg(modelData.lastUpdated))
                                     if (modelData.lastError && modelData.lastError.length)
                                         bits.push(modelData.lastError)
                                     return bits.join(" · ")
@@ -506,7 +506,7 @@ Page {
 
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: qsTr("Refresh sensor config")
+                            text: i18n.translation("refresh_sensor_config")
                             enabled: hassClient.sensors && hassClient.sensors.active
                             onClicked: hassClient.sensors.refreshConfig()
                         }
@@ -518,7 +518,7 @@ Page {
                 }
 
                 ExpandingSection {
-                    title: qsTr("Location")
+                    title: i18n.translation("location")
 
                     content.sourceComponent: Column {
                         width: sections.width
@@ -526,15 +526,15 @@ Page {
 
                         TextSwitch {
                             id: locationEnabledSwitch
-                            text: qsTr("Report location")
+                            text: i18n.translation("report_location")
                             checked: hassClient.sensors
                                      ? hassClient.sensors.locationEnabled : true
                             automaticCheck: false
                             description: hassClient.sensors
                                          && !hassClient.sensors.locationReporting
                                          && hassClient.sensors.locationEnabled
-                                         ? qsTr("Location is disabled in Home Assistant.")
-                                         : qsTr("Allow Helmsman to update the Home Assistant device tracker.")
+                                         ? i18n.translation("location_disabled")
+                                         : i18n.translation("report_location_help")
                             onClicked: {
                                 if (hassClient.sensors)
                                     hassClient.sensors.locationEnabled = !checked
@@ -545,13 +545,13 @@ Page {
                             id: locationPresetBox
                             width: parent.width
                             enabled: locationEnabledSwitch.checked
-                            label: qsTr("Location update mode")
+                            label: i18n.translation("location_update_mode")
                             property bool presetReady: false
                             currentIndex: 1
                             menu: ContextMenu {
-                                MenuItem { text: qsTr("Battery saver") }
-                                MenuItem { text: qsTr("Balanced") }
-                                MenuItem { text: qsTr("Accurate") }
+                                MenuItem { text: i18n.translation("battery_saver") }
+                                MenuItem { text: i18n.translation("balanced") }
+                                MenuItem { text: i18n.translation("accurate") }
                             }
                             Component.onCompleted: {
                                 currentIndex = hassClient.sensors
@@ -575,10 +575,10 @@ Page {
                             visible: locationEnabledSwitch.checked
                             text: {
                                 if (locationPresetBox.currentIndex === 0)
-                                    return qsTr("Fewer Home Assistant updates for lower battery use.")
+                                    return i18n.translation("location_mode_saver")
                                 if (locationPresetBox.currentIndex === 2)
-                                    return qsTr("More frequent Home Assistant updates when a fix is available.")
-                                return qsTr("A balance of update speed and battery use. GPS is not kept running.")
+                                    return i18n.translation("location_mode_accurate")
+                                return i18n.translation("location_mode_balanced")
                             }
                         }
 
@@ -586,13 +586,13 @@ Page {
                             id: staleSlider
                             width: parent.width
                             enabled: locationEnabledSwitch.checked
-                            label: qsTr("Get a location fix if older than")
+                            label: i18n.translation("get_a_location_fix_if_older_than")
                             minimumValue: 5
                             maximumValue: 60
                             stepSize: 5
                             property bool staleReady: false
                             value: 15
-                            valueText: qsTr("%1 min").arg(Math.round(value))
+                            valueText: i18n.translation("min").arg(Math.round(value))
                             Component.onCompleted: {
                                 if (hassClient.sensors)
                                     value = hassClient.sensors.locationStaleMinutes
@@ -614,16 +614,16 @@ Page {
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
                             visible: locationEnabledSwitch.checked
-                            text: qsTr("Helmsman only turns GPS on itself if the last fix is older than this - otherwise it uses fixes requested by other apps")
+                            text: i18n.translation("location_fix_help")
                         }
 
                         TextSwitch {
                             visible: page.internalField && page.internalField.text.length > 0
                             enabled: locationEnabledSwitch.checked
-                            text: qsTr("Mark home on internal connection")
+                            text: i18n.translation("mark_home_on_internal_connection")
                             checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
                             automaticCheck: false
-                            description: qsTr("Always reports the location as 'home' when connected to the internal host")
+                            description: i18n.translation("home_on_internal_help")
                             onClicked: {
                                 if (hassClient.sensors)
                                     hassClient.sensors.homeOnInternal = !checked
@@ -639,12 +639,12 @@ Page {
                             visible: hassClient.sensors
                                      && hassClient.sensors.lastLocationText.length > 0
                             text: hassClient.sensors
-                                  ? qsTr("Last location: %1").arg(hassClient.sensors.lastLocationText) : ""
+                                  ? i18n.translation("last_location").arg(hassClient.sensors.lastLocationText) : ""
                         }
 
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: qsTr("Update location now")
+                            text: i18n.translation("update_location_now")
                             enabled: hassClient.sensors && hassClient.sensors.active
                                      && hassClient.sensors.locationReporting
                             onClicked: hassClient.sensors.refreshLocation()
@@ -664,7 +664,7 @@ Page {
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Save")
+                text: i18n.translation("save")
                 enabled: (page.internalField && page.internalField.text.length > 0)
                          || (page.externalField && page.externalField.text.length > 0)
                 onClicked: page.save()
@@ -679,7 +679,7 @@ Page {
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: hassClient && hassClient.loggedIn
-                text: qsTr("Home Assistant settings")
+                text: i18n.translation("home_assistant_settings")
                 onClicked: pageStack.push(Qt.resolvedUrl("HassWebViewPage.qml"), {
                                               hassClient: hassClient,
                                               startPath: "/config"
@@ -693,7 +693,7 @@ Page {
 
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Sign out")
+                text: i18n.translation("sign_out")
                 onClicked: {
                     hassClient.logout()
                     pageStack.replaceAbove(null, Qt.resolvedUrl("ConnectionPage.qml"), { hassClient: hassClient })
@@ -704,7 +704,7 @@ Page {
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
-                text: qsTr("App %1").arg(hassClient.appVersion)
+                text: i18n.translation("app").arg(hassClient.appVersion)
             }
 
             Item {

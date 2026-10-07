@@ -90,7 +90,7 @@ Page {
         PullDownMenu {
             visible: page.domain === "camera"
             MenuItem {
-                text: qsTr("Restart stream")
+                text: i18n.translation("restart_stream")
                 onClicked: {
                     if (dashboard && dashboard.cameraStream)
                         dashboard.cameraStream.restart()
@@ -157,7 +157,7 @@ Page {
             Button {
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: page.showHistoryTimeline
-                text: qsTr("History")
+                text: i18n.translation("history")
                 onClicked: {
                     pageStack.push(Qt.resolvedUrl("HistoryTimelinePage.qml"), {
                                        hassClient: page.hassClient,
@@ -168,13 +168,13 @@ Page {
             }
 
             DetailItem {
-                label: qsTr("Last changed")
+                label: i18n.translation("last_changed")
                 value: page.formatEntityTime("last_changed")
                 visible: value.length > 0
             }
 
             DetailItem {
-                label: qsTr("Last updated")
+                label: i18n.translation("last_updated")
                 value: page.formatEntityTime("last_updated")
                 visible: value.length > 0
             }
@@ -202,8 +202,8 @@ Page {
                          || page.cameraPowerSupported())
                 text: {
                     if (page.domain === "script")
-                        return qsTr("Run")
-                    return page.on ? qsTr("Turn off") : qsTr("Turn on")
+                        return i18n.translation("run")
+                    return page.on ? i18n.translation("turn_off") : i18n.translation("turn_on")
                 }
                 onClicked: {
                     if (page.domain === "camera")
@@ -226,7 +226,7 @@ Page {
             }
 
             SectionHeader {
-                text: qsTr("Lights")
+                text: i18n.translation("lights")
                 visible: page.lightGroupMembers.length > 0
             }
 
@@ -270,15 +270,15 @@ Page {
                 visible: page.domain === "cover"
                 spacing: Theme.paddingMedium
                 Button {
-                    text: qsTr("Open")
+                    text: i18n.translation("open")
                     onClicked: dashboard.callService("cover", "open_cover", {}, page.entityId)
                 }
                 Button {
-                    text: qsTr("Stop")
+                    text: i18n.translation("stop")
                     onClicked: dashboard.callService("cover", "stop_cover", {}, page.entityId)
                 }
                 Button {
-                    text: qsTr("Close")
+                    text: i18n.translation("close")
                     onClicked: dashboard.callService("cover", "close_cover", {}, page.entityId)
                 }
             }
@@ -291,7 +291,7 @@ Page {
                 maximumValue: 100
                 value: (dashboard && page.rev >= 0)
                        ? Number(dashboard.attribute(page.entityId, "current_position")) : 0
-                label: qsTr("Position")
+                label: i18n.translation("position")
                 onReleased: dashboard.callService("cover", "set_cover_position",
                                                   { "position": Math.round(value) }, page.entityId)
             }
@@ -305,13 +305,13 @@ Page {
                 stepSize: page.numberBound("step", 1)
                 value: (dashboard && page.rev >= 0)
                        ? Number(dashboard.entityState(page.entityId)) : 0
-                label: qsTr("Value")
+                label: i18n.translation("value")
                 onReleased: dashboard.callService(page.domain, "set_value",
                                                   { "value": value }, page.entityId)
             }
 
             SectionHeader {
-                text: qsTr("Controls")
+                text: i18n.translation("controls")
                 visible: page.relatedControls.length > 0
             }
 
@@ -321,7 +321,7 @@ Page {
             }
 
             SectionHeader {
-                text: qsTr("Sensors")
+                text: i18n.translation("sensors")
                 visible: page.relatedSensors.length > 0
             }
 
@@ -331,7 +331,7 @@ Page {
             }
 
             SectionHeader {
-                text: qsTr("Related")
+                text: i18n.translation("related")
                 visible: page.relatedOther.length > 0
             }
 
@@ -341,7 +341,7 @@ Page {
             }
 
             SectionHeader {
-                text: qsTr("Attributes")
+                text: i18n.translation("attributes")
                 visible: true
             }
 
@@ -461,7 +461,7 @@ Page {
                             ? Number(dashboard.attribute(controls.targetId, "brightness")) : 0
                     return b ? Math.round(b * 100 / 255) : 0
                 }
-                label: qsTr("Brightness")
+                label: i18n.translation("brightness")
                 onReleased: {
                     if (dashboard && controls.targetId.length)
                         dashboard.callService("light", "turn_on",
@@ -478,7 +478,7 @@ Page {
                 maximumValue: controls.maxKelvin
                 stepSize: 50
                 valueText: Math.round(value) + " K"
-                label: qsTr("Temperature")
+                label: i18n.translation("temperature")
 
                 Binding {
                     target: temperature
@@ -510,7 +510,7 @@ Page {
                     width: parent.width - 2 * Theme.horizontalPageMargin
                     color: Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
-                    text: qsTr("Color")
+                    text: i18n.translation("color")
                 }
 
                 Row {
@@ -655,7 +655,7 @@ Page {
                     visible: row.showRun
                     preferredWidth: Theme.buttonWidthExtraSmall
                     height: Theme.itemSizeExtraSmall
-                    text: qsTr("Run")
+                    text: i18n.translation("run")
                     onClicked: dashboard.toggle(row.relatedId)
                 }
 

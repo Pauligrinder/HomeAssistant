@@ -208,11 +208,11 @@ Item {
     function prettyState(state) {
         var s = String(state || "")
         if (!s.length)
-            return qsTr("Unknown")
+            return i18n.translation("unknown")
         if (s === "unavailable")
-            return qsTr("Unavailable")
+            return i18n.translation("unavailable")
         if (s === "unknown")
-            return qsTr("Unknown")
+            return i18n.translation("unknown")
         s = s.replace(/_/g, " ")
         return s.charAt(0).toUpperCase() + s.slice(1)
     }

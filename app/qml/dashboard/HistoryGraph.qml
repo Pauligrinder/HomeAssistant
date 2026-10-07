@@ -47,8 +47,8 @@ Item {
         points: root.points
         hours: root.hours > 0 ? root.hours : 24
         unit: root.unit
-        title: root.hours === 24 ? qsTr("Last 24 hours")
-                                 : qsTr("Last %1 hours").arg(root.hours)
+        title: root.hours === 24 ? i18n.translation("last_24_hours")
+                                 : i18n.translation("last_hours").arg(root.hours)
         accent: Theme.highlightColor
         chartHeight: Theme.itemSizeExtraLarge
     }

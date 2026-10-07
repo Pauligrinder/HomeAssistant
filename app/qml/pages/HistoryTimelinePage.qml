@@ -24,14 +24,14 @@ Page {
         model: page.periods
         spacing: Theme.paddingMedium
         header: PageHeader {
-            title: qsTr("History")
-            description: page.hours === 24 ? qsTr("Last 24 hours")
-                                           : qsTr("Last %1 hours").arg(page.hours)
+            title: i18n.translation("history")
+            description: page.hours === 24 ? i18n.translation("last_24_hours")
+                                           : i18n.translation("last_hours").arg(page.hours)
         }
 
         ViewPlaceholder {
             enabled: !page.loading && page.periods.length === 0
-            text: qsTr("No history")
+            text: i18n.translation("no_history")
         }
 
         BusyIndicator {
@@ -183,11 +183,11 @@ Page {
     function prettyState(state) {
         var s = String(state || "")
         if (!s.length)
-            return qsTr("Unknown")
+            return i18n.translation("unknown")
         if (s === "unavailable")
-            return qsTr("Unavailable")
+            return i18n.translation("unavailable")
         if (s === "unknown")
-            return qsTr("Unknown")
+            return i18n.translation("unknown")
         s = s.replace(/_/g, " ")
         return s.charAt(0).toUpperCase() + s.slice(1)
     }

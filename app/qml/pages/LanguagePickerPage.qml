@@ -33,10 +33,10 @@ Page {
         hassClient.uiLanguage = id
         var dlg = pageStack.replace(page, Qt.resolvedUrl("../components/ActionConfirmDialog.qml"), {
                                         prompt: {
-                                            "title": qsTr("Restart Helmsman?"),
-                                            "text": qsTr("Apply the selected language."),
-                                            "confirmText": qsTr("Restart now"),
-                                            "dismissText": qsTr("Later")
+                                            "title": i18n.translation("restart_helmsman"),
+                                            "text": i18n.translation("apply_the_selected_language"),
+                                            "confirmText": i18n.translation("restart_now"),
+                                            "dismissText": i18n.translation("later")
                                         }
                                     })
         dlg.accepted.connect(function() { hassClient.restartApp() })
@@ -44,14 +44,14 @@ Page {
 
     function currentLanguageName() {
         if (!hassClient)
-            return qsTr("System")
+            return i18n.translation("system")
         var want = hassClient.uiLanguage
         var list = page.allLanguages
         for (var i = 0; i < list.length; ++i) {
             if (list[i].id === want)
                 return list[i].name
         }
-        return want.length ? want : qsTr("System")
+        return want.length ? want : i18n.translation("system")
     }
 
     SilicaListView {
@@ -63,11 +63,11 @@ Page {
         header: Column {
             width: listView.width
 
-            PageHeader { title: qsTr("Language") }
+            PageHeader { title: i18n.translation("language") }
 
             SearchField {
                 width: parent.width
-                placeholderText: qsTr("Search languages")
+                placeholderText: i18n.translation("search_languages")
                 onTextChanged: page.filterText = text
             }
 
@@ -77,7 +77,7 @@ Page {
                 wrapMode: Text.Wrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeExtraSmall
-                text: qsTr("System follows your Home Assistant profile language when signed in, otherwise the phone language. Restart Helmsman after changing language.")
+                text: i18n.translation("language_follows_system")
             }
 
             Item {
@@ -118,7 +118,7 @@ Page {
 
         ViewPlaceholder {
             enabled: listView.count === 0
-            text: qsTr("No matching languages")
+            text: i18n.translation("no_matching_languages")
         }
 
         VerticalScrollDecorator {}

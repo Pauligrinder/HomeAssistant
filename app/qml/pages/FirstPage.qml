@@ -94,7 +94,7 @@ Page {
 
         Label {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Helmsman")
+            text: i18n.translation("helmsman")
             color: Theme.highlightColor
             font.pixelSize: Theme.fontSizeExtraLarge
         }
@@ -114,10 +114,10 @@ Page {
             font.pixelSize: Theme.fontSizeSmall
             text: {
                 if (hassClient.restoringSession || hassClient.statusText.indexOf("Restoring") === 0)
-                    return qsTr("Restoring session...")
+                    return i18n.translation("restoring_session")
                 if (hassClient.statusText.length > 0)
                     return hassClient.statusText
-                return qsTr("Starting...")
+                return i18n.translation("starting")
             }
         }
 
@@ -135,14 +135,14 @@ Page {
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
             visible: page.showEscape && !page.decided
-            text: qsTr("Edit addresses")
+            text: i18n.translation("edit_addresses")
             onClicked: page.openSettings()
         }
 
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
             visible: page.restoreCancelled && !page.decided
-            text: qsTr("Retry restore")
+            text: i18n.translation("retry_restore")
             onClicked: {
                 page.restoreCancelled = false
                 page.startRestore()

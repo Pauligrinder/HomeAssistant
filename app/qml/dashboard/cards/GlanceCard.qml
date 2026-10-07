@@ -173,7 +173,7 @@ CardChrome {
                         wrapMode: Text.NoWrap
                         font.pixelSize: Theme.fontSizeTiny
                         color: Theme.highlightColor
-                        text: qsTr("Run")
+                        text: i18n.translation("run")
                     }
                 }
             }

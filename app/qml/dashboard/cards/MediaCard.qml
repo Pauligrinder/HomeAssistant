@@ -71,7 +71,7 @@ CardChrome {
     Row {
         spacing: Theme.paddingMedium
         Button {
-            text: qsTr("Prev")
+            text: i18n.translation("prev")
             onClicked: dashboard.callService("media_player", "media_previous_track", {}, entityId)
         }
         Button {
@@ -80,7 +80,7 @@ CardChrome {
             onClicked: dashboard.callService("media_player", "media_play_pause", {}, entityId)
         }
         Button {
-            text: qsTr("Next")
+            text: i18n.translation("next")
             onClicked: dashboard.callService("media_player", "media_next_track", {}, entityId)
         }
     }

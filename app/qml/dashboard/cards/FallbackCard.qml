@@ -25,7 +25,7 @@ CardChrome {
               : "This card type is not rendered natively."
     }
     Button {
-        text: qsTr("Open in Home Assistant")
+        text: i18n.translation("open_in_home_assistant")
         onClicked: {
             if (!dashboard)
                 return

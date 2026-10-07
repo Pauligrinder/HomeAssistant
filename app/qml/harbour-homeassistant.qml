@@ -165,7 +165,7 @@ ApplicationWindow
     }
 
     function updateCoverNotification(title, message, color, iconPath) {
-        appWindow.coverNotificationTitle = title && title.length > 0 ? title: qsTr("Home Assistant")
+        appWindow.coverNotificationTitle = title && title.length > 0 ? title: i18n.translation("home_assistant")
         appWindow.coverNotificationBody = message || ""
         appWindow.coverNotificationColor = normalizeCoverColor(color)
         appWindow.coverNotificationIcon = iconPath || ""
@@ -284,7 +284,7 @@ ApplicationWindow
         var color = dataString(data, "color")
 
         var replacing = tag.length > 0 && !!appWindow.notificationTags[tag]
-        var summary = title && title.length > 0 ? title: qsTr("Home Assistant")
+        var summary = title && title.length > 0 ? title: i18n.translation("home_assistant")
         var body = message || ""
         var coverIconPath = ""
 

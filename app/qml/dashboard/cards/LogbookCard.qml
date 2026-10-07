@@ -7,11 +7,11 @@ CardChrome {
     Label {
         width: parent.width
         wrapMode: Text.Wrap
-        text: qsTr("Activity / logbook")
+        text: i18n.translation("activity_logbook")
         color: Theme.highlightColor
     }
     Button {
-        text: qsTr("Open logbook")
+        text: i18n.translation("open_logbook")
         onClicked: {
             if (dashboard)
                 dashboard.openWebPath("/logbook")

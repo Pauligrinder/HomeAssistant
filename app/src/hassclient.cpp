@@ -1,4 +1,5 @@
 #include "hassclient.h"
+#include "helmsmani18n.h"
 #include "appsettings.h"
 #include "helmsmanlog.h"
 #include "hasspushchannel.h"
@@ -392,8 +393,7 @@ QString sanitizeUiLanguage(const QString &language)
 
     const QString dir = SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile();
     auto catalogExists = [&](const QString &code) {
-        return QFile::exists(dir + QLatin1Char('/')
-                             + QStringLiteral("harbour-helmsman_%1.qm").arg(code));
+        return QFile::exists(dir + QLatin1Char('/') + code + QStringLiteral(".json"));
     };
     if (catalogExists(tag))
         return tag;
@@ -583,16 +583,16 @@ QString HassClient::preferredUiLanguage()
     if (!explicitLang.isEmpty())
         return explicitLang;
     // System: Home Assistant profile language when known, else phone locale
-    // (installAppTranslator falls back to QLocale::system()).
+    // (loadTranslations falls back to QLocale::system()).
     return sanitizeUiLanguage(ui.value(QStringLiteral("haProfileLanguage")).toString());
 }
 
 QString HassClient::languageDisplayName(const QString &code)
 {
     if (code.isEmpty() || code == QLatin1String("system"))
-        return QCoreApplication::translate("Helmsman", "System");
+        return HelmsmanI18n::instance()->translation(QStringLiteral("system"));
     if (code == QLatin1String("en"))
-        return QCoreApplication::translate("Helmsman", "English");
+        return HelmsmanI18n::instance()->translation(QStringLiteral("english"));
     if (code == QLatin1String("fi"))
         return QStringLiteral("Suomi");
     if (code == QLatin1String("sv"))
@@ -668,14 +668,13 @@ QVariantList HassClient::buildAvailableUiLanguages()
 
     const QString dirPath = SailfishApp::pathTo(QStringLiteral("translations")).toLocalFile();
     QDir dir(dirPath);
-    const QStringList files = dir.entryList(QStringList() << QStringLiteral("harbour-helmsman_*.qm"),
+    const QStringList files = dir.entryList(QStringList() << QStringLiteral("*.json"),
                                             QDir::Files, QDir::Name);
-    const QString prefix = QStringLiteral("harbour-helmsman_");
     for (int i = 0; i < files.size(); ++i) {
-        QString name = files.at(i);
-        if (!name.startsWith(prefix) || !name.endsWith(QLatin1String(".qm")))
+        const QString name = files.at(i);
+        if (!name.endsWith(QLatin1String(".json")))
             continue;
-        const QString code = name.mid(prefix.size(), name.size() - prefix.size() - 3);
+        const QString code = name.left(name.size() - 5);
         if (code.isEmpty() || code == QLatin1String("en"))
             continue;
         list << engineEntry(code, languageDisplayName(code));

@@ -9,7 +9,7 @@ CardChrome {
     Label {
         width: parent.width
         wrapMode: Text.Wrap
-        text: qsTr("Energy dashboard")
+        text: i18n.translation("energy_dashboard")
         color: Theme.highlightColor
         font.pixelSize: Theme.fontSizeMedium
     }
@@ -18,7 +18,7 @@ CardChrome {
         wrapMode: Text.Wrap
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
-        text: qsTr("Energy cards stay in the Home Assistant frontend. Tap to open.")
+        text: i18n.translation("energy_cards_help")
     }
 
     function defaultTap() {
