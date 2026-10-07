@@ -18,6 +18,11 @@ Item {
     height: implicitHeight
 
     property bool active: visible && eventsViewVisible
+    // Bumped after the events view (or the process) returns, so watermark
+    // images decode again. Sailfish has dropped their GL textures, and a
+    // Ready image will not reload a source that did not change.
+    property int imageEpoch: 0
+    property bool resumeImages: false
     property bool expanded: false
     property int collapsedCount: 2
 
@@ -468,12 +473,38 @@ Item {
             refresh()
     }
     Component.onDestruction: widgetIface.call("WidgetGone", [])
+    function scheduleImageReload() {
+        imageReload.restart()
+    }
+
     onActiveChanged: {
         if (active) {
             refresh()
+            if (root.resumeImages)
+                root.scheduleImageReload()
         } else {
+            root.resumeImages = true
             root.adjustEntityId = ""
             root.scriptEntityId = ""
+        }
+    }
+
+    Connections {
+        target: Qt.application
+        onStateChanged: {
+            if (Qt.application.state !== Qt.ApplicationActive)
+                root.resumeImages = true
+            else if (root.resumeImages && root.active)
+                root.scheduleImageReload()
+        }
+    }
+
+    Timer {
+        id: imageReload
+        interval: 50
+        onTriggered: {
+            root.resumeImages = false
+            root.imageEpoch++
         }
     }
 
@@ -679,18 +710,40 @@ Item {
                     clip: true
 
                     Image {
+                        id: graphImage
                         anchors.fill: parent
                         visible: card.hasWatermarkGraph
                         fillMode: Image.Stretch
                         asynchronous: true
-                        cache: true
+                        cache: false
                         smooth: true
-                        source: modelData.graphPath
-                                ? "file://" + modelData.graphPath
-                                : ""
+                        property string path: modelData.graphPath
+                                              ? "file://" + modelData.graphPath
+                                              : ""
+                        function applyPath() {
+                            if (String(graphImage.source) === path)
+                                return
+                            graphImage.source = path
+                        }
+                        onPathChanged: applyPath()
+                        Component.onCompleted: applyPath()
+                        function reload() {
+                            if (!path.length)
+                                return
+                            var async = asynchronous
+                            asynchronous = false
+                            source = ""
+                            source = path
+                            asynchronous = async
+                        }
+                        Connections {
+                            target: root
+                            onImageEpochChanged: graphImage.reload()
+                        }
                     }
 
                     Image {
+                        id: iconImage
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.horizontalCenter: parent.right
                         height: parent.height - 2 * Theme.paddingSmall
@@ -698,13 +751,34 @@ Item {
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         asynchronous: true
+                        cache: false
                         opacity: (card.isGraph || card.isSensor || card.isNotification || card.isScript
                                   ? card.showScriptActions || card.isNotification || card.isGraph || card.isSensor
                                   : modelData.on === true) ? 0.34 : 0.22
                         visible: !card.hasWatermarkGraph && status === Image.Ready
-                        source: modelData.iconPath
-                                ? "file://" + modelData.iconPath
-                                : ""
+                        property string path: modelData.iconPath
+                                             ? "file://" + modelData.iconPath
+                                             : ""
+                        function applyPath() {
+                            if (String(iconImage.source) === path)
+                                return
+                            iconImage.source = path
+                        }
+                        onPathChanged: applyPath()
+                        Component.onCompleted: applyPath()
+                        function reload() {
+                            if (!path.length)
+                                return
+                            var async = asynchronous
+                            asynchronous = false
+                            source = ""
+                            source = path
+                            asynchronous = async
+                        }
+                        Connections {
+                            target: root
+                            onImageEpochChanged: iconImage.reload()
+                        }
                     }
                 }
 

@@ -65,6 +65,28 @@ Item {
         }
     }
 
+    // The last frame's texture is dropped with the GL context, and no new
+    // frame arrives until the stream is running again.
+    Connections {
+        target: Qt.application
+        onStateChanged: {
+            if (Qt.application.state === Qt.ApplicationActive)
+                frameReload.restart()
+        }
+    }
+
+    Timer {
+        id: frameReload
+        interval: 50
+        onTriggered: {
+            var url = frame.source
+            if (!url || String(url).length === 0)
+                return
+            frame.source = ""
+            frame.source = url
+        }
+    }
+
     BusyIndicator {
         anchors.centerIn: parent
         size: BusyIndicatorSize.Large

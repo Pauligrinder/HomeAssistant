@@ -1,9 +1,9 @@
 {
+    "translation_catalog": "harbour-helmsman",
     "widgets": [
         {
             "title": "Helmsman",
-            "description": "Shows selected Home Assistant lights, switches, scripts, and ACs. Helmsman must be running.",
-            "description_id": "Shows selected Home Assistant lights, switches, scripts, and ACs. Helmsman must be running.",
+            "description_id": "harbour-helmsman-events-widget_description",
             "icon": "/usr/share/icons/hicolor/86x86/apps/harbour-helmsman.png",
             "order": 3,
             "path": "/usr/share/harbour-helmsman/eventsview/HelmsmanEventsWidget.qml",

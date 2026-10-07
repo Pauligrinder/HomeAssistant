@@ -14,6 +14,10 @@ Item {
     property bool autoFit: false
     property bool interactive: true
     property int zoom: 15
+    // Map tiles are plain Images. After a backgrounding their textures are
+    // gone and the source URL has not changed, so bump this to decode again.
+    property int imageEpoch: 0
+    property bool textureLost: false
     property int tileSize: 256
     property string tileKey: ""
     property real centerLat: NaN
@@ -255,6 +259,25 @@ Item {
     Component.onCompleted: root.scheduleMarkers()
 
     Timer {
+        id: tileReload
+        interval: 50
+        onTriggered: {
+            root.textureLost = false
+            root.imageEpoch++
+        }
+    }
+
+    Connections {
+        target: Qt.application
+        onStateChanged: {
+            if (Qt.application.state !== Qt.ApplicationActive)
+                root.textureLost = true
+            else if (root.textureLost)
+                tileReload.restart()
+        }
+    }
+
+    Timer {
         id: rebuildTimer
         interval: 40
         repeat: false
@@ -302,18 +325,39 @@ Item {
         Repeater {
             model: tileModel
             Image {
+                id: tile
                 width: root.tileSize
                 height: root.tileSize
                 sourceSize.width: root.tileSize
                 sourceSize.height: root.tileSize
                 asynchronous: true
-                cache: true
+                cache: false
                 fillMode: Image.PreserveAspectCrop
-                source: model.imageUrl
                 x: Math.round((model.tx - root.lon2tile(root.viewLon, root.zoom))
                               * root.tileSize + root.width / 2)
                 y: Math.round((model.ty - root.lat2tile(root.viewLat, root.zoom))
                               * root.tileSize + root.height / 2)
+                property string path: model.imageUrl ? String(model.imageUrl) : ""
+                function applyPath() {
+                    if (String(tile.source) === path)
+                        return
+                    tile.source = path
+                }
+                onPathChanged: applyPath()
+                Component.onCompleted: applyPath()
+                function reload() {
+                    if (!path.length)
+                        return
+                    var async = asynchronous
+                    asynchronous = false
+                    source = ""
+                    source = path
+                    asynchronous = async
+                }
+                Connections {
+                    target: root
+                    onImageEpochChanged: tile.reload()
+                }
             }
         }
 

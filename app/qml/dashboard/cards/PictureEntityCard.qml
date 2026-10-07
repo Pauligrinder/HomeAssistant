@@ -8,6 +8,10 @@ CardChrome {
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     property string imageUrl: ""
     property string requestedPath: ""
+    // state_filter goes through HueSaturation and OpacityMask, which keep a
+    // framebuffer. Recreate that path after the GL context comes back.
+    property bool filterLive: true
+    property bool textureLost: false
     readonly property int rev: root.statesRevision
     contentTopMargin: 0
     contentBottomMargin: 0
@@ -99,6 +103,34 @@ CardChrome {
 
     Component.onCompleted: root.refresh()
 
+    Timer {
+        id: filterReload
+        interval: 50
+        onTriggered: {
+            root.textureLost = false
+            if (root.stateFilter.length === 0 || !picture.reload())
+                return
+            root.filterLive = false
+            filterRestore.restart()
+        }
+    }
+
+    Timer {
+        id: filterRestore
+        interval: 1
+        onTriggered: root.filterLive = true
+    }
+
+    Connections {
+        target: Qt.application
+        onStateChanged: {
+            if (Qt.application.state !== Qt.ApplicationActive)
+                root.textureLost = true
+            else if (root.textureLost)
+                filterReload.restart()
+        }
+    }
+
     Item {
         id: pictureArea
         width: root.width
@@ -125,14 +157,34 @@ CardChrome {
                 id: picture
                 anchors.fill: parent
                 fillMode: Image.PreserveAspectCrop
-                source: root.imageUrl
+                asynchronous: true
+                cache: false
                 visible: false
+                property url pictureUrl: root.imageUrl
+                function applyUrl() {
+                    if (String(picture.source) === String(pictureUrl))
+                        return
+                    picture.source = pictureUrl
+                }
+                onPictureUrlChanged: applyUrl()
+                Component.onCompleted: applyUrl()
+                function reload() {
+                    var url = picture.source
+                    if (!url || String(url).length === 0)
+                        return false
+                    var async = picture.asynchronous
+                    picture.asynchronous = false
+                    picture.source = ""
+                    picture.source = url
+                    picture.asynchronous = async
+                    return true
+                }
             }
 
             Loader {
                 id: filterLoader
                 anchors.fill: parent
-                active: root.stateFilter.length > 0 && root.imageUrl.length > 0
+                active: root.filterLive && root.stateFilter.length > 0 && root.imageUrl.length > 0
                 source: Qt.resolvedUrl("../PictureFilter.qml")
                 visible: false
                 onLoaded: {

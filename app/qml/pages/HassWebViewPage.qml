@@ -1449,6 +1449,7 @@ Page {
         visible: !page.dashboardReady
         z: 2
         readonly property bool snapshotReady: snapshotImage.status === Image.Ready
+        property int imageEpoch: 0
 
         Image {
             id: snapshotImage
@@ -1459,8 +1460,27 @@ Page {
             visible: false
             source: page.snapshotUsable
                     ? ("file://" + hassClient.dashboardSnapshotPath(page.snapshotKey())
-                       + "?" + page.snapshotRevision)
+                       + "?" + page.snapshotRevision
+                       + (loadingOverlay.imageEpoch
+                          ? ("&e=" + loadingOverlay.imageEpoch) : ""))
                     : ""
+        }
+
+        // The blurred still is a GL texture. Coming back has to point the
+        // image at the same file again or FastBlur samples a dropped texture.
+        Timer {
+            id: snapshotReload
+            interval: 50
+            onTriggered: loadingOverlay.imageEpoch++
+        }
+
+        Connections {
+            target: Qt.application
+            onStateChanged: {
+                if (Qt.application.state === Qt.ApplicationActive
+                        && loadingOverlay.visible && page.snapshotUsable)
+                    snapshotReload.restart()
+            }
         }
 
         FastBlur {

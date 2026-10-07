@@ -10,25 +10,89 @@ import QtQuick 2.6
 // another frame and Sailfish reports the app as not responding.
 Item {
     id: root
-    property alias source: image.source
+    // Not an alias: resume has to assign the inner source twice, which would
+    // break a caller's binding if it wrote image.source directly.
+    property url source
     property alias sourceSize: image.sourceSize
     property alias status: image.status
     property int fillMode: Image.PreserveAspectCrop
     property real cornerRadius: 0
     property bool roundTop: true
     property bool roundBottom: true
+    // Kept across a resume reload so a card does not collapse while the
+    // picture is decoded again.
+    property real heldAspect: 0
     // Natural width/height of the loaded picture, 0 until it arrives. Callers
     // use it to give the picture the height Home Assistant would.
-    readonly property real aspectRatio: image.implicitHeight > 0
-                                        ? image.implicitWidth / image.implicitHeight : 0
+    readonly property real aspectRatio: heldAspect
     readonly property bool clipCorners: cornerRadius > 0 && width >= 1 && height >= 1
+    // Sailfish deletes the GL context in the background. Image keeps
+    // status Ready and will not fetch the file again, so the picture stays
+    // blank until something assigns source.
+    property bool textureLost: false
+
+    onSourceChanged: {
+        if (image)
+            image.assign(source)
+    }
+    Component.onCompleted: {
+        if (image)
+            image.assign(source)
+    }
+
+    function noteImage() {
+        if (image.status !== Image.Ready)
+            return
+        if (image.implicitHeight > 0)
+            root.heldAspect = image.implicitWidth / image.implicitHeight
+        clip.requestPaint()
+    }
 
     Image {
         id: image
         anchors.fill: parent
         fillMode: root.fillMode
         asynchronous: true
+        // A shared cache entry can come back without a texture after the
+        // context is dropped. This picture keeps its own copy of the file.
+        cache: false
         visible: !root.clipCorners
+
+        function assign(next) {
+            image.source = next
+        }
+
+        function reload() {
+            var url = image.source
+            if (!url || String(url).length === 0)
+                return
+            // Decode before the next frame so the card does not flash empty.
+            var async = image.asynchronous
+            image.asynchronous = false
+            image.source = ""
+            image.source = url
+            image.asynchronous = async
+        }
+    }
+
+    // Wait until the new context exists, then decode the file again.
+    Timer {
+        id: resumeReload
+        interval: 50
+        onTriggered: {
+            root.textureLost = false
+            image.reload()
+        }
+    }
+
+    Connections {
+        target: Qt.application
+        onStateChanged: {
+            if (Qt.application.state !== Qt.ApplicationActive)
+                root.textureLost = true
+            else if (root.textureLost)
+                resumeReload.restart()
+        }
     }
 
     Canvas {
@@ -40,13 +104,13 @@ Item {
 
         onPaint: {
             var ctx = getContext("2d")
-            ctx.clearRect(0, 0, width, height)
             if (!root.clipCorners || image.status !== Image.Ready)
                 return
             var iw = image.implicitWidth
             var ih = image.implicitHeight
             if (iw < 1 || ih < 1)
                 return
+            ctx.clearRect(0, 0, width, height)
 
             var r = Math.min(root.cornerRadius, width / 2, height / 2)
             var tl = root.roundTop ? r : 0
@@ -86,8 +150,12 @@ Item {
         }
 
         onAvailableChanged: {
-            if (available)
-                requestPaint()
+            // available flips when the context returns. Painting immediately
+            // samples the dead texture and wipes the frame, so reload first.
+            if (!available)
+                root.textureLost = true
+            else if (root.textureLost)
+                resumeReload.restart()
         }
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
@@ -100,6 +168,8 @@ Item {
 
     Connections {
         target: image
-        onStatusChanged: clip.requestPaint()
+        onStatusChanged: root.noteImage()
+        onImplicitWidthChanged: root.noteImage()
+        onImplicitHeightChanged: root.noteImage()
     }
 }
