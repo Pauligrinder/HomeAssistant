@@ -332,7 +332,7 @@ CoverBackground {
         visible: (cover.showingNotification && cover.notificationIcon.length > 0)
                  || (cover.showingFavorites && cover.favoriteWatermarkPath.length > 0)
         fillMode: Image.PreserveAspectFit
-        cache: false
+        cache: true
         z: 0
         property string path: {
             var icon = cover.showingNotification ? cover.notificationIcon
@@ -344,6 +344,8 @@ CoverBackground {
                 return icon
             return "file://" + icon
         }
+        property bool beenActive: false
+        property bool textureLost: false
         onPathChanged: iconWatermark.applyPath()
         Component.onCompleted: iconWatermark.applyPath()
         function applyPath() {
@@ -354,22 +356,45 @@ CoverBackground {
         function reload() {
             if (!path.length)
                 return
+            restore.next = path
             source = ""
-            source = path
+            restore.restart()
+        }
+
+        Timer {
+            id: restore
+            interval: 1
+            property string next
+            onTriggered: {
+                if (next.length && String(iconWatermark.source).length === 0)
+                    iconWatermark.source = next
+                next = ""
+            }
         }
 
         Connections {
             target: Qt.application
             onStateChanged: {
-                if (Qt.application.state === Qt.ApplicationActive)
-                    coverIconReload.restart()
+                if (Qt.application.state === Qt.ApplicationActive) {
+                    if (iconWatermark.beenActive && iconWatermark.textureLost)
+                        iconWatermark.reload()
+                    else
+                        iconWatermark.textureLost = false
+                    iconWatermark.beenActive = true
+                } else if (iconWatermark.beenActive) {
+                    iconWatermark.textureLost = true
+                }
             }
         }
 
-        Timer {
-            id: coverIconReload
-            interval: 50
-            onTriggered: iconWatermark.reload()
+        BusyIndicator {
+            anchors.centerIn: parent
+            running: iconWatermark.visible
+                     && iconWatermark.path.length > 0
+                     && iconWatermark.status !== Image.Ready
+                     && iconWatermark.status !== Image.Error
+            visible: running
+            size: BusyIndicatorSize.Small
         }
     }
 

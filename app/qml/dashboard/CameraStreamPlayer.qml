@@ -65,25 +65,47 @@ Item {
         }
     }
 
-    // The last frame's texture is dropped with the GL context, and no new
-    // frame arrives until the stream is running again.
+    // The last frame's texture is dropped with the GL context. Becoming
+    // active at launch is the first show, not a resume.
+    property bool textureLost: false
+    property bool beenActive: false
+
+    function reloadFrame() {
+        var url = frame.source
+        if (!url || String(url).length === 0) {
+            textureLost = false
+            return
+        }
+        frameReload.pending = url
+        frame.source = ""
+        frameReload.restart()
+    }
+
     Connections {
         target: Qt.application
         onStateChanged: {
-            if (Qt.application.state === Qt.ApplicationActive)
-                frameReload.restart()
+            if (Qt.application.state === Qt.ApplicationActive) {
+                if (root.beenActive && root.textureLost)
+                    root.reloadFrame()
+                else
+                    root.textureLost = false
+                root.beenActive = true
+            } else if (root.beenActive) {
+                root.textureLost = true
+            }
         }
     }
 
     Timer {
         id: frameReload
-        interval: 50
+        interval: 1
+        property url pending
         onTriggered: {
-            var url = frame.source
-            if (!url || String(url).length === 0)
-                return
-            frame.source = ""
-            frame.source = url
+            var url = pending
+            pending = ""
+            root.textureLost = false
+            if (url && String(url).length && String(frame.source).length === 0)
+                frame.source = url
         }
     }
 

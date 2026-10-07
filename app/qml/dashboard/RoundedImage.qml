@@ -1,4 +1,5 @@
 import QtQuick 2.6
+import Sailfish.Silica 1.0
 
 // A picture clipped to the rounded corners of the card it sits in. Only the
 // edges that touch the outside of the card are rounded, so a header keeps its
@@ -26,18 +27,34 @@ Item {
     // use it to give the picture the height Home Assistant would.
     readonly property real aspectRatio: heldAspect
     readonly property bool clipCorners: cornerRadius > 0 && width >= 1 && height >= 1
-    // Sailfish deletes the GL context in the background. Image keeps
-    // status Ready and will not fetch the file again, so the picture stays
-    // blank until something assigns source.
+    // Set only after the picture has actually been on screen. The canvas
+    // reports unavailable while it is first created, and the app becoming
+    // active at launch is not a resume.
     property bool textureLost: false
+    property bool canvasSeen: false
+    property bool beenActive: false
 
     onSourceChanged: {
+        resumeReload.pending = ""
         if (image)
-            image.assign(source)
+            image.source = source
     }
     Component.onCompleted: {
-        if (image)
-            image.assign(source)
+        if (image && String(image.source) !== String(source))
+            image.source = source
+    }
+
+    function reloadImage() {
+        var url = String(source).length ? source : image.source
+        if (!url || String(url).length === 0) {
+            textureLost = false
+            return
+        }
+        // Clearing and restoring in one turn never starts a new load: Image
+        // keeps the previous request and stays blank.
+        resumeReload.pending = url
+        image.source = ""
+        resumeReload.restart()
     }
 
     function noteImage() {
@@ -53,46 +70,49 @@ Item {
         anchors.fill: parent
         fillMode: root.fillMode
         asynchronous: true
-        // A shared cache entry can come back without a texture after the
-        // context is dropped. This picture keeps its own copy of the file.
-        cache: false
+        cache: true
         visible: !root.clipCorners
-
-        function assign(next) {
-            image.source = next
-        }
-
-        function reload() {
-            var url = image.source
-            if (!url || String(url).length === 0)
-                return
-            // Decode before the next frame so the card does not flash empty.
-            var async = image.asynchronous
-            image.asynchronous = false
-            image.source = ""
-            image.source = url
-            image.asynchronous = async
-        }
     }
 
-    // Wait until the new context exists, then decode the file again.
+    // Next tick, after source has actually become empty.
     Timer {
         id: resumeReload
-        interval: 50
+        interval: 1
+        property url pending
         onTriggered: {
+            var url = pending
+            pending = ""
             root.textureLost = false
-            image.reload()
+            if (url && String(url).length && String(image.source).length === 0)
+                image.source = url
         }
     }
 
     Connections {
         target: Qt.application
         onStateChanged: {
-            if (Qt.application.state !== Qt.ApplicationActive)
+            if (Qt.application.state === Qt.ApplicationActive) {
+                if (root.beenActive && root.textureLost)
+                    root.reloadImage()
+                else
+                    root.textureLost = false
+                root.beenActive = true
+            } else if (root.beenActive) {
                 root.textureLost = true
-            else if (root.textureLost)
-                resumeReload.restart()
+            }
         }
+    }
+
+    BusyIndicator {
+        anchors.centerIn: parent
+        z: 2
+        running: String(root.source).length > 0
+                 && image.status !== Image.Ready
+                 && image.status !== Image.Error
+        visible: running
+        size: Math.min(root.width, root.height) < Theme.itemSizeMedium
+              ? BusyIndicatorSize.Small
+              : BusyIndicatorSize.Medium
     }
 
     Canvas {
@@ -150,12 +170,16 @@ Item {
         }
 
         onAvailableChanged: {
-            // available flips when the context returns. Painting immediately
-            // samples the dead texture and wipes the frame, so reload first.
-            if (!available)
+            if (available) {
+                if (!root.canvasSeen) {
+                    root.canvasSeen = true
+                    requestPaint()
+                } else if (!root.textureLost) {
+                    requestPaint()
+                }
+            } else if (root.canvasSeen) {
                 root.textureLost = true
-            else if (root.textureLost)
-                resumeReload.restart()
+            }
         }
         onWidthChanged: requestPaint()
         onHeightChanged: requestPaint()
