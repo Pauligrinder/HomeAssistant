@@ -169,12 +169,12 @@
   <context>
     <name>EntityMap</name>
     <message>
-      <location filename="../qml/dashboard/EntityMap.qml" line="448" />
+      <location filename="../qml/dashboard/EntityMap.qml" line="437" />
       <source>Waiting for location…</source>
       <translation>Väntar på plats...</translation>
     </message>
     <message>
-      <location filename="../qml/dashboard/EntityMap.qml" line="481" />
+      <location filename="../qml/dashboard/EntityMap.qml" line="470" />
       <source>© OpenStreetMap</source>
       <translation>© OpenStreetMap</translation>
     </message>
