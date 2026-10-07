@@ -9,8 +9,17 @@ Page {
     property var mdiIcons
     property string entityId: ""
     property var dashboard: hassClient ? hassClient.lovelace : null
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int entityTick: 0
+    readonly property int rev: (dashboard ? dashboard.statesRevision : 0) + entityTick
     readonly property string domain: dashboard ? dashboard.domainOf(entityId) : ""
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            if (entityId === page.entityId)
+                page.entityTick++
+        }
+    }
     readonly property bool on: (dashboard && rev >= 0) ? dashboard.isOn(entityId) : false
     readonly property real latitude: page.locationLatitude()
     readonly property real longitude: page.locationLongitude()

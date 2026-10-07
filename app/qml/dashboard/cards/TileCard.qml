@@ -7,7 +7,7 @@ CardChrome {
     tapEnabled: true
 
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     readonly property bool on: (dashboard && entityId.length && rev >= 0) ? dashboard.isOn(entityId) : false
     readonly property var features: (card && card.features) ? card.features : []
 

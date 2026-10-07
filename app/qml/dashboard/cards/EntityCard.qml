@@ -5,7 +5,7 @@ import ".."
 CardChrome {
     id: root
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     readonly property bool isScript: root.entityId.indexOf("script.") === 0
 
     Column {

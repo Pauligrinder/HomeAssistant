@@ -14,7 +14,8 @@ CardChrome {
             return card.entities
         return []
     }
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int listTick: 0
+    readonly property int rev: root.statesRevision + listTick
     readonly property var located: {
         var _ = root.rev
         return root.locateEntities()
@@ -24,6 +25,23 @@ CardChrome {
         if (typeof value === "string")
             return value
         return value && value.entity ? String(value.entity) : ""
+    }
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            var list = root.entities
+            if (!list.length) {
+                root.listTick++
+                return
+            }
+            for (var i = 0; i < list.length; ++i) {
+                if (root.entityIdOf(list[i]) === entityId) {
+                    root.listTick++
+                    return
+                }
+            }
+        }
     }
 
     function locateEntities() {

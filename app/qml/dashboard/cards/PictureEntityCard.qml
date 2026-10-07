@@ -8,7 +8,7 @@ CardChrome {
     readonly property string entityId: card && card.entity ? String(card.entity) : ""
     property string imageUrl: ""
     property string requestedPath: ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
     contentTopMargin: 0
     contentBottomMargin: 0
     contentHorizontalMargin: 0

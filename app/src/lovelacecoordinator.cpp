@@ -595,6 +595,7 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_ingressValidateId(0)
     , m_initialDashboardSelected(false)
     , m_pendingWebChromeless(false)
+    , m_needsBroadStateBump(false)
 {
     m_pendingTimer.setInterval(kPendingTimerMs);
     connect(&m_pendingTimer, SIGNAL(timeout()), this, SLOT(onPendingTimeout()));
@@ -753,6 +754,7 @@ void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
         if (m_currentViewIndex >= m_views.size())
             m_currentViewIndex = 0;
         m_configLoaded = true;
+        rebuildConditionEntities();
         emit currentConfigChanged();
         emit viewsChanged();
         emit currentViewIndexChanged();
@@ -1488,7 +1490,9 @@ void LovelaceCoordinator::applyStateChanged(const QVariantMap &event)
         m_entities.remove(entityId);
     else
         m_entities.insert(entityId, newState);
+    bool pendingTouched = false;
     if (m_optimisticPending.contains(entityId)) {
+        pendingTouched = true;
         if (newState.isEmpty() || pendingMatches(entityId, newState))
             m_optimisticPending.remove(entityId);
         else
@@ -1496,9 +1500,16 @@ void LovelaceCoordinator::applyStateChanged(const QVariantMap &event)
         if (m_optimisticPending.isEmpty())
             m_pendingTimer.stop();
     }
-    ++m_statesRevision;
     emit entityChanged(entityId);
-    emit statesRevisionChanged();
+    // Avoid rebinding every card on each HA state tick. Cards listen to
+    // entityChanged for their own entity; statesRevision is for visibility /
+    // filters / pending overlays that affect layout across the tree.
+    if (pendingTouched
+            || m_needsBroadStateBump
+            || m_conditionEntities.contains(entityId)) {
+        ++m_statesRevision;
+        emit statesRevisionChanged();
+    }
 }
 
 void LovelaceCoordinator::applyDashboards(const QVariant &result)
@@ -1616,6 +1627,7 @@ void LovelaceCoordinator::commitConfig(const QVariantMap &config)
     m_pendingGenerated = false;
     m_configByPath.insert(m_currentUrlPath, m_currentConfig);
     m_viewsByPath.insert(m_currentUrlPath, m_views);
+    rebuildConditionEntities();
     ++m_configsRevision;
     emit currentConfigChanged();
     emit viewsChanged();
@@ -1761,6 +1773,70 @@ void LovelaceCoordinator::bumpStatesRevision()
 {
     ++m_statesRevision;
     emit statesRevisionChanged();
+}
+
+void LovelaceCoordinator::collectEntitiesFromConditions(const QVariant &conditions)
+{
+    const QVariantList list = variantListOf(conditions);
+    for (int i = 0; i < list.size(); ++i) {
+        const QVariant &item = list.at(i);
+        if (item.type() == QVariant::String) {
+            const QString entityId = item.toString();
+            if (!entityId.isEmpty())
+                m_conditionEntities.insert(entityId);
+            continue;
+        }
+        const QVariantMap cond = item.toMap();
+        if (cond.isEmpty())
+            continue;
+        const QString entityId = cond.value(QStringLiteral("entity")).toString();
+        if (!entityId.isEmpty())
+            m_conditionEntities.insert(entityId);
+        if (cond.contains(QStringLiteral("conditions")))
+            collectEntitiesFromConditions(cond.value(QStringLiteral("conditions")));
+    }
+}
+
+void LovelaceCoordinator::collectConditionEntities(const QVariant &value)
+{
+    if (value.type() == QVariant::List) {
+        const QVariantList list = value.toList();
+        for (int i = 0; i < list.size(); ++i)
+            collectConditionEntities(list.at(i));
+        return;
+    }
+    if (value.type() != QVariant::Map)
+        return;
+    const QVariantMap map = value.toMap();
+    const QString type = map.value(QStringLiteral("type")).toString();
+    if (type == QLatin1String("entity-filter"))
+        m_needsBroadStateBump = true;
+    if (map.contains(QStringLiteral("visibility")))
+        collectEntitiesFromConditions(map.value(QStringLiteral("visibility")));
+    if (type == QLatin1String("conditional")
+            || map.contains(QStringLiteral("conditions")))
+        collectEntitiesFromConditions(map.value(QStringLiteral("conditions")));
+    if (map.contains(QStringLiteral("state_filter"))
+            && type == QLatin1String("entity-filter"))
+        m_needsBroadStateBump = true;
+    if (map.contains(QStringLiteral("cards")))
+        collectConditionEntities(map.value(QStringLiteral("cards")));
+    if (map.contains(QStringLiteral("card")))
+        collectConditionEntities(map.value(QStringLiteral("card")));
+    if (map.contains(QStringLiteral("sections")))
+        collectConditionEntities(map.value(QStringLiteral("sections")));
+    if (map.contains(QStringLiteral("elements")))
+        collectConditionEntities(map.value(QStringLiteral("elements")));
+}
+
+void LovelaceCoordinator::rebuildConditionEntities()
+{
+    m_conditionEntities.clear();
+    m_needsBroadStateBump = false;
+    QHash<QString, QVariantList>::const_iterator it = m_viewsByPath.constBegin();
+    for (; it != m_viewsByPath.constEnd(); ++it)
+        collectConditionEntities(it.value());
+    collectConditionEntities(m_views);
 }
 
 void LovelaceCoordinator::applyEntityRegistry(const QVariant &result)

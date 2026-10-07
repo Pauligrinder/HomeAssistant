@@ -133,7 +133,7 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("Use full URLs including the scheme. Internal is often http:// on LAN; external is often https://.")
+                            text: qsTr("Use full URLs. Internal is usually http://<ip-address>:<port>, external something like https://example.io.nabu.casa")
                         }
 
                         TextField {
@@ -210,7 +210,7 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("If you only have one address, put it in External URL and leave Internal URL empty. Helmsman will not switch between addresses in that case.")
+                            text: qsTr("To only use one address (and disable the switching logic), put the address in the external field.")
                         }
 
                         TextField {
@@ -304,7 +304,7 @@ Page {
                             text: qsTr("Native dashboard")
                             automaticCheck: false
                             checked: hassClient.nativeDashboardEnabled
-                            description: qsTr("Render your Lovelace dashboard as Silica instead of the Home Assistant web UI. On by default. Custom cards and energy still open in the web view.")
+                            description: qsTr("Render your dashboards natively instead of using the Home Assistant web UI. On by default. Unimplemented things still open in the webview.")
                             onClicked: hassClient.nativeDashboardEnabled = !checked
                         }
 
@@ -355,7 +355,7 @@ Page {
                             font.pixelSize: Theme.fontSizeExtraSmall
                             text: hassClient.webViewEngine !== hassClient.webViewEngineActive
                                   ? qsTr("Restart Helmsman to apply the selected engine.")
-                                  : qsTr("Used for the Home Assistant web UI. ESR153 appears when sailfish-browser-next153 is installed; Atlantic when Atlantic Browser is installed.")
+                                  : qsTr("Choose which engine the webviews should be rendered in. Stock/ESR153/Atlantic are supported if installed")
                         }
                         Item {
                             width: 1
@@ -386,7 +386,7 @@ Page {
                             text: qsTr("Show notifications on the app cover")
                             automaticCheck: false
                             checked: hassClient.coverNotificationsEnabled
-                            description: qsTr("Tint the cover with the latest Home Assistant alert. Turn this off to keep cover favorites visible.")
+                            description: qsTr("If this is enabled, notifications take over the app cover until dismissed")
                             onClicked: hassClient.coverNotificationsEnabled = !checked
                         }
 
@@ -396,12 +396,12 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("Pick lights, switches, scripts, ACs, and sensors for the app cover. Tap a light, switch, or AC to toggle it, or a script to run it. Sensors just show their current value and have no cover button.")
+                            text: qsTr("Select entities to show on the app cover")
                         }
 
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: qsTr("Choose cover favorites")
+                            text: qsTr("Manage app cover entities")
                             enabled: hassClient.loggedIn
                             onClicked: pageStack.push(Qt.resolvedUrl("EventsViewSettingsPage.qml"),
                                                       { hassClient: hassClient,
@@ -414,12 +414,12 @@ Page {
                             wrapMode: Text.Wrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeSmall
-                            text: qsTr("Pick lights, switches, scripts, ACs, sensors, and graphs for the Events View. Search on the favorites page filters every list. Tap a light, switch, or AC to toggle it, hold a light for brightness/color or an AC for mode, temperature, fan, and vanes, or tap a script for Run and Cancel. Sensors show their current value with the last 24 hours as the card background. Graphs are sensors that already publish a today/tomorrow series, such as Nordpool electricity prices. In Events View favorites, drag a preview card to reorder it, or drop it on the bin to remove it.")
+                            text: qsTr("Select entities to show in the Events View widget when enabled.")
                         }
 
                         Button {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: qsTr("Choose Events View favorites")
+                            text: qsTr("Manage events view entities")
                             enabled: hassClient.loggedIn
                             onClicked: pageStack.push(Qt.resolvedUrl("EventsViewSettingsPage.qml"),
                                                       { hassClient: hassClient,
@@ -586,7 +586,7 @@ Page {
                             id: staleSlider
                             width: parent.width
                             enabled: locationEnabledSwitch.checked
-                            label: qsTr("Request own location if older than")
+                            label: qsTr("Get a location fix if older than")
                             minimumValue: 5
                             maximumValue: 60
                             stepSize: 5
@@ -614,7 +614,7 @@ Page {
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
                             visible: locationEnabledSwitch.checked
-                            text: qsTr("Uses location updates from other apps when they request GPS. Helmsman only turns GPS on itself if the last fix is older than this.")
+                            text: qsTr("Helmsman only turns GPS on itself if the last fix is older than this - otherwise it uses fixes requested by other apps")
                         }
 
                         TextSwitch {
@@ -623,7 +623,7 @@ Page {
                             text: qsTr("Mark home on internal connection")
                             checked: hassClient.sensors ? hassClient.sensors.homeOnInternal : true
                             automaticCheck: false
-                            description: qsTr("Report home without using GPS while connected through the internal URL. Helmsman includes the Home zone coordinates so the device shows on the map, and repeats that update so Home Assistant does not time out to away. When disabled, no location is sent on that connection.")
+                            description: qsTr("Always reports the location as 'home' when connected to the internal host")
                             onClicked: {
                                 if (hassClient.sensors)
                                     hassClient.sensors.homeOnInternal = !checked

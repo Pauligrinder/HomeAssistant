@@ -9,7 +9,16 @@ Column {
     property var mdiIcons
     width: parent ? parent.width : Screen.width
     spacing: Theme.paddingSmall
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int entityTick: 0
+    readonly property int rev: (dashboard ? dashboard.statesRevision : 0) + entityTick
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            if (entityId === bar.entityId)
+                bar.entityTick++
+        }
+    }
 
     Repeater {
         model: bar.features

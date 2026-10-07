@@ -8,7 +8,8 @@ CardChrome {
     contentTopMargin: Theme.paddingSmall
     contentBottomMargin: Theme.paddingSmall
 
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int listTick: 0
+    readonly property int rev: root.statesRevision + listTick
     readonly property var entities: (card && card.entities) ? card.entities : []
     readonly property var visibleEntities: {
         var list = root.entities
@@ -23,6 +24,27 @@ CardChrome {
                 out.push(list[i])
         }
         return out
+    }
+
+    function rowEntityId(entry) {
+        if (typeof entry === "string")
+            return entry
+        if (entry && entry.entity)
+            return String(entry.entity)
+        return ""
+    }
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            var list = root.entities
+            for (var i = 0; i < list.length; ++i) {
+                if (root.rowEntityId(list[i]) === entityId) {
+                    root.listTick++
+                    return
+                }
+            }
+        }
     }
     readonly property bool hasTitle: !!(card && card.title && String(card.title).length > 0)
     readonly property bool showName: !card || card.show_name !== false

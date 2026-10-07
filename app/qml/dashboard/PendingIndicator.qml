@@ -5,7 +5,16 @@ BusyIndicator {
     id: indicator
     property var dashboard
     property string entityId
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int entityTick: 0
+    readonly property int rev: (dashboard ? dashboard.statesRevision : 0) + entityTick
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            if (entityId === indicator.entityId)
+                indicator.entityTick++
+        }
+    }
 
     size: BusyIndicatorSize.ExtraSmall
     running: !!(dashboard && indicator.entityId && indicator.entityId.length

@@ -65,7 +65,24 @@ Item {
         anchors.right: parent.right
         anchors.top: titleLabel.visible ? titleLabel.bottom : parent.top
         height: root.chartHeight
+        // The default framebuffer is discarded when Sailfish drops the GL
+        // context in the background. An image keeps that frame, and a repaint
+        // once the canvas is usable again redraws from the points already held.
+        renderTarget: Canvas.Image
+        renderStrategy: Canvas.Immediate
         onPaint: root.paintChart(getContext("2d"))
+        onAvailableChanged: {
+            if (available)
+                requestPaint()
+        }
+
+        Connections {
+            target: Qt.application
+            onStateChanged: {
+                if (Qt.application.state === Qt.ApplicationActive && canvas.available)
+                    canvas.requestPaint()
+            }
+        }
     }
 
     Flow {

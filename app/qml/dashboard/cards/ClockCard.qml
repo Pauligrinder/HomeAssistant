@@ -8,7 +8,7 @@ CardChrome {
 
     Timer {
         interval: 30000
-        running: true
+        running: Qt.application.active
         repeat: true
         triggeredOnStart: true
         onTriggered: clockLabel.text = Qt.formatTime(new Date(), "hh:mm")

@@ -6,7 +6,7 @@ CardChrome {
     id: root
     readonly property string entityId: card && (card.entity || card.stat_id)
                                        ? String(card.entity || card.stat_id) : ""
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    readonly property int rev: root.statesRevision
 
     Label {
         width: parent.width

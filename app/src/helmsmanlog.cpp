@@ -21,8 +21,6 @@
 namespace {
 
 const int kHeartbeatMs = 60 * 1000;
-const int kLagTickMs = 2000;
-const int kLagWarnMs = 5000;
 const int kKeepDays = 14;
 
 QString typeLabel(QtMsgType type)
@@ -76,10 +74,8 @@ public:
     explicit HelmsmanLogger(QObject *parent = 0)
         : QObject(parent)
         , m_previous(0)
-        , m_lastLagMs(0)
     {
         m_started.start();
-        m_lagClock.start();
     }
 
     QString directoryPath() const { return m_directory; }
@@ -100,10 +96,6 @@ public:
         m_heartbeat.setInterval(kHeartbeatMs);
         connect(&m_heartbeat, &QTimer::timeout, this, [this]() { onHeartbeat(); });
         m_heartbeat.start();
-
-        m_lagTimer.setInterval(kLagTickMs);
-        connect(&m_lagTimer, &QTimer::timeout, this, [this]() { onLagTick(); });
-        m_lagTimer.start();
 
         if (qApp) {
             connect(qApp, &QCoreApplication::aboutToQuit, this, [this]() { onAboutToQuit(); });
@@ -215,41 +207,34 @@ private:
                 .arg(typeLabel(type), -5)
                 .arg(message);
         m_stream << line << '\n';
-        m_stream.flush();
-        m_file.flush();
+        // Buffer to disk; flush on heartbeat / quit instead of every line.
+    }
+
+    void flushUnlocked()
+    {
+        if (m_file.isOpen()) {
+            m_stream.flush();
+            m_file.flush();
+        }
     }
 
     void onHeartbeat()
     {
         const QGuiApplication *gui = qobject_cast<QGuiApplication *>(qApp);
         writeRaw(QtInfoMsg,
-                 QStringLiteral("Helmsman heartbeat: uptime=%1s rss=%2 active=%3 lastLag=%4ms")
+                 QStringLiteral("Helmsman heartbeat: uptime=%1s rss=%2 active=%3")
                  .arg(m_started.elapsed() / 1000)
                  .arg(processRssKb())
-                 .arg(gui ? int(gui->applicationState()) : -1)
-                 .arg(m_lastLagMs));
-    }
-
-    void onLagTick()
-    {
-        const qint64 gap = m_lagClock.restart();
-        m_lastLagMs = gap - kLagTickMs;
-        if (gap >= kLagWarnMs) {
-            writeRaw(QtWarningMsg,
-                     QStringLiteral("Helmsman hang: event loop stalled %1ms (timer was %2ms)")
-                     .arg(gap)
-                     .arg(kLagTickMs));
-        }
+                 .arg(gui ? int(gui->applicationState()) : -1));
+        QMutexLocker locker(&m_mutex);
+        flushUnlocked();
     }
 
     void onAboutToQuit()
     {
         writeRaw(QtInfoMsg, QStringLiteral("Helmsman log: aboutToQuit"));
         QMutexLocker locker(&m_mutex);
-        if (m_file.isOpen()) {
-            m_stream.flush();
-            m_file.flush();
-        }
+        flushUnlocked();
     }
 
     void onAppStateChanged(Qt::ApplicationState state)
@@ -265,10 +250,7 @@ private:
     QString m_date;
     QtMessageHandler m_previous;
     QTimer m_heartbeat;
-    QTimer m_lagTimer;
     QElapsedTimer m_started;
-    QElapsedTimer m_lagClock;
-    qint64 m_lastLagMs;
 };
 
 HelmsmanLogger *g_logger = 0;

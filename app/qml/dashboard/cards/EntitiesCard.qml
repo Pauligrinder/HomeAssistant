@@ -7,13 +7,35 @@ CardChrome {
     tapEnabled: false
 
     readonly property var entities: (card && card.entities) ? card.entities : []
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int listTick: 0
+    readonly property int rev: root.statesRevision + listTick
     readonly property bool pictureHeader: !!(card && card.header
                                               && card.header.type === "picture")
     readonly property bool pictureFooter: !!(card && card.footer
                                               && card.footer.type === "picture")
     contentTopMargin: pictureHeader ? 0 : Theme.paddingMedium
     contentBottomMargin: pictureFooter ? 0 : Theme.paddingMedium
+
+    function rowEntityId(entry) {
+        if (typeof entry === "string")
+            return entry
+        if (entry && entry.entity)
+            return String(entry.entity)
+        return ""
+    }
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            var list = root.entities
+            for (var i = 0; i < list.length; ++i) {
+                if (root.rowEntityId(list[i]) === entityId) {
+                    root.listTick++
+                    return
+                }
+            }
+        }
+    }
 
     CardHeaderFooter {
         config: (card && card.header) ? card.header : ({})

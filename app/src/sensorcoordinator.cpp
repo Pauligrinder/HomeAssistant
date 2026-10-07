@@ -24,7 +24,7 @@ const int kConfigRefreshMs = 20 * 60 * 1000;
 const int kUpdateDebounceMs = 750;
 // HA device_tracker consider_home defaults to 180s. Keep the internal-home
 // webhook fresher than that so overnight Wi‑Fi stays "home".
-const int kHomeHeartbeatMs = 60 * 1000;
+const int kHomeHeartbeatMs = 120 * 1000;
 const double kHomeAccuracyFallbackMeters = 100.0;
 // Gap between the first webhook calls after start. Issuing config, sensor
 // registration, and the first state update together stalled the UI thread on

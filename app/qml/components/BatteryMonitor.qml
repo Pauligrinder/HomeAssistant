@@ -99,12 +99,17 @@ Item {
         onValueChanged: monitor.recomputeState()
     }
 
-    // Some devices only expose ChargePercentage; poll a few times after start.
+    // Some devices only expose ChargePercentage; poll a few times after start,
+    // then rely on ContextProperty onValueChanged.
+    property int startupPollsLeft: 5
     Timer {
         interval: 3000
-        running: true
+        running: monitor.startupPollsLeft > 0
         repeat: true
-        onTriggered: monitor.recomputeState()
+        onTriggered: {
+            monitor.recomputeState()
+            monitor.startupPollsLeft = Math.max(0, monitor.startupPollsLeft - 1)
+        }
     }
 
     Component.onCompleted: monitor.recomputeState()

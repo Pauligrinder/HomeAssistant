@@ -8,9 +8,18 @@ Rectangle {
     property var dashboard
     property var mdiIcons
     property var badge
-    readonly property int rev: dashboard ? dashboard.statesRevision : 0
+    property int entityTick: 0
+    readonly property int rev: (dashboard ? dashboard.statesRevision : 0) + entityTick
 
     signal clicked(string entityId)
+
+    Connections {
+        target: dashboard
+        onEntityChanged: {
+            if (entityId === pill.entityId)
+                pill.entityTick++
+        }
+    }
 
     readonly property string entityId: {
         if (typeof pill.badge === "string")
