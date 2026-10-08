@@ -1,5 +1,6 @@
 #include <sailfishapp.h>
 #include <QGuiApplication>
+#include <QQuickItem>
 #include <QQuickView>
 #include <QtQml>
 #include <QNetworkProxy>
