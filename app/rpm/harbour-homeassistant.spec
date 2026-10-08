@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.8
+Version:    0.4.9
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,10 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.9-1
+- Settings has a Debug section. File logging can be turned off, and touch
+  actions can be written into the same daily log.
+
 * Thu Oct 08 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.8-1
 - Switching from the web dashboard to native opens the dashboard that was
   on screen, or the profile default, instead of the generated Overview.

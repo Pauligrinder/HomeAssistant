@@ -655,6 +655,40 @@ Page {
                         }
                     }
                 }
+
+                ExpandingSection {
+                    title: i18n.translation("debug")
+
+                    content.sourceComponent: Column {
+                        width: sections.width
+                        spacing: Theme.paddingMedium
+
+                        TextSwitch {
+                            text: i18n.translation("enable_logging")
+                            automaticCheck: false
+                            checked: debugSettings.fileLoggingEnabled
+                            description: i18n.translation("enable_logging_help")
+                            onClicked: debugSettings.fileLoggingEnabled = !checked
+                        }
+
+                        TextSwitch {
+                            text: i18n.translation("also_log_touch_actions")
+                            enabled: debugSettings.fileLoggingEnabled
+                            automaticCheck: false
+                            checked: debugSettings.touchLoggingEnabled
+                            description: i18n.translation("also_log_touch_actions_help")
+                            onClicked: {
+                                if (debugSettings.fileLoggingEnabled)
+                                    debugSettings.touchLoggingEnabled = !checked
+                            }
+                        }
+
+                        Item {
+                            width: 1
+                            height: Theme.paddingLarge
+                        }
+                    }
+                }
             }
 
             Item {

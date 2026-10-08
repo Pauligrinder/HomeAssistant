@@ -76,8 +76,10 @@ int main(int argc, char *argv[])
 
     QQuickView *view = SailfishApp::createView();
     view->rootContext()->setContextProperty(QStringLiteral("i18n"), HelmsmanI18n::instance());
+    view->rootContext()->setContextProperty(QStringLiteral("debugSettings"), HelmsmanDebug::instance());
     HelmsmanLog::watchEngine(view->engine());
     view->setSource(SailfishApp::pathTo(QStringLiteral("qml/harbour-homeassistant.qml")));
+    HelmsmanLog::watchWindow(view->rootObject());
     view->show();
 
     return app->exec();
