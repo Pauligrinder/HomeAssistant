@@ -32,10 +32,133 @@ ApplicationWindow
         return props
     }
 
-    function replaceHomePage() {
+    property bool nativeStartupPending: false
+
+    function findWebDashboard() {
+        if (!pageStack || typeof pageStack.find !== "function")
+            return null
+        return pageStack.find(function(p) {
+            return p && p.isHome && typeof p.readFrontendPath === "function"
+        })
+    }
+
+    // pathname from the web UI, or null when it is not a Lovelace dashboard
+    // and the profile default should be used instead.
+    function lovelaceSelectionFromPath(pathname) {
+        var path = String(pathname || "")
+        if (!path.length)
+            return null
+        var cut = path.indexOf("?")
+        if (cut >= 0)
+            path = path.substring(0, cut)
+        cut = path.indexOf("#")
+        if (cut >= 0)
+            path = path.substring(0, cut)
+        if (path.length > 1 && path.charAt(path.length - 1) === "/")
+            path = path.substring(0, path.length - 1)
+        var parts = path.split("/")
+        var segs = []
+        for (var i = 0; i < parts.length; ++i) {
+            if (parts[i].length)
+                segs.push(parts[i])
+        }
+        if (!segs.length)
+            return null
+        var skip = {
+            "energy": true,
+            "map": true,
+            "logbook": true,
+            "history": true,
+            "config": true,
+            "developer-tools": true,
+            "profile": true,
+            "hassio": true,
+            "media-browser": true,
+            "todo": true,
+            "app": true,
+            "my": true,
+            "notfound": true,
+            "auth": true
+        }
+        if (skip[segs[0]])
+            return null
+        // /lovelace is the shell URL. Home Assistant replaces it with the
+        // profile default; if that has not happened yet, keep the default
+        // instead of forcing the generated Overview.
+        if (segs[0] === "lovelace")
+            return null
+        var dashboard = segs[0]
+        var view = ""
+        if (segs.length > 1) {
+            try {
+                view = decodeURIComponent(segs[1])
+            } catch (e) {
+                view = segs[1]
+            }
+        }
+        if (dashboard.length) {
+            try {
+                dashboard = decodeURIComponent(dashboard)
+            } catch (e2) {
+                dashboard = segs[0]
+            }
+        }
+        return { explicit: true, dashboard: dashboard, view: view }
+    }
+
+    function finishNativeStartup(pathname) {
+        if (!appWindow.nativeStartupPending)
+            return
+        appWindow.nativeStartupPending = false
+        nativeStartupTimer.stop()
+        var selection = appWindow.lovelaceSelectionFromPath(pathname)
+        var lovelace = hassClientInstance.lovelace
+        if (lovelace && lovelace.adoptStartupDashboard) {
+            lovelace.adoptStartupDashboard(selection ? (selection.dashboard || "") : "",
+                                           !!(selection && selection.explicit))
+        }
+        appWindow.replaceHomePage(selection)
+    }
+
+    function openNativeFromWeb() {
+        var web = appWindow.findWebDashboard()
+        var lovelace = hassClientInstance.lovelace
+        if (!web) {
+            appWindow.replaceHomePage(null)
+            return
+        }
+        if (lovelace && lovelace.beginStartupHold)
+            lovelace.beginStartupHold()
+        appWindow.nativeStartupPending = true
+        nativeStartupTimer.restart()
+        var fallback = web.frontendPath || ""
+        web.readFrontendPath(function(path) {
+            var chosen = (path && String(path).length) ? String(path) : fallback
+            appWindow.finishNativeStartup(chosen)
+        })
+    }
+
+    function replaceHomePage(selection) {
         if (!hassClientInstance.loggedIn)
             return
-        pageStack.replaceAbove(null, appWindow.homePageUrl(), appWindow.homePageProperties())
+        var props = appWindow.homePageProperties()
+        if (hassClientInstance.nativeDashboardEnabled) {
+            var chosen = selection || null
+            if (!chosen && hassClientInstance.lovelace
+                    && hassClientInstance.lovelace.explicitDashboard) {
+                chosen = {
+                    explicit: true,
+                    dashboard: hassClientInstance.lovelace.currentUrlPath || "",
+                    view: ""
+                }
+            }
+            if (chosen && chosen.explicit) {
+                props.followDefault = false
+                props.urlPath = chosen.dashboard ? String(chosen.dashboard) : ""
+                props.pendingViewPath = chosen.view ? String(chosen.view) : ""
+            }
+        }
+        pageStack.replaceAbove(null, appWindow.homePageUrl(), props)
     }
 
     function goHomeIfLoggedIn() {
@@ -488,16 +611,33 @@ ApplicationWindow
                 appWindow.clearCoverNotification()
         }
         onNativeDashboardEnabledChanged: {
-            if (hassClientInstance.loggedIn
-                    && pageStack.currentPage
-                    && pageStack.currentPage.objectName !== "SplashPage")
-                appWindow.replaceHomePage()
+            if (!hassClientInstance.loggedIn
+                    || !pageStack.currentPage
+                    || pageStack.currentPage.objectName === "SplashPage")
+                return
+            if (hassClientInstance.nativeDashboardEnabled)
+                appWindow.openNativeFromWeb()
+            else {
+                appWindow.nativeStartupPending = false
+                nativeStartupTimer.stop()
+                appWindow.replaceHomePage(null)
+            }
         }
     }
 
     Connections {
         target: pageStack
         onCurrentPageChanged: appWindow.flushPendingEventsFavorites()
+    }
+
+    Timer {
+        id: nativeStartupTimer
+        interval: 1200
+        repeat: false
+        onTriggered: {
+            var web = appWindow.findWebDashboard()
+            appWindow.finishNativeStartup(web ? (web.frontendPath || "") : "")
+        }
     }
 
     initialPage: Component {

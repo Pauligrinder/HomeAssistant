@@ -51,7 +51,7 @@ Page {
             pageStack.pop(existing)
             return
         }
-        page.dashboard.setCurrentUrlPath(norm)
+        page.dashboard.pinDashboard(norm)
         pageStack.replace(Qt.resolvedUrl("NativeHomePage.qml"), {
                               hassClient: page.hassClient,
                               mdiIcons: page.mdiIcons,

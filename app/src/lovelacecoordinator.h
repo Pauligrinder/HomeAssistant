@@ -33,6 +33,11 @@ class LovelaceCoordinator : public QObject
     Q_PROPERTY(QVariantList switcherItems READ switcherItems NOTIFY switcherItemsChanged)
     Q_PROPERTY(QString currentUrlPath READ currentUrlPath WRITE setCurrentUrlPath NOTIFY currentUrlPathChanged)
     Q_PROPERTY(QString defaultUrlPath READ defaultUrlPath NOTIFY defaultUrlPathChanged)
+    // False until the user and system default panels have been read. The home
+    // page must not fall back to Overview during that gap.
+    Q_PROPERTY(bool defaultsReady READ defaultsReady NOTIFY defaultsReadyChanged)
+    // True after the user picked a dashboard, or the web UI path was adopted.
+    Q_PROPERTY(bool explicitDashboard READ explicitDashboard NOTIFY explicitDashboardChanged)
     Q_PROPERTY(QVariantMap currentConfig READ currentConfig NOTIFY currentConfigChanged)
     Q_PROPERTY(QVariantList views READ views NOTIFY viewsChanged)
     Q_PROPERTY(int currentViewIndex READ currentViewIndex WRITE setCurrentViewIndex NOTIFY currentViewIndexChanged)
@@ -70,6 +75,8 @@ public:
     QVariantList switcherItems() const;
     QString currentUrlPath() const;
     QString defaultUrlPath() const;
+    bool defaultsReady() const;
+    bool explicitDashboard() const;
     Q_INVOKABLE bool isDefaultDashboardPath(const QString &path) const;
     Q_INVOKABLE QString normalizedUrlPath(const QString &path) const;
     Q_INVOKABLE QVariantList viewsForPath(const QString &path) const;
@@ -103,9 +110,17 @@ public slots:
     void setCurrentUrlPath(const QString &path);
     void setCurrentViewIndex(int index);
     void selectSwitcherPath(const QString &path);
+    // Remember a dashboard the user actually chose so a later native start
+    // does not replace it with Overview.
+    Q_INVOKABLE void pinDashboard(const QString &path);
+    // While held, lovelace/config is not requested. The web-to-native switch
+    // uses this so Overview is not built before the open dashboard is known.
+    Q_INVOKABLE void beginStartupHold();
+    Q_INVOKABLE void adoptStartupDashboard(const QString &path, bool explicitPath);
 
     void start();
     void stop();
+    void clearForLogout();
     void refresh();
     void selectViewByPath(const QString &path);
 
@@ -186,6 +201,8 @@ signals:
     void switcherItemsChanged();
     void currentUrlPathChanged();
     void defaultUrlPathChanged();
+    void defaultsReadyChanged();
+    void explicitDashboardChanged();
     void currentConfigChanged();
     void viewsChanged();
     void currentViewIndexChanged();
@@ -347,6 +364,10 @@ private:
     QString m_userDefaultPanel;
     QString m_systemDefaultPanel;
     bool m_initialDashboardSelected;
+    bool m_defaultsReady;
+    bool m_explicitDashboard;
+    bool m_startupHold;
+    QString m_configRequestPath;
     QString m_pendingNavigate;
     QString m_pendingUrl;
     QString m_pendingMoreInfo;

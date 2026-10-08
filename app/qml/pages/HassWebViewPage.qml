@@ -105,6 +105,9 @@ Page {
     // Leave the Silica edge-swipe free while the frontend can go back on its
     // own (settings subpages, add-on history). Pop the page only at the URL
     // this webview was opened with.
+    // Last Lovelace path reported by the page. SPA navigations do not update
+    // WebView.url, so this is what native mode opens.
+    property string frontendPath: ""
     property bool spaCanGoBack: false
     property bool holdBackOff: false
     readonly property bool startedAtConfig: page.isConfigHomePath(page.startPath)
@@ -174,6 +177,31 @@ Page {
     function isConfigHomePath(value) {
         var p = page.webPath(value)
         return p === "/config" || p === "/config/dashboard"
+    }
+
+    function noteFrontendPath(path) {
+        var value = String(path || "")
+        if (value.length)
+            page.frontendPath = value
+    }
+
+    function readFrontendPath(callback) {
+        if (!dashboardView || !page.dashboardReady) {
+            if (typeof callback === "function")
+                callback(page.frontendPath || "")
+            return
+        }
+        page.runViewJavaScript(
+                    "return (function(){try{return String(location.pathname||'');}catch(e){return '';}})();",
+                    function(result) {
+                        page.noteFrontendPath(result)
+                        if (typeof callback === "function")
+                            callback(page.frontendPath || String(result || ""))
+                    },
+                    function() {
+                        if (typeof callback === "function")
+                            callback(page.frontendPath || "")
+                    })
     }
 
     function runViewJavaScript(script, ok, fail) {
@@ -495,7 +523,10 @@ Page {
                 + "})();"
         page.runViewJavaScript(
                     script,
-                    function() { page.scheduleSnapshotCapture() },
+                    function() {
+                        page.readFrontendPath()
+                        page.scheduleSnapshotCapture()
+                    },
                     function() { page.scheduleSnapshotCapture() })
     }
 
@@ -524,7 +555,10 @@ Page {
 
         page.runViewJavaScript(
                     script,
-                    function() { page.scheduleSnapshotCapture() },
+                    function() {
+                        page.readFrontendPath()
+                        page.scheduleSnapshotCapture()
+                    },
                     function() { page.scheduleSnapshotCapture() })
     }
 
@@ -1070,7 +1104,9 @@ Page {
         page.runViewJavaScript(
                     "return (function(){"
                     + "try{window.__helmsmanAttachExternal&&window.__helmsmanAttachExternal();}catch(e){}"
-                    + "var q=window.__helmsmanQueue||[]; window.__helmsmanQueue=[]; return JSON.stringify(q);"
+                    + "var q=window.__helmsmanQueue||[]; window.__helmsmanQueue=[];"
+                    + "var p=''; try{p=String(location.pathname||'');}catch(e2){}"
+                    + "return JSON.stringify({q:q,p:p});"
                     + "})();",
                     function(result) {
                         page.handleBridgeQueue(result)
@@ -1084,12 +1120,20 @@ Page {
         if (!raw || raw.length === 0 || raw === "[]")
             return
 
-        var queue
+        var parsed
         try {
-            queue = JSON.parse(raw)
+            parsed = JSON.parse(raw)
         } catch (e) {
             return
         }
+
+        var queue = parsed
+        if (parsed && parsed.q) {
+            queue = parsed.q
+            page.noteFrontendPath(parsed.p)
+        }
+        if (!queue || !queue.length)
+            return
 
         for (var i = 0; i < queue.length; ++i) {
             var item = queue[i]

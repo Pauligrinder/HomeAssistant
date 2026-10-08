@@ -70,6 +70,10 @@ Page {
         var rev = dashboard ? dashboard.configsRevision : 0
         if (!dashboard || rev < 0)
             return false
+        // Cached Overview sits on the empty path. Hide it until the profile
+        // default is known, or the web/switcher selection is explicit.
+        if (page.followDefault && !dashboard.defaultsReady && !dashboard.explicitDashboard)
+            return false
         return dashboard.pathConfigReady(page.boundPath)
     }
     // Empty views, or views made only of webpage/iframe/custom HTML cards,
@@ -124,6 +128,118 @@ Page {
         return out
     }
 
+    // Overview's generated strategy is one card per entity. Instantiating all
+    // of them freezes the UI, so large views are shown 50 cards at a time.
+    readonly property int cardPageSize: 50
+    property int cardPage: 0
+    readonly property int cardCount: page.layoutCardCount(page.boundView)
+    readonly property int cardPageCount: {
+        var n = page.cardCount
+        if (n <= page.cardPageSize)
+            return 1
+        return Math.ceil(n / page.cardPageSize)
+    }
+    readonly property var displayView: page.pagedView(page.boundView, page.cardPage)
+
+    function layoutCardCount(view) {
+        if (!view)
+            return 0
+        if (String(view.type || "") === "sections") {
+            var total = 0
+            var sections = view.sections || []
+            for (var s = 0; s < sections.length; ++s) {
+                var cards = (sections[s] && sections[s].cards) ? sections[s].cards : []
+                total += cards.length
+            }
+            return total
+        }
+        var cards = view.cards || []
+        return cards.length
+    }
+
+    function sliceList(list, start, count) {
+        var out = []
+        if (!list || count <= 0)
+            return out
+        var n = list.length
+        if (start < 0)
+            start = 0
+        var end = start + count
+        if (end > n)
+            end = n
+        for (var i = start; i < end; ++i)
+            out.push(list[i])
+        return out
+    }
+
+    function pagedView(view, pageIndex) {
+        var size = page.cardPageSize
+        if (!view)
+            return ({})
+        var index = pageIndex > 0 ? pageIndex : 0
+        if (String(view.type || "") === "sections") {
+            var sections = view.sections || []
+            var total = 0
+            for (var s = 0; s < sections.length; ++s) {
+                var list = (sections[s] && sections[s].cards) ? sections[s].cards : []
+                total += list.length
+            }
+            if (total <= size)
+                return view
+            var maxPage = Math.floor((total - 1) / size)
+            if (index > maxPage)
+                index = maxPage
+            var start = index * size
+            var end = start + size
+            var built = []
+            var seen = 0
+            for (var s2 = 0; s2 < sections.length; ++s2) {
+                var section = sections[s2] || ({})
+                var cards = section.cards || []
+                var from = seen
+                var to = seen + cards.length
+                seen = to
+                if (to <= start || from >= end)
+                    continue
+                var localStart = start > from ? start - from : 0
+                var localEnd = end < to ? end - from : cards.length
+                var picked = []
+                for (var c = localStart; c < localEnd; ++c)
+                    picked.push(cards[c])
+                built.push({
+                               title: section.title,
+                               type: section.type,
+                               visibility: section.visibility,
+                               cards: picked
+                           })
+            }
+            return {
+                title: view.title,
+                path: view.path,
+                icon: view.icon,
+                type: view.type || "sections",
+                badges: view.badges,
+                cards: [],
+                sections: built
+            }
+        }
+        var flat = view.cards || []
+        if (flat.length <= size)
+            return view
+        var maxFlat = Math.floor((flat.length - 1) / size)
+        if (index > maxFlat)
+            index = maxFlat
+        return {
+            title: view.title,
+            path: view.path,
+            icon: view.icon,
+            type: view.type,
+            badges: view.badges,
+            cards: page.sliceList(flat, index * size, size),
+            sections: view.sections || []
+        }
+    }
+
     function viewIsEmptyOrWebHtml(view) {
         if (!view || !view.type)
             return true
@@ -171,7 +287,7 @@ Page {
             pageStack.pop(existing)
             return
         }
-        page.dashboard.setCurrentUrlPath(norm)
+        page.dashboard.pinDashboard(norm)
         pageStack.push(Qt.resolvedUrl("NativeHomePage.qml"), {
                            hassClient: hassClient,
                            mdiIcons: page.mdiIcons,
@@ -306,12 +422,31 @@ Page {
         }
     }
 
+    function syncBoundDashboard() {
+        if (!dashboard || page.status !== PageStatus.Active)
+            return
+        // followDefault binds to the profile default. Until that value has
+        // arrived, syncing would pin Overview and then keep showing it.
+        if (page.followDefault && !dashboard.defaultsReady)
+            return
+        if (dashboard.currentUrlPath !== page.boundPath)
+            dashboard.setCurrentUrlPath(page.boundPath)
+    }
+
     onStatusChanged: {
         if (status !== PageStatus.Active)
             return
-        if (dashboard && dashboard.currentUrlPath !== page.boundPath)
-            dashboard.setCurrentUrlPath(page.boundPath)
+        page.syncBoundDashboard()
         page.consumePendingWebPath()
+    }
+
+    onBoundPathChanged: page.cardPage = 0
+    onViewIndexChanged: page.cardPage = 0
+    onCardCountChanged: {
+        var pages = page.cardCount > page.cardPageSize
+                ? Math.ceil(page.cardCount / page.cardPageSize) : 1
+        if (page.cardPage >= pages)
+            page.cardPage = pages - 1
     }
 
     onBoundViewsChanged: {
@@ -333,6 +468,8 @@ Page {
 
     Connections {
         target: dashboard
+        onDefaultsReadyChanged: page.syncBoundDashboard()
+        onDefaultUrlPathChanged: page.syncBoundDashboard()
         onReadyChanged: {
             if (dashboard && dashboard.ready && !page.notifiedReady
                     && page.followDefault) {
@@ -394,6 +531,8 @@ Page {
     SilicaFlickable {
         id: flick
         anchors.fill: parent
+        anchors.bottomMargin: page.cardPageCount > 1
+                             ? Theme.itemSizeSmall + Theme.paddingMedium : 0
         contentHeight: page.panelMapView ? height : (column.y + column.height + Theme.paddingLarge)
         clip: true
 
@@ -528,7 +667,7 @@ Page {
                 sourceComponent: {
                     if (page.needsWebviewPrompt)
                         return webviewPromptComp
-                    if (!page.boundView || !page.boundView.type)
+                    if (!page.boundReady || !page.boundView || !page.boundView.type)
                         return emptyComp
                     var t = page.boundView.type || "masonry"
                     if (t === "sections")
@@ -539,6 +678,37 @@ Page {
                         return sidebarComp
                     return masonryComp
                 }
+            }
+        }
+    }
+
+    Row {
+        id: cardPager
+        z: 2
+        visible: page.cardPageCount > 1
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.paddingMedium
+        spacing: Theme.paddingLarge
+
+        IconButton {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            icon.source: "image://theme/icon-m-left"
+            enabled: page.cardPage > 0
+            onClicked: {
+                page.cardPage = Math.max(0, page.cardPage - 1)
+                flick.contentY = 0
+            }
+        }
+        IconButton {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            icon.source: "image://theme/icon-m-right"
+            enabled: page.cardPage + 1 < page.cardPageCount
+            onClicked: {
+                page.cardPage = Math.min(page.cardPageCount - 1, page.cardPage + 1)
+                flick.contentY = 0
             }
         }
     }
@@ -583,7 +753,7 @@ Page {
         id: sectionsComp
         SectionsLayout {
             width: viewLoader.width
-            view: page.boundView
+            view: page.displayView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
@@ -594,7 +764,7 @@ Page {
         id: masonryComp
         MasonryLayout {
             width: viewLoader.width
-            view: page.boundView
+            view: page.displayView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
@@ -606,7 +776,7 @@ Page {
         PanelLayout {
             width: viewLoader.width
             fillHeight: page.viewFillHeight
-            view: page.boundView
+            view: page.displayView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
@@ -617,7 +787,7 @@ Page {
         id: sidebarComp
         SidebarLayout {
             width: viewLoader.width
-            view: page.boundView
+            view: page.displayView
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons

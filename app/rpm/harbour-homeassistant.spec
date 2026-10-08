@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.7
+Version:    0.4.8
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,12 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Thu Oct 08 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.8-1
+- Switching from the web dashboard to native opens the dashboard that was
+  on screen, or the profile default, instead of the generated Overview.
+- A view with more than 50 cards is split into pages, with previous and
+  next arrows, so Overview does not freeze the app.
+
 * Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.7-1
 - Pictures redraw the first time the app returns from the background.
 - Rounded pictures, including map faces, are scaled and center-cropped
