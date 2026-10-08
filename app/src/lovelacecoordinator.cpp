@@ -390,6 +390,25 @@ QString normalizeDashboardPath(const QString &path)
     return path;
 }
 
+// A missing or partial frontend payload must not wipe a panel we already
+// know, or the next native open snaps to the generated Overview.
+bool takeFrontendDefaultPanel(const QVariant &result, QString *panel)
+{
+    const QVariantMap envelope = result.toMap();
+    if (!envelope.contains(QStringLiteral("value")))
+        return false;
+    const QVariant value = envelope.value(QStringLiteral("value"));
+    if (!value.isValid() || value.isNull()) {
+        panel->clear();
+        return true;
+    }
+    const QVariantMap core = value.toMap();
+    if (!core.contains(QStringLiteral("default_panel")))
+        return false;
+    *panel = core.value(QStringLiteral("default_panel")).toString();
+    return true;
+}
+
 QVariantMap configMapFromResult(const QVariant &result)
 {
     QVariantMap map = result.toMap();
@@ -594,6 +613,9 @@ LovelaceCoordinator::LovelaceCoordinator(QObject *parent)
     , m_ingressSessionId(0)
     , m_ingressValidateId(0)
     , m_initialDashboardSelected(false)
+    , m_defaultsReady(false)
+    , m_explicitDashboard(false)
+    , m_startupHold(false)
     , m_pendingWebChromeless(false)
     , m_needsBroadStateBump(false)
 {
@@ -647,6 +669,9 @@ QString LovelaceCoordinator::defaultUrlPath() const
             ? m_userDefaultPanel : m_systemDefaultPanel;
     return normalizeDashboardPath(path);
 }
+
+bool LovelaceCoordinator::defaultsReady() const { return m_defaultsReady; }
+bool LovelaceCoordinator::explicitDashboard() const { return m_explicitDashboard; }
 
 bool LovelaceCoordinator::isDefaultDashboardPath(const QString &path) const
 {
@@ -739,16 +764,27 @@ HassCameraStream *LovelaceCoordinator::cameraStream() const { return m_cameraStr
 
 void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
 {
+    // A web-to-native switch holds config loads until the open dashboard is known.
+    if (m_startupHold)
+        return;
+    // An empty profile default is Overview. Do not load it before frontend
+    // user data says that is actually the user's dashboard.
+    if (!m_explicitDashboard && !m_defaultsReady)
+        return;
     QString next = normalizeDashboardPath(path);
-    if (m_currentUrlPath == next && m_configLoaded)
+    const bool same = m_currentUrlPath == next;
+    if (same && m_configId != 0 && m_configRequestPath == next)
+        return;
+    if (same && m_configId == 0 && pathConfigReady(next))
         return;
     m_configFallbackTried = true;
     m_pendingGenerated = false;
-    const bool same = m_currentUrlPath == next;
     m_currentUrlPath = next;
     if (!same)
         emit currentUrlPathChanged();
     if (m_viewsByPath.contains(next)) {
+        if (m_configId != 0 && m_configRequestPath != next)
+            m_configId = 0;
         m_currentConfig = m_configByPath.value(next);
         m_views = m_viewsByPath.value(next);
         if (m_currentViewIndex >= m_views.size())
@@ -767,13 +803,49 @@ void LovelaceCoordinator::setCurrentUrlPath(const QString &path)
         requestConfig();
 }
 
+void LovelaceCoordinator::pinDashboard(const QString &path)
+{
+    if (!m_explicitDashboard) {
+        m_explicitDashboard = true;
+        emit explicitDashboardChanged();
+    }
+    setCurrentUrlPath(path);
+}
+
+void LovelaceCoordinator::beginStartupHold()
+{
+    m_startupHold = true;
+}
+
+void LovelaceCoordinator::adoptStartupDashboard(const QString &path, bool explicitPath)
+{
+    m_startupHold = false;
+    if (explicitPath) {
+        if (!m_explicitDashboard) {
+            m_explicitDashboard = true;
+            emit explicitDashboardChanged();
+        }
+        // Leave the profile-default fetch running. explicitDashboard keeps
+        // maybeRequestInitialConfig from replacing this path with Overview.
+        setCurrentUrlPath(path);
+        return;
+    }
+    // Ids are still zero when this runs before start(). Treating that as
+    // "defaults arrived" would select Overview.
+    if (!m_defaultsReady
+            && m_frontendUserDataId == 0
+            && m_frontendSystemDataId == 0)
+        return;
+    maybeRequestInitialConfig();
+}
+
 void LovelaceCoordinator::selectSwitcherPath(const QString &path)
 {
     const QString next = normalizeDashboardPath(path);
     if (isKnownDashboardPath(next)) {
         HelmsmanLog::info(QStringLiteral("ui"),
                           QStringLiteral("switcher native dashboard %1").arg(next));
-        setCurrentUrlPath(next);
+        pinDashboard(next);
         return;
     }
     const QString component = panelComponentName(next, m_panels);
@@ -994,11 +1066,14 @@ void LovelaceCoordinator::stop()
     m_pendingPanelPath.clear();
     m_nativePanelPaths.clear();
     m_configId = 0;
+    m_configRequestPath.clear();
     m_frontendUserDataId = 0;
     m_frontendSystemDataId = 0;
-    m_userDefaultPanel.clear();
-    m_systemDefaultPanel.clear();
+    // Keep the resolved default and any dashboard the user pinned. Clearing
+    // them here made the next native open request Overview before frontend
+    // user data came back.
     m_initialDashboardSelected = false;
+    m_startupHold = false;
     // Command ids do not survive a reconnect, so in-flight media resolves have
     // to be forgotten or their pictures would never be requested again.
     m_mediaSourceById.clear();
@@ -1014,6 +1089,40 @@ void LovelaceCoordinator::stop()
     m_configFallbackTried = false;
     m_pendingGenerated = false;
     clearPendingConfirmation();
+}
+
+void LovelaceCoordinator::clearForLogout()
+{
+    m_entities.clear();
+    m_statesLoaded = false;
+    m_configByPath.clear();
+    m_viewsByPath.clear();
+    m_views.clear();
+    m_currentConfig.clear();
+    m_configLoaded = false;
+    m_currentUrlPath.clear();
+    m_userDefaultPanel.clear();
+    m_systemDefaultPanel.clear();
+    m_initialDashboardSelected = false;
+    m_startupHold = false;
+    m_configRequestPath.clear();
+    m_dashboards.clear();
+    m_panels.clear();
+    m_switcherItems.clear();
+    if (m_explicitDashboard) {
+        m_explicitDashboard = false;
+        emit explicitDashboardChanged();
+    }
+    if (m_defaultsReady) {
+        m_defaultsReady = false;
+        emit defaultsReadyChanged();
+    }
+    emit defaultUrlPathChanged();
+    emit currentUrlPathChanged();
+    emit dashboardsChanged();
+    emit switcherItemsChanged();
+    emit viewsChanged();
+    emit currentConfigChanged();
 }
 
 void LovelaceCoordinator::refresh()
@@ -1067,10 +1176,17 @@ void LovelaceCoordinator::subscribeAll()
 
     if (keepStates) {
         setBusy(false);
-        if (m_configLoaded)
-            setReady(true);
-        else
-            requestConfig();
+        requestDashboards();
+        requestPanels();
+        requestFrontendDefaults();
+        // Under a startup hold the web path is not known yet. Loading now
+        // would build Overview, including a card for every entity.
+        if (!m_startupHold && (m_defaultsReady || m_explicitDashboard)) {
+            if (pathConfigReady(m_currentUrlPath))
+                setReady(true);
+            else
+                requestConfig();
+        }
         const QStringList todoIds = m_todoItems.keys();
         for (int i = 0; i < todoIds.size(); ++i)
             fetchTodo(todoIds.at(i));
@@ -1132,6 +1248,8 @@ void LovelaceCoordinator::requestConfig()
 {
     if (!m_socket || !m_socket->authenticated())
         return;
+    if (m_startupHold)
+        return;
     setError(QString());
     if (m_viewsByPath.isEmpty())
         setReady(false);
@@ -1140,6 +1258,7 @@ void LovelaceCoordinator::requestConfig()
     setBusy(true);
     QJsonObject msg;
     msg.insert(QStringLiteral("type"), QStringLiteral("lovelace/config"));
+    m_configRequestPath = m_currentUrlPath;
     if (!m_currentUrlPath.isEmpty())
         msg.insert(QStringLiteral("url_path"), m_currentUrlPath);
     m_configId = m_socket->sendCommand(msg);
@@ -1180,18 +1299,31 @@ void LovelaceCoordinator::maybeRequestInitialConfig()
     if (m_dashboardsId != 0 || m_frontendUserDataId != 0
             || m_frontendSystemDataId != 0)
         return;
+    // Remember that the default panel is known even if a web path is still
+    // being read. The hold below only skips the config request.
+    if (!m_defaultsReady) {
+        m_defaultsReady = true;
+        emit defaultsReadyChanged();
+    }
+    if (m_startupHold)
+        return;
 
     if (!m_initialDashboardSelected) {
-        const QString path = defaultUrlPath();
-        if (m_currentUrlPath != path) {
-            m_currentUrlPath = path;
-            emit currentUrlPathChanged();
+        // A pinned dashboard (switcher or the page open in the web UI) wins
+        // over the profile default. Otherwise wait until that default is known
+        // so an empty path does not load Overview.
+        if (!m_explicitDashboard) {
+            const QString path = defaultUrlPath();
+            if (m_currentUrlPath != path) {
+                m_currentUrlPath = path;
+                emit currentUrlPathChanged();
+            }
         }
         m_initialDashboardSelected = true;
     }
 
     if (m_wantRunning && m_socket && m_socket->authenticated()
-            && m_configId == 0 && !m_configLoaded)
+            && m_configId == 0 && !pathConfigReady(m_currentUrlPath))
         requestConfig();
 }
 
@@ -1283,21 +1415,15 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
     }
     if (id == m_frontendUserDataId) {
         m_frontendUserDataId = 0;
-        if (success) {
-            const QVariantMap core = result.toMap().value(QStringLiteral("value")).toMap();
-            m_userDefaultPanel = core.value(QStringLiteral("default_panel")).toString();
+        if (success && takeFrontendDefaultPanel(result, &m_userDefaultPanel))
             emit defaultUrlPathChanged();
-        }
         maybeRequestInitialConfig();
         return;
     }
     if (id == m_frontendSystemDataId) {
         m_frontendSystemDataId = 0;
-        if (success) {
-            const QVariantMap core = result.toMap().value(QStringLiteral("value")).toMap();
-            m_systemDefaultPanel = core.value(QStringLiteral("default_panel")).toString();
+        if (success && takeFrontendDefaultPanel(result, &m_systemDefaultPanel))
             emit defaultUrlPathChanged();
-        }
         maybeRequestInitialConfig();
         return;
     }
@@ -1372,6 +1498,14 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
     }
     if (id == m_configId) {
         m_configId = 0;
+        // The path can move while this reply is in flight (web selection
+        // arriving after a default fetch). Drop the stale body.
+        if (m_configRequestPath != m_currentUrlPath) {
+            if (m_wantRunning && !m_startupHold && m_socket && m_socket->authenticated()
+                    && !pathConfigReady(m_currentUrlPath))
+                requestConfig();
+            return;
+        }
         if (success)
             applyConfig(result);
         else

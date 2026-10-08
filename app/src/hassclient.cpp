@@ -1585,6 +1585,8 @@ void HassClient::logout()
     m_endpointDebounceTimer.stop();
     stopSensors();
     stopWidget();
+    if (m_lovelace)
+        m_lovelace->clearForLogout();
     stopPushChannel();
     clearPersistedTokens();
     clearDashboardSnapshot();
