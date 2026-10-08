@@ -280,10 +280,13 @@ CardChrome {
                         return true
                     return !!(dashboard && root.rev >= 0 && dashboard.isVisible(el.conditions))
                 }
-                opacity: (dashboard && root.rev >= 0 && entityId.length
-                          && dashboard.entityDimmed(entityId)) ? 0.45 : 1.0
+                opacity: root.withPressOpacity(
+                             (dashboard && root.rev >= 0 && entityId.length
+                              && dashboard.entityDimmed(entityId)) ? 0.45 : 1.0,
+                             tapArea.pressed && tapArea.enabled)
 
                 MouseArea {
+                    id: tapArea
                     anchors.fill: parent
                     enabled: elType !== ""
                     onClicked: {

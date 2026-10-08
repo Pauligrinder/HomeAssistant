@@ -18,6 +18,7 @@ CardChrome {
         MouseArea {
             width: icon.width
             height: icon.height
+            opacity: pressed ? root.tapPressOpacity : 1.0
             MdiIcon {
                 id: icon
                 mdiIcons: root.mdiIcons

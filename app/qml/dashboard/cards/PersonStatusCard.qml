@@ -134,6 +134,7 @@ CardChrome {
         x: -Theme.paddingMedium
         width: root.width
         height: Theme.itemSizeHuge
+        opacity: personTap.pressed ? root.tapPressOpacity : 1.0
 
         RoundedImage {
             anchors.fill: parent
@@ -195,6 +196,7 @@ CardChrome {
         }
 
         MouseArea {
+            id: personTap
             anchors.fill: parent
             z: 1
             onClicked: {

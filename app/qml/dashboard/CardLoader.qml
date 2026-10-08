@@ -43,7 +43,12 @@ Loader {
         var span = Math.min(loader.columns, Math.max(1, cols))
         var gap = Theme.paddingMedium
         var unit = (loader.unitWidth - gap * (loader.columns - 1)) / loader.columns
-        return Math.max(Theme.itemSizeSmall, span * unit + Math.max(0, span - 1) * gap)
+        var computed = span * unit + Math.max(0, span - 1) * gap
+        // itemSizeSmall is only a placeholder before unitWidth is known.
+        // Do not inflate cells past their span or a 3-column row can overflow.
+        if (!isFinite(computed) || computed <= 0)
+            return Theme.itemSizeSmall
+        return computed
     }
 
     // Cards read card and dashboard in their own Component.onCompleted, which

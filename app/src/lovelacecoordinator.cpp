@@ -2122,19 +2122,17 @@ QVariantMap LovelaceCoordinator::decorateCard(const QVariantMap &card) const
             || type == QLatin1String("vertical-stack")
             || type == QLatin1String("horizontal-stack")) {
         if (type == QLatin1String("grid")) {
-            int cols = card.value(QStringLiteral("columns")).toInt();
-            if (cols < 1)
-                cols = 3;
-            const int span = qMax(1, 12 / cols);
-            const bool square = card.value(QStringLiteral("square")).toBool();
+            // HA grid is CSS repeat(N, 1fr): every child occupies one cell.
+            // Type defaults such as button/tile = 6 are for the sections 12-col
+            // layout, not for nested grid packing (those produced 2+1 rows).
+            const bool square = !card.contains(QStringLiteral("square"))
+                    || card.value(QStringLiteral("square")).toBool();
             const QVariantList inner = variantListOf(card.value(QStringLiteral("cards")));
             QVariantList decorated;
             decorated.reserve(inner.size());
             for (const QVariant &entry : inner) {
                 QVariantMap child = decorateCard(entry.toMap());
-                const int childCols = child.value(QStringLiteral("_columns")).toInt();
-                if (childCols <= 0 || childCols == 12)
-                    child.insert(QStringLiteral("_columns"), span);
+                child.insert(QStringLiteral("_columns"), 1);
                 if (square) {
                     child.insert(QStringLiteral("_square"), true);
                     if (child.value(QStringLiteral("_rows")).toInt() <= 0)

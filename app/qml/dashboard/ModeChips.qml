@@ -45,6 +45,7 @@ Column {
                 height: Theme.itemSizeExtraSmall
                 radius: Theme.paddingSmall
                 color: active ? "#73FFFFFF" : "#28FFFFFF"
+                opacity: chipTap.pressed ? 0.6 : 1.0
 
                 Label {
                     anchors.fill: parent
@@ -59,6 +60,7 @@ Column {
                 }
 
                 MouseArea {
+                    id: chipTap
                     anchors.fill: parent
                     onClicked: chips.picked(String(modelData))
                 }

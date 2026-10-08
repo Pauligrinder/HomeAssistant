@@ -122,8 +122,10 @@ CardChrome {
                     return true
                 return !!dashboard.entityEntryVisible(row.config)
             }
-            opacity: (row.entityId.length && dashboard && root.rev >= 0
-                      && dashboard.entityDimmed(row.entityId)) ? 0.45 : 1.0
+            opacity: root.withPressOpacity(
+                         (row.entityId.length && dashboard && root.rev >= 0
+                          && dashboard.entityDimmed(row.entityId)) ? 0.45 : 1.0,
+                         row.down)
 
             onClicked: {
                 if (rowType === "weblink" && dashboard) {
