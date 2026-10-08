@@ -60,9 +60,10 @@ Rectangle {
     color: Theme.rgba(Theme.primaryColor,
                       Theme.colorScheme === Theme.LightOnDark ? 0.20 : 0.10)
     opacity: {
-        if (!dashboard || pill.entityId.length === 0)
-            return 1.0
-        return dashboard.entityDimmed(pill.entityId) ? 0.45 : 1.0
+        var base = 1.0
+        if (dashboard && pill.entityId.length > 0 && dashboard.entityDimmed(pill.entityId))
+            base = 0.45
+        return tapArea.pressed && tapArea.enabled ? base * 0.6 : base
     }
     visible: {
         if (pill.entityId.length === 0 || pill.labelText.length === 0)
@@ -105,6 +106,7 @@ Rectangle {
     }
 
     MouseArea {
+        id: tapArea
         anchors.fill: parent
         enabled: pill.entityId.length > 0
         onClicked: pill.clicked(pill.entityId)

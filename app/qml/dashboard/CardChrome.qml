@@ -14,6 +14,8 @@ Rectangle {
     readonly property int statesRevision: (dashboard ? dashboard.statesRevision : 0)
                                           + entityTick
     property bool tapEnabled: true
+    // Optional override for cards that tap something other than handleCardTap.
+    property var tapHandler
     property bool showBackground: true
     property int fillHeight: 0
     property int minContentHeight: 0
@@ -42,13 +44,24 @@ Rectangle {
     }
     readonly property bool actionPending: (dashboard && trackedEntityId.length && statesRevision >= 0)
                                           ? dashboard.isPending(trackedEntityId) : false
+    // Pressed tappable cards dim; 0.6 stays above the 0.45 unavailable fade.
+    readonly property real tapPressOpacity: 0.6
+
+    function withPressOpacity(baseOpacity, isPressed) {
+        var base = Number(baseOpacity)
+        if (!isFinite(base))
+            base = 1
+        return isPressed ? base * chrome.tapPressOpacity : base
+    }
+
     opacity: {
         if (dashboard && card && statesRevision >= 0 && !dashboard.cardVisible(card))
             return 0
+        var base = 1
         if (dashboard && trackedEntityId.length && statesRevision >= 0
                 && dashboard.entityDimmed(trackedEntityId))
-            return 0.45
-        return 1
+            base = 0.45
+        return chrome.withPressOpacity(base, tapArea.pressed && chrome.tapEnabled)
     }
     visible: !dashboard || !card || (statesRevision >= 0 && dashboard.cardVisible(card))
     clip: true
@@ -128,10 +141,15 @@ Rectangle {
     }
 
     MouseArea {
+        id: tapArea
         anchors.fill: parent
         enabled: chrome.tapEnabled && chrome.visible
         z: 0
         onClicked: {
+            if (typeof chrome.tapHandler === "function") {
+                chrome.tapHandler()
+                return
+            }
             if (dashboard && card)
                 dashboard.handleCardTap(card)
         }

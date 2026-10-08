@@ -75,6 +75,7 @@ Item {
             }
 
             Component.onCompleted: picture.refresh()
+            opacity: pictureTap.pressed && pictureTap.enabled ? 0.6 : 1.0
 
             RoundedImage {
                 id: image
@@ -87,6 +88,7 @@ Item {
             }
 
             MouseArea {
+                id: pictureTap
                 anchors.fill: parent
                 enabled: !!(extra.config && extra.config.tap_action)
                 onClicked: extra.dashboard.performAction(extra.config.tap_action, "")

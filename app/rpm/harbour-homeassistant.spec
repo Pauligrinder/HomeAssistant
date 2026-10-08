@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.4.9
+Version:    0.5.0
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,12 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.0-1
+- Cards, chips, and rows dim while pressed so a tap is visible.
+- Button cards honor show_name, show_icon, show_state, icon_height, and color.
+- Grid cards place one child per cell, so a row of buttons no longer wraps
+  early or overflows the view.
+
 * Fri Oct 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.9-1
 - Settings has a Debug section. File logging can be turned off, and touch
   actions can be written into the same daily log.

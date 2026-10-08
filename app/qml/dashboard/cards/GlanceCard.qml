@@ -87,8 +87,10 @@ CardChrome {
             MouseArea {
                 width: Math.floor(grid.width / Math.max(1, grid.columns))
                 height: cell.height
-                opacity: (entityId.length && dashboard && root.rev >= 0
-                          && dashboard.entityDimmed(entityId)) ? 0.45 : 1.0
+                opacity: root.withPressOpacity(
+                             (entityId.length && dashboard && root.rev >= 0
+                              && dashboard.entityDimmed(entityId)) ? 0.45 : 1.0,
+                             pressed)
                 property string entityId: typeof modelData === "string"
                                           ? modelData
                                           : (modelData.entity ? String(modelData.entity) : "")

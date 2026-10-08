@@ -26,9 +26,5 @@ CardChrome {
             dashboard.openWebPath("/energy")
     }
 
-    MouseArea {
-        anchors.fill: parent
-        z: 1
-        onClicked: root.defaultTap()
-    }
+    Component.onCompleted: tapHandler = defaultTap
 }
