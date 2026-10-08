@@ -1,10 +1,10 @@
 TARGET = harbour-helmsman
 
 CONFIG += sailfishapp
-QT += network websockets gui positioning dbus qml
+QT += network websockets gui positioning dbus qml quick
 LIBS += -ldl
 
-VERSION = 0.4.8
+VERSION = 0.4.9
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \
