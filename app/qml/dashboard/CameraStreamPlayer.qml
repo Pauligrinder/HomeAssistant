@@ -22,12 +22,24 @@ Item {
             return
         if (!root.active) {
             root.userPaused = false
-            stream.stop()
+            // Only stop if we still own this entity. MoreInfo shares the same
+            // HassCameraStream; stopping blindly there is fine, but a sibling
+            // player that stays active must be able to reclaim it on pop.
+            if (stream.entityId === root.entityId)
+                stream.stop()
             return
         }
         if (root.userPaused)
             return
         stream.start(root.entityId)
+    }
+
+    function resumeIfNeeded() {
+        if (!root.active || root.userPaused || !stream || !root.entityId.length)
+            return
+        if (stream.playing || stream.loading)
+            return
+        root.sync()
     }
 
     onActiveChanged: root.sync()
@@ -38,7 +50,8 @@ Item {
         root.sync()
     }
     Component.onDestruction: {
-        if (stream)
+        // Do not stop a stream MoreInfo (or another card) still owns.
+        if (stream && stream.entityId === root.entityId && root.active)
             stream.stop()
     }
 
@@ -54,6 +67,9 @@ Item {
         asynchronous: false
         cache: false
         visible: status === Image.Ready
+        // Frames are already capped in HassCameraStream; keep a belt-and-braces limit.
+        sourceSize.width: Math.round(Math.max(width, 1) * Theme.pixelRatio)
+        sourceSize.height: Math.round(Math.max(height, 1) * Theme.pixelRatio)
     }
 
     Connections {
@@ -65,7 +81,22 @@ Item {
         onPlayingChanged: {
             if (stream && stream.playing)
                 root.userPaused = false
+            else
+                resumeTimer.restart()
         }
+        onLoadingChanged: {
+            if (stream && !stream.loading && !stream.playing)
+                resumeTimer.restart()
+        }
+        onEntityIdChanged: resumeTimer.restart()
+    }
+
+    // MoreInfo stops the shared stream on pop; reclaim it if we still want live.
+    Timer {
+        id: resumeTimer
+        interval: 200
+        repeat: false
+        onTriggered: root.resumeIfNeeded()
     }
 
     // The last frame's texture is dropped with the GL context. Becoming
@@ -93,6 +124,7 @@ Item {
                 else
                     root.textureLost = false
                 root.beenActive = true
+                resumeTimer.restart()
             } else if (root.beenActive) {
                 root.textureLost = true
             }

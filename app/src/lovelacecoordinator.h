@@ -316,7 +316,7 @@ private:
     void getMedia(const QUrl &url, const QString &tag, int redirects = 0);
     void resolveMediaSource(const QString &path);
     void postJson(const QString &path, const QJsonObject &body, const QString &kind, const QString &tag = QString());
-    QString mediaCachePath(const QString &path) const;
+    QString mediaCachePath(const QString &path, const QString &suffix = QString()) const;
 
     HassWebsocket *m_socket;
     QNetworkAccessManager *m_nam;

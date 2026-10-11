@@ -73,7 +73,6 @@ CardChrome {
     }
 
     onCardChanged: root.rememberTitle()
-    Component.onCompleted: root.rememberTitle()
 
     readonly property var flatElements: {
         var _ = root.rev
@@ -186,22 +185,25 @@ CardChrome {
         }
     }
 
-    Component.onCompleted: root.refresh()
+    Component.onCompleted: {
+        root.rememberTitle()
+        root.refresh()
+    }
 
     Item {
         id: stage
-        x: -Theme.paddingMedium
         width: root.width
         height: {
-            // Square grid / forced fill: occupy the chrome height.
-            if (root.fillHeight > 0)
-                return root.fillHeight
+            // Prefer the picture's own aspect. fillHeight from CardFlow is often
+            // the pre-load placeholder height and would lock the card too short.
             var configured = root.aspectRatioFromConfig()
             if (configured > 0)
                 return width / configured
             if (background.aspectRatio > 0)
                 return width / background.aspectRatio
-            return Math.max(Theme.itemSizeExtraLarge, width * 0.66)
+            if (root.fillHeight > 0)
+                return root.fillHeight
+            return Math.max(Theme.itemSizeExtraLarge, width * 9 / 16)
         }
 
         RoundedImage {
@@ -212,8 +214,10 @@ CardChrome {
             // paint over the footer after MoreInfo / media refresh. CardChrome
             // already clips to the card radius.
             cornerRadius: 0
-            fillMode: root.fillHeight > 0 ? Image.PreserveAspectCrop
-                                          : Image.PreserveAspectFit
+            fillMode: Image.PreserveAspectCrop
+            // Never pass 0: that loads the full bitmap (overlay sources are 4K).
+            sourceSize.width: Math.round(Math.max(width, Screen.width / 2)
+                                         * Theme.pixelRatio)
         }
 
         Repeater {
@@ -224,8 +228,18 @@ CardChrome {
                 property string entityId: el && el.entity ? String(el.entity) : ""
                 property string elType: el && el.type ? String(el.type) : ""
                 property var style: (el && el.style) ? el.style : ({})
+                property bool hasLeft: !!(style && style.left !== undefined && style.left !== null
+                                          && String(style.left).length)
+                property bool hasRight: !!(style && style.right !== undefined && style.right !== null
+                                           && String(style.right).length)
+                property bool hasTop: !!(style && style.top !== undefined && style.top !== null
+                                         && String(style.top).length)
+                property bool hasBottom: !!(style && style.bottom !== undefined && style.bottom !== null
+                                            && String(style.bottom).length)
                 property real leftPct: root.styleNumber(style, "left", 50)
+                property real rightPct: root.styleNumber(style, "right", 0)
                 property real topPct: root.styleNumber(style, "top", 50)
+                property real bottomPct: root.styleNumber(style, "bottom", 0)
                 property bool centerAnchor: !(style && style.transform === "none")
 
                 width: {
@@ -269,8 +283,21 @@ CardChrome {
                         return Theme.itemSizeMedium
                     return root.styleSize(style, "height", Theme.iconSizeMedium, stage.height)
                 }
-                x: stage.width * leftPct / 100 - (centerAnchor ? width / 2 : 0)
-                y: stage.height * topPct / 100 - (centerAnchor ? height / 2 : 0)
+                // HA styles use left/top or right/bottom (% of the picture).
+                x: {
+                    if (node.hasRight && !node.hasLeft) {
+                        var fromRight = stage.width * node.rightPct / 100
+                        return stage.width - fromRight - (centerAnchor ? width / 2 : width)
+                    }
+                    return stage.width * node.leftPct / 100 - (centerAnchor ? width / 2 : 0)
+                }
+                y: {
+                    if (node.hasBottom && !node.hasTop) {
+                        var fromBottom = stage.height * node.bottomPct / 100
+                        return stage.height - fromBottom - (centerAnchor ? height / 2 : height)
+                    }
+                    return stage.height * node.topPct / 100 - (centerAnchor ? height / 2 : 0)
+                }
                 z: 1
                 visible: {
                     if (dashboard && root.rev >= 0 && entityId.length
@@ -325,6 +352,9 @@ CardChrome {
                     cornerRadius: root.styleNumber(style, "border-radius", 0)
                     fillMode: Image.PreserveAspectFit
                     source: elementImage.resolvedUrl
+                    // Overlay media-source photos are often 4K; bind a real cap.
+                    sourceSize.width: Math.round(Math.max(width, Theme.itemSizeMedium)
+                                                 * Theme.pixelRatio)
                     property string resolvedUrl: ""
                     property string requestedPath: ""
 

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.0
+Version:    0.5.1
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,12 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Mon Oct 12 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.1-1
+- Picture-glance no longer freezes the phone when a live camera opens.
+- Glance tap opens camera details, and live video resumes after returning.
+- Picture, picture-entity, and picture-elements size to the image and fill
+  the card without a chrome strip under the photo.
+
 * Fri Oct 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.0-1
 - Cards, chips, and rows dim while pressed so a tap is visible.
 - Button cards honor show_name, show_icon, show_state, icon_height, and color.

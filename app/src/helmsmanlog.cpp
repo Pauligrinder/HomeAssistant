@@ -973,8 +973,11 @@ private:
                 .arg(typeLabel(type), -5)
                 .arg(message);
         m_stream << line << '\n';
-        if (flushNow)
-            flushUnlocked();
+        // Always flush. The dashboard can hang the GUI thread before the
+        // 60s heartbeat, and an unflushed buffer leaves an empty log file
+        // that looks like logging never started.
+        flushUnlocked();
+        Q_UNUSED(flushNow);
     }
 
     void flushUnlocked()

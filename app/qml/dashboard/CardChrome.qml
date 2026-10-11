@@ -33,14 +33,13 @@ Rectangle {
            ? Theme.rgba(Theme.highlightBackgroundColor, Theme.highlightBackgroundOpacity)
            : "transparent"
     radius: Theme.paddingSmall
+    // Only the primary entity. camera_image must not be tracked here: camera
+    // entities refresh access_token often, and bumping entityTick rebuilds
+    // glance/entity children hard enough to freeze the dashboard on open.
     readonly property string trackedEntityId: {
-        if (!card)
+        if (!card || !card.entity)
             return ""
-        if (card.entity)
-            return String(card.entity)
-        if (card.camera_image)
-            return String(card.camera_image)
-        return ""
+        return String(card.entity)
     }
     readonly property bool actionPending: (dashboard && trackedEntityId.length && statesRevision >= 0)
                                           ? dashboard.isPending(trackedEntityId) : false
