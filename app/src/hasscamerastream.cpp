@@ -1,8 +1,10 @@
 #include "hasscamerastream.h"
 
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QImageReader>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -349,28 +351,34 @@ void HassCameraStream::publishFrame(const QByteArray &jpeg)
     if (jpeg.size() < 24 || !jpeg.startsWith(kJpegSoi))
         return;
 
+    // Cap frame size before the QML Image uploads a texture. Full 1080p/4K
+    // MJPEG frames have hung hybris the same way camera_proxy stills did.
+    const int maxEdge = 640;
+    QBuffer buffer;
+    buffer.setData(jpeg);
+    buffer.open(QIODevice::ReadOnly);
+    QImageReader reader(&buffer);
+    const QSize original = reader.size();
+    if (original.isValid()
+            && (original.width() > maxEdge || original.height() > maxEdge)) {
+        reader.setScaledSize(original.scaled(maxEdge, maxEdge, Qt::KeepAspectRatio));
+    }
+    const QImage image = reader.read();
+    if (image.isNull())
+        return;
+
     m_slot = 1 - m_slot;
     const QString path = cacheDir()
             + (m_slot ? QStringLiteral("/frame-a.jpg") : QStringLiteral("/frame-b.jpg"));
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+    if (!image.save(path, "JPG", 70)) {
         qWarning() << "Helmsman camera: cannot write frame" << path;
         return;
     }
-    if (file.write(jpeg) != jpeg.size()) {
-        qWarning() << "Helmsman camera: short write for frame" << path;
-        return;
-    }
-    file.flush();
-    file.close();
 
-    if (m_frameWidth <= 0 || m_frameHeight <= 0) {
-        const QImage image = QImage::fromData(jpeg, "JPEG");
-        if (!image.isNull()) {
-            m_frameWidth = image.width();
-            m_frameHeight = image.height();
-            emit frameSizeChanged();
-        }
+    if (m_frameWidth != image.width() || m_frameHeight != image.height()) {
+        m_frameWidth = image.width();
+        m_frameHeight = image.height();
+        emit frameSizeChanged();
     }
 
     m_generation += 1;

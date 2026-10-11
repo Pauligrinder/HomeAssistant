@@ -15,6 +15,8 @@
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QImageReader>
+#include <QBuffer>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QUrlQuery>
@@ -2564,10 +2566,19 @@ QString LovelaceCoordinator::defaultActionType(const QString &entityId, bool ico
     return QStringLiteral("more-info");
 }
 
+static QString cardActionEntityId(const QVariantMap &card)
+{
+    const QString entity = card.value(QStringLiteral("entity")).toString();
+    if (!entity.isEmpty())
+        return entity;
+    // picture-glance / picture-entity often only set camera_image.
+    return card.value(QStringLiteral("camera_image")).toString();
+}
+
 void LovelaceCoordinator::handleCardTap(const QVariantMap &card)
 {
     QVariantMap action = card.value(QStringLiteral("tap_action")).toMap();
-    const QString entityId = card.value(QStringLiteral("entity")).toString();
+    const QString entityId = cardActionEntityId(card);
     if (action.isEmpty()) {
         action.insert(QStringLiteral("action"), defaultActionType(entityId, false));
     }
@@ -2578,7 +2589,7 @@ void LovelaceCoordinator::handleCardTap(const QVariantMap &card)
 void LovelaceCoordinator::handleCardHold(const QVariantMap &card)
 {
     QVariantMap action = card.value(QStringLiteral("hold_action")).toMap();
-    const QString entityId = card.value(QStringLiteral("entity")).toString();
+    const QString entityId = cardActionEntityId(card);
     if (action.isEmpty())
         action.insert(QStringLiteral("action"), QStringLiteral("more-info"));
     attachCardConfirmation(&action, card);
@@ -2588,7 +2599,7 @@ void LovelaceCoordinator::handleCardHold(const QVariantMap &card)
 void LovelaceCoordinator::handleCardDoubleTap(const QVariantMap &card)
 {
     QVariantMap action = card.value(QStringLiteral("double_tap_action")).toMap();
-    const QString entityId = card.value(QStringLiteral("entity")).toString();
+    const QString entityId = cardActionEntityId(card);
     if (action.isEmpty())
         return;
     attachCardConfirmation(&action, card);
@@ -3576,13 +3587,16 @@ void LovelaceCoordinator::onSslErrors(const QList<QSslError> &errors)
         reply->ignoreSslErrors();
 }
 
-QString LovelaceCoordinator::mediaCachePath(const QString &path) const
+QString LovelaceCoordinator::mediaCachePath(const QString &path, const QString &suffix) const
 {
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
             + QStringLiteral("/hass-media");
     QDir().mkpath(dir);
     const QByteArray hash = QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex();
-    return dir + QLatin1Char('/') + QString::fromLatin1(hash) + QStringLiteral(".png");
+    QString ext = suffix.isEmpty() ? QStringLiteral(".png") : suffix;
+    if (!ext.startsWith(QLatin1Char('.')))
+        ext.prepend(QLatin1Char('.'));
+    return dir + QLatin1Char('/') + QString::fromLatin1(hash) + ext;
 }
 
 void LovelaceCoordinator::onReplyFinished()
@@ -3620,6 +3634,66 @@ void LovelaceCoordinator::onReplyFinished()
         if (status != 0 && (status < 200 || status >= 300)) {
             qWarning() << "Helmsman lovelace: media HTTP" << status << "for" << tag;
             return;
+        }
+
+        // Prefer writing the response bytes as-is. Camera snapshots are large
+        // JPEGs; decoding and re-encoding them as PNG on the GUI thread is
+        // enough for Sailfish to report Helmsman as not responding when a
+        // picture-glance (or any camera card) first loads.
+        const QByteArray contentType =
+                reply->header(QNetworkRequest::ContentTypeHeader).toByteArray().toLower();
+        QString suffix;
+        if (contentType.contains("jpeg") || contentType.contains("jpg")
+                || data.startsWith("\xFF\xD8"))
+            suffix = QStringLiteral(".jpg");
+        else if (contentType.contains("png") || data.startsWith("\x89PNG"))
+            suffix = QStringLiteral(".png");
+        else if (contentType.contains("webp"))
+            suffix = QStringLiteral(".webp");
+        else if (contentType.contains("gif") || data.startsWith("GIF8"))
+            suffix = QStringLiteral(".gif");
+
+        // camera_proxy stills are often 1920px; uploading that as a GL texture
+        // has hung hybris. Write a capped JPEG instead of the full frame.
+        const bool cameraProxy = tag.startsWith(QLatin1String("/api/camera_proxy/"));
+        if (cameraProxy && !data.isEmpty()) {
+            QBuffer buffer;
+            buffer.setData(data);
+            buffer.open(QIODevice::ReadOnly);
+            QImageReader reader(&buffer);
+            const QSize original = reader.size();
+            const int maxEdge = 640;
+            if (original.isValid()
+                    && (original.width() > maxEdge || original.height() > maxEdge)) {
+                reader.setScaledSize(original.scaled(maxEdge, maxEdge, Qt::KeepAspectRatio));
+            }
+            const QImage scaled = reader.read();
+            if (!scaled.isNull()) {
+                const QString filePath = mediaCachePath(tag, QStringLiteral(".jpg"));
+                if (scaled.save(filePath, "JPG", 80)) {
+                    const QString url = QStringLiteral("file://") + filePath;
+                    m_mediaCache.insert(tag, url);
+                    emit mediaCached(tag, url);
+                    return;
+                }
+            }
+            qWarning() << "Helmsman lovelace: camera downscale failed for" << tag
+                       << "falling back to raw bytes";
+        }
+
+        if (!suffix.isEmpty() && !data.isEmpty()) {
+            const QString filePath = mediaCachePath(tag, suffix);
+            QFile file(filePath);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Truncate)
+                    && file.write(data) == data.size()) {
+                file.flush();
+                file.close();
+                const QString url = QStringLiteral("file://") + filePath;
+                m_mediaCache.insert(tag, url);
+                emit mediaCached(tag, url);
+                return;
+            }
+            qWarning() << "Helmsman lovelace: failed to cache raw image for" << tag;
         }
 
         const QImage image = QImage::fromData(data);

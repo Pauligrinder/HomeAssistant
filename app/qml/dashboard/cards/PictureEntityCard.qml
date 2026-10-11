@@ -36,12 +36,26 @@ CardChrome {
             return ""
         return dashboard.formatState(root.entityId)
     }
+    readonly property real pictureAspect: {
+        if (root.stateFilter.length === 0 && plainPicture.aspectRatio > 0)
+            return plainPicture.aspectRatio
+        if (picture.implicitWidth > 0 && picture.implicitHeight > 0)
+            return picture.implicitWidth / picture.implicitHeight
+        return 0
+    }
+    readonly property real naturalPictureHeight: {
+        if (root.pictureAspect > 0)
+            return root.width / root.pictureAspect
+        return Math.max(Theme.itemSizeExtraLarge, root.width * 9 / 16)
+    }
 
     function mediaPath() {
         if (!dashboard)
             return ""
         if (entityId.length && dashboard.domainOf(entityId) === "camera")
             return dashboard.cameraPath(entityId)
+        if (card && card.camera_image)
+            return dashboard.cameraPath(String(card.camera_image))
         var pic = dashboard.mediaPathOf(dashboard.attribute(entityId, "entity_picture"))
         if (pic.length)
             return pic
@@ -160,18 +174,23 @@ CardChrome {
     Item {
         id: pictureArea
         width: root.width
+        // Grow with the image aspect, but never leave a chrome-colored gap when
+        // CardFlow assigns a taller fillHeight.
         height: root.fillHeight > 0
-                ? root.fillHeight
-                : Math.max(Theme.itemSizeExtraLarge, width * 0.5)
+                ? Math.max(root.fillHeight, root.naturalPictureHeight)
+                : root.naturalPictureHeight
 
         // Default path: RoundedImage (no cached FBO over the footer).
         RoundedImage {
+            id: plainPicture
             anchors.fill: parent
             visible: root.stateFilter.length === 0
             source: root.imageUrl
-            cornerRadius: root.radius
-            roundBottom: !root.showOverlay
+            // CardChrome clips; skip Canvas corner paint on large pictures.
+            cornerRadius: 0
             fillMode: Image.PreserveAspectCrop
+            sourceSize.width: Math.round(Math.max(width, Screen.width / 2)
+                                         * Theme.pixelRatio)
         }
 
         // Filtered path only when state_filter is set.
@@ -186,6 +205,8 @@ CardChrome {
                 asynchronous: true
                 cache: true
                 visible: false
+                sourceSize.width: Math.round(Math.max(width, Screen.width / 2)
+                                             * Theme.pixelRatio)
                 property url pictureUrl: root.imageUrl
                 function applyUrl() {
                     if (String(picture.source) === String(pictureUrl))
@@ -244,6 +265,15 @@ CardChrome {
                 opacity: root.filterOpacity
                 cached: false
             }
+        }
+
+        BusyIndicator {
+            anchors.centerIn: parent
+            size: BusyIndicatorSize.Medium
+            running: root.stateFilter.length === 0
+                     && String(root.imageUrl).length === 0
+                     && root.requestedPath.length > 0
+            visible: running
         }
 
         // Flat bar — no radius/cover strip (that stacked into a darker band).

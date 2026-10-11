@@ -7,6 +7,7 @@ CardChrome {
     property string imageUrl: ""
     contentTopMargin: 0
     contentBottomMargin: 0
+    contentHorizontalMargin: 0
     readonly property bool lightAmbience: Theme.colorScheme === Theme.DarkOnLight
 
     function mediaPath() {
@@ -33,18 +34,24 @@ CardChrome {
     }
 
     Item {
-        x: -Theme.paddingMedium
         width: root.width
-        height: root.fillHeight > 0
-                ? root.fillHeight
-                : Math.max(Theme.itemSizeExtraLarge, width * 0.45)
+        height: {
+            if (picture.aspectRatio > 0)
+                return width / picture.aspectRatio
+            if (root.fillHeight > 0)
+                return root.fillHeight
+            return Math.max(Theme.itemSizeExtraLarge, width * 9 / 16)
+        }
 
         RoundedImage {
+            id: picture
             anchors.fill: parent
             source: root.imageUrl
-            cornerRadius: root.radius
-            fillMode: root.fillHeight > 0 ? Image.PreserveAspectCrop
-                                          : Image.PreserveAspectFit
+            // CardChrome clips; skip Canvas corner paint on large pictures.
+            cornerRadius: 0
+            fillMode: Image.PreserveAspectCrop
+            sourceSize.width: Math.round(Math.max(width, Screen.width / 2)
+                                         * Theme.pixelRatio)
         }
 
         Rectangle {
