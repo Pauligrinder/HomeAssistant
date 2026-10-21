@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.1
+Version:    0.5.2
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,15 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.2-1
+- Unknown Lovelace roots such as custom:horizontal-layout still show their
+  cards; horizontal and vertical layout words pick a sensible packing.
+- Ignore stale GeoClue / cached GPS fixes so location does not jump to an
+  old city from another app's leftover position.
+- Soft-merge entity states after reconnect, and refresh person status
+  including battery helpers.
+- Collapse noisy history legends when a sensor has many states.
+
 * Mon Oct 12 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.1-1
 - Picture-glance no longer freezes the phone when a live camera opens.
 - Glance tap opens camera details, and live video resumes after returning.

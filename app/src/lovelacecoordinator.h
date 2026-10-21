@@ -259,6 +259,7 @@ private:
     void requestEntityIcons();
     void maybeRequestInitialConfig();
     void applyStates(const QVariant &result);
+    void applyStatesMerge(const QVariantList &list);
     void applyStateObject(const QVariantMap &state);
     void applyStateChanged(const QVariantMap &event);
     void applyDashboards(const QVariant &result);

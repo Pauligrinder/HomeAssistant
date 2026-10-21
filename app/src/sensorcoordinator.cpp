@@ -967,12 +967,22 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     const bool dueByTime = firstFix
             || m_lastLocationSent.msecsTo(now)
             >= minimumLocationIntervalMs(m_locationPreset);
+    const double moveMeters = firstFix
+            ? 0.0
+            : haversineMeters(m_lastLat, m_lastLon, latitude, longitude);
     const bool dueByMove = !firstFix
-            && haversineMeters(m_lastLat, m_lastLon, latitude, longitude)
-            >= minimumLocationMoveMeters(m_locationPreset);
+            && moveMeters >= minimumLocationMoveMeters(m_locationPreset);
     const bool betterAccuracy = accuracyMeters > 0
             && (m_lastAccuracy <= 0
                 || accuracyMeters + kAccuracyImproveMeters < m_lastAccuracy);
+    // A multi-kilometre jump is almost always a stale cached fix from another
+    // app (GeoClue). Require a real interval tick and a usable accuracy.
+    if (!firstFix && moveMeters >= 2000.0) {
+        if (!dueByTime)
+            return;
+        if (accuracyMeters <= 0 || accuracyMeters > 150.0)
+            return;
+    }
     // Prefer a tighter fix (GPS after Wi‑Fi) even before the interval elapses.
     if (!dueByTime && !dueByMove && !betterAccuracy)
         return;
@@ -1085,8 +1095,8 @@ void SensorCoordinator::refreshLocation()
         postLocationUpdate(true);
         return;
     }
-    if (m_haveLocation && qIsFinite(m_lastLat) && qIsFinite(m_lastLon))
-        postLocationUpdate(true);
+    // Do not re-post m_lastLat/Lon here. That reused a cached GeoClue /
+    // PositionSource dump (often an old city) before a fresh seek finished.
     emit locationRefreshRequested();
 }
 

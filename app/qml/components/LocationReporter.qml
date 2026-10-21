@@ -26,12 +26,23 @@ Item {
     readonly property int seekTimeoutMs: 45000
     readonly property int seekUpdateMs: 5000
     readonly property int staleCheckMs: 60000
+    // Never post a fix older than this, even if the user's stale interval is
+    // longer. Cached GeoClue dumps from other apps (e.g. an old Helsinki fix)
+    // were jumping the device_tracker across the country.
+    readonly property int maxPostAgeMs: 120000
     property bool seeking: false
     property double lastFixAtMs: 0
     property double lastSeekAtMs: 0
+    property double lastPostedLat: 0
+    property double lastPostedLon: 0
+    property bool havePostedFix: false
 
     function staleMs() {
         return Math.max(5, reporter.staleMinutes) * 60 * 1000
+    }
+
+    function maxAcceptAgeMs() {
+        return Math.min(reporter.staleMs(), reporter.maxPostAgeMs)
     }
 
     function nowMs() {
@@ -66,6 +77,17 @@ Item {
         return 0
     }
 
+    function approxMeters(lat1, lon1, lat2, lon2) {
+        var r = 6371000
+        var p1 = lat1 * Math.PI / 180
+        var p2 = lat2 * Math.PI / 180
+        var dp = (lat2 - lat1) * Math.PI / 180
+        var dl = (lon2 - lon1) * Math.PI / 180
+        var a = Math.sin(dp / 2) * Math.sin(dp / 2)
+                + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2)
+        return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    }
+
     function acceptFix(latitude, longitude, accuracy, timestampSec) {
         if (!reporter.enabled || !hassClient || !hassClient.sensors)
             return false
@@ -73,19 +95,58 @@ Item {
             return false
         if (!isFinite(latitude) || !isFinite(longitude))
             return false
-        if (timestampSec && timestampSec > 0) {
-            var ageMs = reporter.nowMs() - (timestampSec * 1000)
-            if (ageMs > reporter.staleMs() * 2)
+
+        var now = reporter.nowMs()
+        var hasTs = timestampSec !== undefined && timestampSec !== null
+                && Number(timestampSec) > 0
+        var fixAtMs = hasTs ? Math.min(now, Number(timestampSec) * 1000) : now
+        var ageMs = now - fixAtMs
+        var acc = reporter.accuracyMeters(accuracy)
+        var maxAge = reporter.maxAcceptAgeMs()
+
+        // Drop other apps' cached GeoClue positions. A PositionSource burst
+        // often surfaces those first; posting them made HA jump to Helsinki.
+        if (hasTs && ageMs > maxAge) {
+            console.log("Helmsman location: reject stale fix ageSec=",
+                        Math.round(ageMs / 1000), "lat=", latitude, "lon=", longitude)
+            return false
+        }
+
+        // Untimestamped first hits while seeking are usually the same cache.
+        if (!hasTs && reporter.seeking) {
+            var seekAge = now - reporter.lastSeekAtMs
+            if (seekAge < 4000 && (acc <= 0 || acc > 75))
                 return false
         }
-        var acc = reporter.accuracyMeters(accuracy)
-        // A PositionSource burst can first return a cached fix. Preserve its
-        // actual age so it cannot postpone the next acquisition as if it had
-        // just been measured.
-        var fixAtMs = timestampSec && timestampSec > 0
-                ? timestampSec * 1000 : reporter.nowMs()
-        reporter.lastFixAtMs = Math.min(reporter.nowMs(), fixAtMs)
+
+        // Huge jump from a weak / untimestamped fix: wait for a better one.
+        if (reporter.havePostedFix) {
+            var jump = reporter.approxMeters(reporter.lastPostedLat, reporter.lastPostedLon,
+                                             latitude, longitude)
+            if (jump > 2000) {
+                if (!hasTs || ageMs > 30000) {
+                    console.log("Helmsman location: reject teleport jumpM=",
+                                Math.round(jump), "ageSec=", Math.round(ageMs / 1000))
+                    return false
+                }
+                if (acc <= 0 || acc > 150) {
+                    console.log("Helmsman location: reject inaccurate teleport acc=", acc)
+                    return false
+                }
+            }
+        }
+
+        // Preserve the real fix age so a cached hit cannot postpone the next
+        // acquisition as if it had just been measured.
+        reporter.lastFixAtMs = fixAtMs
+        reporter.lastPostedLat = latitude
+        reporter.lastPostedLon = longitude
+        reporter.havePostedFix = true
         hassClient.sensors.updateLocation(latitude, longitude, acc, -1)
+
+        // Fresh GPS-quality fix: end the burst early.
+        if (reporter.seeking && hasTs && ageMs < 30000 && acc > 0 && acc <= 75)
+            reporter.stopSeek()
         return true
     }
 
@@ -137,11 +198,16 @@ Item {
     }
 
     function refreshNow() {
-        if (!reporter.enabled || reporter.seeking)
+        if (!reporter.enabled)
             return
+        // Force a new acquisition even if the last accepted fix is still
+        // within the stale window — "Update location now" must not reuse it.
+        if (reporter.seeking)
+            reporter.stopSeek()
         startDelayTimer.stop()
         reporter.seeking = true
         reporter.lastSeekAtMs = reporter.nowMs()
+        // Allow untimestamped/cached first hits to be filtered for a few seconds.
         seekTimeoutTimer.restart()
         reporter.powerGps()
         positionSource.updateInterval = reporter.seekUpdateMs
@@ -193,7 +259,8 @@ Item {
                 return
             var accuracy = position.horizontalAccuracy
             var ts = 0
-            if (position.timestamp)
+            if (position.timestamp && !isNaN(position.timestamp.getTime())
+                    && position.timestamp.getTime() > 0)
                 ts = position.timestamp.getTime() / 1000
             reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts)
         }

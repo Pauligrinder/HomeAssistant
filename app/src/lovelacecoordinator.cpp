@@ -1181,6 +1181,9 @@ void LovelaceCoordinator::subscribeAll()
         requestDashboards();
         requestPanels();
         requestFrontendDefaults();
+        // Re-fetch states quietly. Skipping get_states on reconnect left
+        // person / device_tracker cards stuck on values missed while offline.
+        requestStates();
         // Under a startup hold the web path is not known yet. Loading now
         // would build Overview, including a card for every entity.
         if (!m_startupHold && (m_defaultsReady || m_explicitDashboard)) {
@@ -1594,6 +1597,12 @@ void LovelaceCoordinator::onEventReceived(int id, const QVariantMap &event)
 void LovelaceCoordinator::applyStates(const QVariant &result)
 {
     const QVariantList list = variantListOf(result);
+    // Soft merge after reconnect: emit per-entity changes only. A full clear
+    // + statesRevision bump rebuilt every card and froze the UI for seconds.
+    if (m_statesLoaded && !m_entities.isEmpty()) {
+        applyStatesMerge(list);
+        return;
+    }
     m_entities.clear();
     for (int i = 0; i < list.size(); ++i)
         applyStateObject(list.at(i).toMap());
@@ -1605,6 +1614,56 @@ void LovelaceCoordinator::applyStates(const QVariant &result)
         applyGeneratedConfig();
     else if (m_configLoaded)
         setReady(true);
+}
+
+void LovelaceCoordinator::applyStatesMerge(const QVariantList &list)
+{
+    QHash<QString, bool> seen;
+    seen.reserve(list.size());
+    bool anyChange = false;
+    bool pendingTouched = false;
+    for (int i = 0; i < list.size(); ++i) {
+        const QVariantMap state = list.at(i).toMap();
+        const QString entityId = state.value(QStringLiteral("entity_id")).toString();
+        if (entityId.isEmpty())
+            continue;
+        seen.insert(entityId, true);
+        const QVariantMap previous = m_entities.value(entityId);
+        if (previous == state)
+            continue;
+        m_entities.insert(entityId, state);
+        anyChange = true;
+        if (m_conditionEntities.contains(entityId))
+            pendingTouched = true;
+        if (m_optimisticPending.contains(entityId)) {
+            pendingTouched = true;
+            if (pendingMatches(entityId, state))
+                m_optimisticPending.remove(entityId);
+            else
+                overlayPending(entityId);
+            if (m_optimisticPending.isEmpty())
+                m_pendingTimer.stop();
+        }
+        emit entityChanged(entityId);
+    }
+    // Drop entities that disappeared while we were offline.
+    const QStringList existing = m_entities.keys();
+    for (int i = 0; i < existing.size(); ++i) {
+        const QString entityId = existing.at(i);
+        if (seen.contains(entityId))
+            continue;
+        m_entities.remove(entityId);
+        anyChange = true;
+        if (m_conditionEntities.contains(entityId))
+            pendingTouched = true;
+        emit entityChanged(entityId);
+    }
+    reconcilePendingStates();
+    m_statesLoaded = true;
+    if (anyChange && (pendingTouched || m_needsBroadStateBump)) {
+        ++m_statesRevision;
+        emit statesRevisionChanged();
+    }
 }
 
 void LovelaceCoordinator::applyStateObject(const QVariantMap &state)
@@ -2077,6 +2136,8 @@ QVariantList LovelaceCoordinator::normalizeViews(const QVariantMap &config) cons
     for (int i = 0; i < views.size(); ++i) {
         QVariantMap view = views.at(i).toMap();
         QString type = view.value(QStringLiteral("type")).toString();
+        // Keep custom roots (e.g. custom:horizontal-layout) as-is; QML picks a
+        // layout from word hints and always falls back to masonry.
         if (type.isEmpty())
             type = view.contains(QStringLiteral("sections"))
                     ? QStringLiteral("sections")
@@ -2120,9 +2181,9 @@ QVariantMap LovelaceCoordinator::decorateCard(const QVariantMap &card) const
         if (!title.isEmpty())
             out.insert(QStringLiteral("_helmsman_card_title"), title);
     }
-    if (type == QLatin1String("grid")
-            || type == QLatin1String("vertical-stack")
-            || type == QLatin1String("horizontal-stack")) {
+    // Built-in stacks/grids, plus layout-card roots (custom:horizontal-layout,
+    // custom:vertical-layout, …) and any other container that ships a cards[].
+    if (card.contains(QStringLiteral("cards"))) {
         if (type == QLatin1String("grid")) {
             // HA grid is CSS repeat(N, 1fr): every child occupies one cell.
             // Type defaults such as button/tile = 6 are for the sections 12-col
@@ -2144,7 +2205,8 @@ QVariantMap LovelaceCoordinator::decorateCard(const QVariantMap &card) const
             }
             out.insert(QStringLiteral("cards"), decorated);
         } else {
-            out.insert(QStringLiteral("cards"), decorateCards(variantListOf(card.value(QStringLiteral("cards")))));
+            out.insert(QStringLiteral("cards"),
+                       decorateCards(variantListOf(card.value(QStringLiteral("cards")))));
         }
     }
     if (type == QLatin1String("conditional")) {

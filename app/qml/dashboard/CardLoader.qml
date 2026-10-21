@@ -94,6 +94,21 @@ Loader {
             item.minContentHeight = Qt.binding(function() { return loader.minHeight })
     }
 
+    // layout-card and similar custom containers: render nested cards instead of
+    // a dead "unsupported" stub. Word hints pick orientation when possible.
+    function sourceForContainer(type) {
+        var t = String(type || "").toLowerCase()
+        var nested = loader.card && loader.card.cards
+        if (!nested || !nested.length)
+            return ""
+        if (t.indexOf("horizontal") >= 0)
+            return Qt.resolvedUrl("cards/HorizontalStackCard.qml")
+        if (t.indexOf("grid") >= 0)
+            return Qt.resolvedUrl("cards/GridCard.qml")
+        // vertical-layout, masonry-layout, and any other cards[] container
+        return Qt.resolvedUrl("cards/VerticalStackCard.qml")
+    }
+
     function sourceForType(type) {
         var t = String(type || "")
         if (t === "custom:person-status-card" || t === "custom:person-info-card")
@@ -102,6 +117,9 @@ Loader {
             return Qt.resolvedUrl("cards/CustomCalendarCard.qml")
         if (t === "custom:apexcharts-card")
             return Qt.resolvedUrl("cards/ApexChartsCard.qml")
+        var container = loader.sourceForContainer(t)
+        if (container !== "")
+            return container
         if (t.indexOf("custom:") === 0)
             return Qt.resolvedUrl("cards/FallbackCard.qml")
         if (t.indexOf("energy-") === 0 || t === "energy")
@@ -147,6 +165,9 @@ Loader {
         case "logbook":
         case "activity": return Qt.resolvedUrl("cards/LogbookCard.qml")
         default:
+            container = loader.sourceForContainer(t)
+            if (container !== "")
+                return container
             return Qt.resolvedUrl("cards/FallbackCard.qml")
         }
     }

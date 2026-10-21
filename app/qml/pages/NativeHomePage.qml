@@ -97,8 +97,11 @@ Page {
         if (t.indexOf("custom:html") === 0 || t === "custom:html-template-card"
                 || t === "custom:html-card" || t === "custom:config-template-card")
             return true
-        if (t === "vertical-stack" || t === "horizontal-stack" || t === "grid") {
-            var nested = card.cards || []
+        // Stacks, grids, and layout-card roots (custom:horizontal-layout, …):
+        // treat nested cards as the real content.
+        var nested = card.cards || []
+        if (nested.length
+                || t === "vertical-stack" || t === "horizontal-stack" || t === "grid") {
             if (!nested.length)
                 return true
             for (var i = 0; i < nested.length; ++i) {
@@ -110,6 +113,34 @@ Page {
         if (t === "conditional" && card.card)
             return page.cardIsWebHtml(card.card)
         return false
+    }
+
+    // Map a Lovelace view type onto one of our layout components. Exact matches
+    // first; then word hints (layout-card uses custom:horizontal-layout etc.).
+    // Unknown types still get masonry so the card list is never dropped.
+    function layoutComponentForType(type) {
+        var t = String(type || "").toLowerCase()
+        if (t === "sections" || t.indexOf("section") >= 0)
+            return sectionsComp
+        if (t === "panel")
+            return panelComp
+        if (t === "sidebar" || t.indexOf("sidebar") >= 0)
+            return sidebarComp
+        // custom:horizontal-layout → wrapping equal-width rows;
+        // custom:vertical-layout / masonry-layout / anything else → masonry.
+        if (t.indexOf("horizontal") >= 0)
+            return horizontalComp
+        return masonryComp
+    }
+
+    function viewLooksLikeSections(view) {
+        if (!view)
+            return false
+        var t = String(view.type || "").toLowerCase()
+        if (t === "sections" || t.indexOf("section") >= 0)
+            return true
+        return !!(view.sections && view.sections.length
+                  && !(view.cards && view.cards.length))
     }
 
     function collectViewCards(view) {
@@ -144,7 +175,7 @@ Page {
     function layoutCardCount(view) {
         if (!view)
             return 0
-        if (String(view.type || "") === "sections") {
+        if (page.viewLooksLikeSections(view)) {
             var total = 0
             var sections = view.sections || []
             for (var s = 0; s < sections.length; ++s) {
@@ -177,7 +208,7 @@ Page {
         if (!view)
             return ({})
         var index = pageIndex > 0 ? pageIndex : 0
-        if (String(view.type || "") === "sections") {
+        if (page.viewLooksLikeSections(view)) {
             var sections = view.sections || []
             var total = 0
             for (var s = 0; s < sections.length; ++s) {
@@ -241,7 +272,7 @@ Page {
     }
 
     function viewIsEmptyOrWebHtml(view) {
-        if (!view || !view.type)
+        if (!view)
             return true
         var cards = page.collectViewCards(view)
         if (!cards.length)
@@ -667,16 +698,14 @@ Page {
                 sourceComponent: {
                     if (page.needsWebviewPrompt)
                         return webviewPromptComp
-                    if (!page.boundReady || !page.boundView || !page.boundView.type)
+                    if (!page.boundReady || !page.boundView)
                         return emptyComp
-                    var t = page.boundView.type || "masonry"
-                    if (t === "sections")
-                        return sectionsComp
-                    if (t === "panel")
-                        return panelComp
-                    if (t === "sidebar")
-                        return sidebarComp
-                    return masonryComp
+                    // Missing / unknown type still renders when cards exist
+                    // (layout-card roots like custom:horizontal-layout).
+                    if (!page.boundView.type
+                            && !page.collectViewCards(page.boundView).length)
+                        return emptyComp
+                    return page.layoutComponentForType(page.boundView.type)
                 }
             }
         }
@@ -763,6 +792,17 @@ Page {
     Component {
         id: masonryComp
         MasonryLayout {
+            width: viewLoader.width
+            view: page.displayView
+            dashboard: page.dashboard
+            hassClient: page.hassClient
+            mdiIcons: page.mdiIcons
+        }
+    }
+
+    Component {
+        id: horizontalComp
+        HorizontalLayout {
             width: viewLoader.width
             view: page.displayView
             dashboard: page.dashboard
