@@ -21,8 +21,8 @@ CardChrome {
         color: Theme.secondaryColor
         font.pixelSize: Theme.fontSizeExtraSmall
         text: root.cardType.indexOf("custom:") === 0
-              ? "This custom card is not rendered natively."
-              : "This card type is not rendered natively."
+              ? i18n.translation("custom_component_unsupported")
+              : i18n.translation("card_type_unsupported")
     }
     Button {
         text: i18n.translation("open_in_home_assistant")

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.2
+Version:    0.5.3
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,13 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.3-1
+- Native renderers for common HACS cards: horizon, auto-entities, mushroom
+  title/light, collapsable cards, and blank button-card spacers.
+- Button cards toggle on tap and open details on hold; double-tap waits
+  briefly when double_tap_action is set.
+- Unknown custom components show a clear unsupported message.
+
 * Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.2-1
 - Unknown Lovelace roots such as custom:horizontal-layout still show their
   cards; horizontal and vertical layout words pick a sensible packing.

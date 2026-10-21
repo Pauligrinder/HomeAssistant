@@ -2209,7 +2209,8 @@ QVariantMap LovelaceCoordinator::decorateCard(const QVariantMap &card) const
                        decorateCards(variantListOf(card.value(QStringLiteral("cards")))));
         }
     }
-    if (type == QLatin1String("conditional")) {
+    // conditional, auto-entities, and similar wrappers ship one nested card.
+    if (card.contains(QStringLiteral("card"))) {
         const QVariantMap nested = card.value(QStringLiteral("card")).toMap();
         if (!nested.isEmpty())
             out.insert(QStringLiteral("card"), decorateCard(nested));
@@ -2628,6 +2629,14 @@ QString LovelaceCoordinator::defaultActionType(const QString &entityId, bool ico
     return QStringLiteral("more-info");
 }
 
+// HA button / shortcut cards default tap to toggle (not more-info), even for
+// lights and switches. Hold stays more-info via handleCardHold.
+static bool cardDefaultsTapToToggle(const QVariantMap &card)
+{
+    const QString type = card.value(QStringLiteral("type")).toString();
+    return type == QLatin1String("button") || type == QLatin1String("shortcut");
+}
+
 static QString cardActionEntityId(const QVariantMap &card)
 {
     const QString entity = card.value(QStringLiteral("entity")).toString();
@@ -2642,7 +2651,10 @@ void LovelaceCoordinator::handleCardTap(const QVariantMap &card)
     QVariantMap action = card.value(QStringLiteral("tap_action")).toMap();
     const QString entityId = cardActionEntityId(card);
     if (action.isEmpty()) {
-        action.insert(QStringLiteral("action"), defaultActionType(entityId, false));
+        action.insert(QStringLiteral("action"),
+                      cardDefaultsTapToToggle(card)
+                      ? QStringLiteral("toggle")
+                      : defaultActionType(entityId, false));
     }
     attachCardConfirmation(&action, card);
     performAction(action, entityId);

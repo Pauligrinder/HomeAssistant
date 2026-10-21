@@ -117,6 +117,26 @@ Loader {
             return Qt.resolvedUrl("cards/CustomCalendarCard.qml")
         if (t === "custom:apexcharts-card")
             return Qt.resolvedUrl("cards/ApexChartsCard.qml")
+        if (t === "custom:horizon-card")
+            return Qt.resolvedUrl("cards/HorizonCard.qml")
+        if (t === "custom:auto-entities")
+            return Qt.resolvedUrl("cards/AutoEntitiesCard.qml")
+        if (t === "custom:mushroom-title-card")
+            return Qt.resolvedUrl("cards/MushroomTitleCard.qml")
+        if (t === "custom:mushroom-light-card")
+            return Qt.resolvedUrl("cards/MushroomLightCard.qml")
+        if (t === "custom:collapsable-cards" || t === "custom:expander-card")
+            return Qt.resolvedUrl("cards/CollapsableCards.qml")
+        if (t === "custom:button-card") {
+            var ct = loader.card && loader.card.color_type
+                     ? String(loader.card.color_type) : ""
+            if (ct === "blank-card" || ct === "label-card")
+                return Qt.resolvedUrl("cards/BlankCard.qml")
+            // Simple entity button-card → core button renderer.
+            if (loader.card && loader.card.entity)
+                return Qt.resolvedUrl("cards/ButtonCard.qml")
+            return Qt.resolvedUrl("cards/FallbackCard.qml")
+        }
         var container = loader.sourceForContainer(t)
         if (container !== "")
             return container
