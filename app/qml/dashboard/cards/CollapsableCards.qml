@@ -33,7 +33,8 @@ Column {
             anchors.rightMargin: Theme.paddingMedium
             anchors.verticalCenter: parent.verticalCenter
             text: (card && card.title) ? String(card.title)
-                  : i18n.translation(root.expanded ? "show_less" : "expand")
+                  : (root.expanded ? i18n.translation("show_less")
+                                   : i18n.translation("expand"))
             color: Theme.highlightColor
             truncationMode: TruncationMode.Fade
         }
