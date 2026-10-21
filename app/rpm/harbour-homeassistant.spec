@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.3
+Version:    0.5.4
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -64,6 +64,12 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.4-1
+- Pad native dashboards below the screen notch; content can still scroll
+  under it.
+- Honor Lovelace view and dashboard background images.
+- Person more-info shows the entity picture as a circular avatar when set.
+
 * Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.3-1
 - Native renderers for common HACS cards: horizon, auto-entities, mushroom
   title/light, collapsable cards, and blank button-card spacers.

@@ -20,6 +20,19 @@ Page {
             return false
         return String(cards[0].type || "") === "map"
     }
+    // Punch-hole / notch: pad the first paint so cards sit below it. The inset
+    // is part of the flickable content (column.y), so scrolling can still carry
+    // cards under the cutout. Only upright portrait — landscape puts the cutout
+    // on the side, inverted portrait at the bottom.
+    readonly property int topCutoutInset: {
+        if (typeof Screen === "undefined" || !Screen.topCutout)
+            return 0
+        if (page.orientation === Orientation.Landscape
+                || page.orientation === Orientation.LandscapeInverted
+                || page.orientation === Orientation.PortraitInverted)
+            return 0
+        return Math.max(0, Screen.topCutout.y + Screen.topCutout.height)
+    }
     readonly property int viewFillHeight: {
         if (!page.panelMapView)
             return 0
@@ -65,6 +78,19 @@ Page {
         if (i < 0 || i >= views.length)
             i = 0
         return views[i] || ({})
+    }
+    // View background wins over the dashboard-wide background.
+    readonly property var backgroundConfig: {
+        var rev = dashboard ? dashboard.configsRevision : 0
+        var view = page.boundView
+        if (view && view.background !== undefined && view.background !== null
+                && view.background !== "")
+            return view.background
+        var cfg = dashboard ? dashboard.currentConfig : null
+        if (cfg && cfg.background !== undefined && cfg.background !== null
+                && cfg.background !== "")
+            return cfg.background
+        return null
     }
     readonly property bool boundReady: {
         var rev = dashboard ? dashboard.configsRevision : 0
@@ -559,6 +585,18 @@ Page {
         }
     }
 
+    DashboardBackground {
+        id: dashBackground
+        anchors.fill: parent
+        anchors.bottomMargin: page.cardPageCount > 1
+                              ? Theme.itemSizeSmall + Theme.paddingMedium : 0
+        z: -1
+        dashboard: page.dashboard
+        background: page.backgroundConfig
+        contentHeight: flick.contentHeight
+        contentY: flick.contentY
+    }
+
     SilicaFlickable {
         id: flick
         anchors.fill: parent
@@ -566,6 +604,8 @@ Page {
                              ? Theme.itemSizeSmall + Theme.paddingMedium : 0
         contentHeight: page.panelMapView ? height : (column.y + column.height + Theme.paddingLarge)
         clip: true
+        // Keep the ambience / background visible between cards.
+        // (SilicaFlickable is transparent by default.)
 
         PullDownMenu {
             MenuItem {
@@ -607,8 +647,8 @@ Page {
             id: column
             width: parent.width
             // Without a page header the first row would otherwise sit against
-            // the very top of the screen.
-            y: Theme.paddingLarge
+            // the very top of the screen. topCutoutInset clears the notch.
+            y: Theme.paddingLarge + page.topCutoutInset
             spacing: Theme.paddingMedium
 
             Flickable {
