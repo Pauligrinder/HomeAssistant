@@ -16,8 +16,14 @@ Page {
     Connections {
         target: dashboard
         onEntityChanged: {
-            if (entityId === page.entityId)
+            if (entityId === page.entityId) {
                 page.entityTick++
+                page.refreshPicture()
+            }
+        }
+        onMediaCached: {
+            if (path === page.picturePath)
+                page.pictureUrl = fileUrl
         }
     }
     readonly property bool on: (dashboard && rev >= 0) ? dashboard.isOn(entityId) : false
@@ -74,6 +80,39 @@ Page {
         { "r": 255, "g": 0, "b": 160 }
     ]
     property int clockTick: 0
+    property string pictureUrl: ""
+    property string picturePath: ""
+    readonly property bool hasPicture: page.pictureUrl.length > 0
+
+    function entityPicturePath() {
+        if (!dashboard || !page.entityId.length || page.rev < 0)
+            return ""
+        return dashboard.mediaPathOf(dashboard.attribute(page.entityId, "entity_picture")) || ""
+    }
+
+    function refreshPicture() {
+        var path = page.entityPicturePath()
+        page.picturePath = path
+        if (!path.length) {
+            page.pictureUrl = ""
+            return
+        }
+        if (path.indexOf("data:") === 0) {
+            page.pictureUrl = path
+            return
+        }
+        if (!dashboard) {
+            page.pictureUrl = ""
+            return
+        }
+        var cached = dashboard.cachedMediaUrl(path)
+        if (cached && cached.length)
+            page.pictureUrl = cached
+        else {
+            page.pictureUrl = ""
+            dashboard.prefetchMedia(path)
+        }
+    }
 
     Timer {
         interval: 30000
@@ -81,6 +120,9 @@ Page {
         repeat: true
         onTriggered: page.clockTick++
     }
+
+    onEntityIdChanged: page.refreshPicture()
+    Component.onCompleted: page.refreshPicture()
 
     SilicaFlickable {
         id: flick
@@ -117,11 +159,28 @@ Page {
 
             Item {
                 width: parent.width
-                height: visible ? Theme.itemSizeMedium : 0
+                height: visible ? (page.hasPicture ? Theme.itemSizeExtraLarge
+                                                   : Theme.itemSizeMedium) : 0
                 visible: page.domain !== "camera"
+
+                RoundedImage {
+                    id: portrait
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: Theme.itemSizeExtraLarge
+                    height: width
+                    visible: page.hasPicture
+                    source: page.pictureUrl
+                    fillMode: Image.PreserveAspectCrop
+                    // Circular avatar, matching HA person more-info.
+                    cornerRadius: width / 2
+                    opacity: (dashboard && page.rev >= 0 && dashboard.isPending(page.entityId))
+                             ? 0.55 : 1.0
+                }
+
                 MdiIcon {
                     id: icon
                     anchors.horizontalCenter: parent.horizontalCenter
+                    visible: !page.hasPicture
                     mdiIcons: page.mdiIcons
                     name: (dashboard && page.rev >= 0) ? dashboard.entityIcon(page.entityId) : ""
                     iconColor: page.on ? Theme.highlightColor : Theme.primaryColor
@@ -130,7 +189,8 @@ Page {
                     opacity: (dashboard && page.rev >= 0 && dashboard.isPending(page.entityId)) ? 0.55 : 1.0
                 }
                 PendingIndicator {
-                    anchors.centerIn: icon
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
                     dashboard: page.dashboard
                     entityId: page.entityId
                     size: BusyIndicatorSize.Small
