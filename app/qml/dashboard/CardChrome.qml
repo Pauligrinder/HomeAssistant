@@ -139,26 +139,71 @@ Rectangle {
         z: 2
     }
 
+    // When double_tap_action is set, defer the single-tap so a second tap can
+    // claim the gesture (HA waits ~250ms). Without that action, tap is immediate.
+    readonly property bool hasDoubleTapAction: {
+        if (!card || !card.double_tap_action)
+            return false
+        var t = String(card.double_tap_action.action || "")
+        return t !== "none" && t !== "no-op"
+    }
+    property bool suppressDoubleClick: false
+    readonly property int doubleTapWaitMs: 280
+
+    function runCardTap() {
+        if (typeof chrome.tapHandler === "function") {
+            chrome.tapHandler()
+            return
+        }
+        if (dashboard && card)
+            dashboard.handleCardTap(card)
+    }
+
+    function runCardDoubleTap() {
+        if (dashboard && card)
+            dashboard.handleCardDoubleTap(card)
+    }
+
+    Timer {
+        id: pendingTapTimer
+        interval: chrome.doubleTapWaitMs
+        repeat: false
+        onTriggered: chrome.runCardTap()
+    }
+
     MouseArea {
         id: tapArea
         anchors.fill: parent
         enabled: chrome.tapEnabled && chrome.visible
         z: 0
         onClicked: {
-            if (typeof chrome.tapHandler === "function") {
-                chrome.tapHandler()
+            if (!chrome.hasDoubleTapAction) {
+                chrome.runCardTap()
                 return
             }
-            if (dashboard && card)
-                dashboard.handleCardTap(card)
+            // Second click inside the wait window → double tap.
+            if (pendingTapTimer.running) {
+                pendingTapTimer.stop()
+                chrome.suppressDoubleClick = true
+                chrome.runCardDoubleTap()
+                return
+            }
+            pendingTapTimer.start()
         }
         onPressAndHold: {
+            pendingTapTimer.stop()
             if (dashboard && card)
                 dashboard.handleCardHold(card)
         }
         onDoubleClicked: {
-            if (dashboard && card)
-                dashboard.handleCardDoubleTap(card)
+            // Usually already handled in onClicked; ignore the echo.
+            if (chrome.suppressDoubleClick) {
+                chrome.suppressDoubleClick = false
+                return
+            }
+            pendingTapTimer.stop()
+            chrome.runCardDoubleTap()
         }
+        onCanceled: pendingTapTimer.stop()
     }
 }
