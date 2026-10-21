@@ -17,10 +17,12 @@ Item {
 
     readonly property var samples: root.buildSamples()
     readonly property var periods: root.buildPeriods()
-    readonly property var legendModel: {
-        var src = root.periods
-        return src ? root.legendStates() : []
-    }
+    // Categorical legends explode when a sensor has dozens of states; keep the
+    // five longest and fold the rest into one "Rest (N)" entry.
+    readonly property int legendStateLimit: 5
+    readonly property string restStateKey: "__helmsman_rest__"
+    readonly property var stateCollapse: root.buildStateCollapse()
+    readonly property var legendModel: root.collapsedLegend()
     readonly property bool numeric: root.samples.length >= 2
     readonly property bool categorical: !root.numeric && root.periods.length > 0
     readonly property bool hasContent: root.numeric || root.categorical
@@ -207,6 +209,11 @@ Item {
 
     function prettyState(state) {
         var s = String(state || "")
+        if (s === root.restStateKey) {
+            var n = root.stateCollapse && root.stateCollapse.restCount
+                    ? root.stateCollapse.restCount : 0
+            return i18n.translation("history_rest", n)
+        }
         if (!s.length)
             return i18n.translation("unknown")
         if (s === "unavailable")
@@ -218,7 +225,10 @@ Item {
     }
 
     function colorForState(state) {
-        var s = String(state || "").toLowerCase()
+        var s = String(state || "")
+        if (s === root.restStateKey)
+            return Theme.rgba(Theme.secondaryColor, 0.55)
+        s = s.toLowerCase()
         if (s === "home" || s === "on" || s === "open" || s === "unlocked"
                 || s === "active" || s === "playing" || s === "detected"
                 || s === "occupied" || s === "wet" || s === "motion")
@@ -236,18 +246,60 @@ Item {
         return Qt.hsla(hue / 360, 0.55, 0.45, 1)
     }
 
-    function legendStates() {
-        var seen = {}
-        var out = []
-        var src = root.periods
+    function buildStateCollapse() {
+        var totals = {}
+        var names = []
+        var src = root.periods || []
         for (var i = 0; i < src.length; ++i) {
-            var s = src[i].state
-            if (seen[s])
-                continue
-            seen[s] = true
-            out.push(s)
+            var s = String(src[i].state || "")
+            if (!totals.hasOwnProperty(s)) {
+                totals[s] = 0
+                names.push(s)
+            }
+            totals[s] += Math.max(0, (src[i].end || 0) - (src[i].start || 0))
         }
+        names.sort(function(a, b) {
+            var d = totals[b] - totals[a]
+            if (d !== 0)
+                return d
+            if (a < b)
+                return -1
+            if (a > b)
+                return 1
+            return 0
+        })
+        var kept = {}
+        var legend = []
+        var keep = Math.min(root.legendStateLimit, names.length)
+        for (var j = 0; j < keep; ++j) {
+            kept[names[j]] = true
+            legend.push(names[j])
+        }
+        return {
+            "kept": kept,
+            "legend": legend,
+            "restCount": Math.max(0, names.length - keep)
+        }
+    }
+
+    function collapsedLegend() {
+        var c = root.stateCollapse
+        if (!c || !c.legend)
+            return []
+        var out = c.legend.slice()
+        if (c.restCount > 0)
+            out.push(root.restStateKey)
         return out
+    }
+
+    function bucketState(state) {
+        var s = String(state || "")
+        var c = root.stateCollapse
+        if (c && c.kept && c.kept[s])
+            return s
+        if (c && c.restCount > 0)
+            return root.restStateKey
+        return s
     }
 
     function paintChart(ctx) {
@@ -370,7 +422,7 @@ Item {
             x2 = Math.max(left, Math.min(right, x2))
             if (x2 - x1 < 1)
                 x2 = x1 + 1
-            ctx.fillStyle = root.colorForState(src[i].state)
+            ctx.fillStyle = root.colorForState(root.bucketState(src[i].state))
             ctx.fillRect(x1, barTop, x2 - x1, barHeight)
         }
 

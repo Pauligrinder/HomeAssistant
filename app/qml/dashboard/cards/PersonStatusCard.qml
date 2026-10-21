@@ -14,7 +14,11 @@ CardChrome {
             return String(card.battery_entity)
         return card && card.google_battery ? String(card.google_battery) : ""
     }
-    readonly property int rev: root.statesRevision
+    // CardChrome only ticks the primary entity. Battery / calendar helpers and
+    // reconnect merges for the person need an explicit tick so home/away icons
+    // refresh even when dashboard.statesRevision stays put.
+    property int statusTick: 0
+    readonly property int rev: root.statesRevision + statusTick
     property string imageUrl: ""
     property string requestedPath: ""
 
@@ -126,6 +130,21 @@ CardChrome {
                 root.imageUrl = fileUrl
         }
         onStatesRevisionChanged: root.refreshImage()
+        onEntityChanged: {
+            if (entityId === root.entityId) {
+                root.statusTick++
+                root.refreshImage()
+                return
+            }
+            if (root.batteryEntity.length && entityId === root.batteryEntity)
+                root.statusTick++
+            else if (card && card.calendar_entity
+                     && entityId === String(card.calendar_entity))
+                root.statusTick++
+            else if (card && card.calendar_color_entity
+                     && entityId === String(card.calendar_color_entity))
+                root.statusTick++
+        }
     }
 
     Component.onCompleted: root.refreshImage()
