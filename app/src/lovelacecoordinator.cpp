@@ -639,6 +639,8 @@ void LovelaceCoordinator::setWebsocket(HassWebsocket *socket)
     if (!m_socket)
         return;
     connect(m_socket, SIGNAL(connectionReady()), this, SLOT(onConnectionReady()));
+    connect(m_socket, SIGNAL(connectionFailed(QString)),
+            this, SLOT(onConnectionFailed(QString)));
     connect(m_socket, SIGNAL(authenticatedChanged()), this, SLOT(onAuthenticatedChanged()));
     connect(m_socket, SIGNAL(resultReceived(int,bool,QVariant,QVariantMap)),
             this, SLOT(onResultReceived(int,bool,QVariant,QVariantMap)));
@@ -1149,6 +1151,7 @@ void LovelaceCoordinator::selectViewByPath(const QString &path)
 void LovelaceCoordinator::onConnectionReady()
 {
     emit connectedChanged();
+    setError(QString());
     const QString ingressSlug = m_pendingIngressSlug;
     const QString ingressFallback = m_pendingIngressFallback;
     m_ingressAddonInfoId = 0;
@@ -1158,6 +1161,15 @@ void LovelaceCoordinator::onConnectionReady()
         subscribeAll();
     if (!ingressSlug.isEmpty())
         requestIngressOpen(ingressSlug, ingressFallback);
+}
+
+void LovelaceCoordinator::onConnectionFailed(const QString &message)
+{
+    emit connectedChanged();
+    setBusy(false);
+    setReady(false);
+    if (!message.isEmpty())
+        setError(message);
 }
 
 void LovelaceCoordinator::onAuthenticatedChanged()

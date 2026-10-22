@@ -228,6 +228,7 @@ signals:
 
 private slots:
     void onConnectionReady();
+    void onConnectionFailed(const QString &message);
     void onAuthenticatedChanged();
     void onResultReceived(int id, bool success, const QVariant &result, const QVariantMap &error);
     void onEventReceived(int id, const QVariantMap &event);

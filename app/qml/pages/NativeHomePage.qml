@@ -810,9 +810,17 @@ Page {
         Item {
             width: viewLoader.width
             height: Theme.itemSizeLarge
+            // lastError is shown by the label above the loader.
+            visible: !(dashboard && dashboard.lastError && dashboard.lastError.length)
             Label {
                 anchors.centerIn: parent
-                text: dashboard && dashboard.busy ? i18n.translation("loading_dashboard") : i18n.translation("no_views")
+                text: {
+                    if (dashboard && dashboard.busy)
+                        return i18n.translation("loading_dashboard")
+                    if (dashboard && !dashboard.connected)
+                        return i18n.translation("connecting_to_home_assistant")
+                    return i18n.translation("no_views")
+                }
                 color: Theme.secondaryColor
             }
         }
