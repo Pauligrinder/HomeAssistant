@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.4
+Version:    0.5.5
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -10,7 +10,6 @@ Requires:   qt5-qtcore
 Requires:   qt5-qtdeclarative
 Requires:   qt5-qtgraphicaleffects
 Requires:   qt5-qtnetwork
-Requires:   qt5-qtwebsockets
 Requires:   qt5-qtpositioning
 Requires:   qt5-qtdbus
 Requires:   sailfish-components-webview-qt5
@@ -23,7 +22,6 @@ BuildRequires:  pkgconfig(Qt5Core)
 BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
 BuildRequires:  pkgconfig(Qt5Network)
-BuildRequires:  pkgconfig(Qt5WebSockets)
 BuildRequires:  pkgconfig(Qt5Positioning)
 BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(qt5embedwidget)

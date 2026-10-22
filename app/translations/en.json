@@ -28,6 +28,7 @@
   "configure_addresses": "Configure your Home Assistant addresses, then connect to sign in.",
   "connect": "Connect",
   "connecting": "Connecting...",
+  "connecting_to_home_assistant": "Connecting to Home Assistant…",
   "connection": "Connection",
   "controls": "Controls",
   "cover_favorites": "Cover favorites",
