@@ -3,9 +3,9 @@ import Sailfish.Silica 1.0
 
 // thomasloven/lovelace-layout-card column engine (horizontal + vertical).
 // layout-card measures getBoundingClientRect() in CSS px (width default 300).
-// Sailfish QML coordinates are denser — Theme.pixelRatio maps CSS px → QML,
-// same idea as AtlanticDashboardWebView's device scale factor. Without it a
-// 1080-wide phone gets floor(1080/300)=3 columns while the webview stays at 1.
+// Sailfish QML is denser: AtlanticDashboardWebView uses pixelRatio * 1.2 as the
+// CSS↔panel scale. pixelRatio alone left phones at floor(~650/300)=2 columns
+// while the webview (same scale) stayed at 1.
 Item {
     id: root
     property var view: ({})
@@ -18,8 +18,8 @@ Item {
     // "vertical"   — next card stays in the same column until layout-break.
     property string mode: "horizontal"
 
-    // CSS px → QML px. Match the webview content scale used for Lovelace.
-    readonly property real cssScale: Math.max(Theme.pixelRatio, 1.0)
+    // Same factor as AtlanticDashboardWebView.contentScale.
+    readonly property real cssScale: Math.max(Theme.pixelRatio, 1.0) * 1.2
     readonly property var config: {
         if (root.card && typeof root.card === "object")
             return root.card
@@ -52,18 +52,34 @@ Item {
     }
     readonly property bool rtl: !!(root.layoutOpts.rtl === true
                                   || root.layoutOpts.rtl === "true")
+    // layout-card defaults: margin "0px 4px 0px 4px", padding "4px 0px 4px 0px".
+    readonly property real horizontalChromeCss: {
+        return root.boxHorizontalCss(root.layoutOpts.margin, 4, 4)
+                + root.boxHorizontalCss(root.layoutOpts.padding, 0, 0)
+    }
     readonly property int columnCount: {
-        // base-column-layout.ts _updateSize(), with width converted to QML.
-        var availCss = Math.max(1, Math.floor(root.width / root.cssScale))
-        var n = Math.floor(availCss / root.configuredWidthCss)
+        // Fit n columns of (width * cssScale) plus inter-column gaps and the
+        // layout margin/padding chrome — not raw floor(qmlWidth/scale/300),
+        // which over-counted on HD phones (2 cols vs web's 1).
+        var gap = Theme.paddingMedium
+        var chrome = root.horizontalChromeCss * root.cssScale
+        var colQml = root.configuredWidthCss * root.cssScale
+        var avail = Math.max(0, root.width - chrome)
+        var stride = colQml + gap
+        if (stride < 1)
+            stride = 1
+        // n * colQml + (n - 1) * gap <= avail  →  n <= (avail + gap) / stride
+        var n = Math.floor((avail + gap) / stride)
         n = Math.min(n, root.configuredMaxCols)
         return Math.max(1, n)
     }
     // Per-column width in QML px. One column fills the view (layout-card uses
     // width:100% with max-width only capping multi-column growth).
     readonly property int columnPixelWidth: {
-        var gaps = Math.max(0, root.columnCount - 1) * Theme.paddingMedium
-        var avail = Math.max(1, Math.floor(root.width - gaps))
+        var gap = Theme.paddingMedium
+        var chrome = root.horizontalChromeCss * root.cssScale
+        var gaps = Math.max(0, root.columnCount - 1) * gap
+        var avail = Math.max(1, Math.floor(root.width - chrome - gaps))
         var share = Math.floor(avail / root.columnCount)
         if (root.columnCount === 1)
             return Math.max(1, share)
@@ -87,6 +103,30 @@ Item {
     onModeChanged: root.rebuildColumns()
     onWidthChanged: root.rebuildColumns()
     Component.onCompleted: root.rebuildColumns()
+
+    // Sum of left+right from a CSS box shorthand (px/unitless). Defaults when
+    // unset match layout-card (margin 4+4, padding 0+0 horizontally).
+    function boxHorizontalCss(value, defaultLeft, defaultRight) {
+        if (value === undefined || value === null || value === "")
+            return defaultLeft + defaultRight
+        if (typeof value === "number") {
+            if (!isFinite(value) || value < 0)
+                return defaultLeft + defaultRight
+            return value * 2
+        }
+        var parts = String(value).trim().split(/\s+/)
+        function pxPart(s) {
+            var n = parseFloat(s)
+            return (isFinite(n) && n >= 0) ? n : 0
+        }
+        if (parts.length === 1)
+            return 2 * pxPart(parts[0])
+        if (parts.length === 2 || parts.length === 3)
+            return 2 * pxPart(parts[1])
+        if (parts.length >= 4)
+            return pxPart(parts[3]) + pxPart(parts[1])
+        return defaultLeft + defaultRight
+    }
 
     function isBreak(card) {
         if (!card)
