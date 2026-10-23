@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network gui positioning dbus qml quick
 LIBS += -ldl
 
-VERSION = 0.5.6
+VERSION = 0.5.7
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 SOURCES += \

@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.6
+Version:    0.5.7
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -62,6 +62,10 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.7-1
+- Internal connection always reports home when the setting is enabled.
+- Icon-only view tabs get horizontal padding and a press opacity fade.
+
 * Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.6-1
 - Map cards honor show_all and geo_location_sources; titles overlay the map.
 - layout-card horizontal/vertical packing matches HACS column width rules.

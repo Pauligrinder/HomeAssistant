@@ -15,12 +15,13 @@ import Nemo.DBus 2.0
 Item {
     id: reporter
     property var hassClient
-    // Keep listening on home Wi‑Fi too: SensorCoordinator ignores GPS only
-    // after home is confirmed, so edge flaps can still be overruled by a
-    // fresh away-fix during the confirm debounce.
+    // Home on internal owns the tracker — skip GeoClue seeks while pinned.
+    readonly property bool pinnedHome: hassClient && hassClient.sensors
+            && hassClient.sensors.homeOnInternal && hassClient.usingInternalUrl
     property bool enabled: hassClient && hassClient.sensors
             ? hassClient.sensors.locationReporting
               && hassClient.sensors.active
+              && !reporter.pinnedHome
             : false
     readonly property int staleMinutes: hassClient && hassClient.sensors
             ? hassClient.sensors.locationStaleMinutes : 15
