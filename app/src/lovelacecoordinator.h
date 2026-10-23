@@ -143,6 +143,8 @@ public slots:
     QVariantList areaEntities(const QString &areaId) const;
     QVariantList relatedEntities(const QString &entityId) const;
     QVariantList zones() const;
+    // Entity ids for a map card: show_all, entities, and geo_location_sources.
+    QVariantList mapCardEntities(const QVariantMap &card) const;
 
     bool isVisible(const QVariant &visibility) const;
     bool cardVisible(const QVariantMap &card) const;

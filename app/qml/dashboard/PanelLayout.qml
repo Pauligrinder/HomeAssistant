@@ -8,6 +8,8 @@ Column {
     property var hassClient
     property var mdiIcons
     property int fillHeight: 0
+    // Punch-hole clearance for full-bleed panel maps (tiles under, content padded).
+    property int topContentInset: 0
     width: parent ? parent.width : Screen.width
     spacing: Theme.paddingMedium
 
@@ -19,6 +21,7 @@ Column {
             unitWidth: layout.width
             columns: 12
             fillHeight: index === 0 ? layout.fillHeight : 0
+            topContentInset: index === 0 ? layout.topContentInset : 0
             card: {
                 var c = modelData || {}
                 c._columns = 12

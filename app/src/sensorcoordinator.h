@@ -100,6 +100,7 @@ private slots:
     void onUpdateDebounceTimeout();
     void onStartupStepTimeout();
     void onHomeHeartbeatTimeout();
+    void onHomeConfirmTimeout();
 
 private:
     enum WebhookKind {
@@ -179,6 +180,9 @@ private:
     QTimer m_updateDebounce;
     QTimer m_startupTimer;
     QTimer m_homeHeartbeatTimer;
+    // Wi‑Fi flaps at the edge of home range used to snap the tracker home
+    // while GPS still had us blocks away. Confirm home only after this sticks.
+    QTimer m_homeConfirmTimer;
     int m_startupStep;
 
     QString m_webhookId;
@@ -194,6 +198,7 @@ private:
     int m_locationStaleMinutes;
     bool m_homeOnInternal;
     bool m_usingInternalUrl;
+    bool m_homeConfirmed;
     bool m_started;
     bool m_registrationInFlight;
     QString m_lastError;
@@ -211,6 +216,7 @@ private:
     bool m_haveHomeCoordinates;
     bool m_zonesFetchPending;
     QDateTime m_lastLocationSent;
+    QDateTime m_lastGpsAt;
     double m_lastLat;
     double m_lastLon;
     double m_lastAccuracy;

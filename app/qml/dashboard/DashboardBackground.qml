@@ -26,6 +26,8 @@ Item {
     }
     readonly property bool fixed: root.parsed.attachment !== "scroll"
     readonly property int fillMode: {
+        if (root.tile)
+            return Image.Tile
         var s = root.parsed.size
         if (s === "contain")
             return Image.PreserveAspectFit
@@ -36,6 +38,12 @@ Item {
     readonly property bool tile: root.parsed.repeat === "repeat"
             || root.parsed.repeat === "repeat-x"
             || root.parsed.repeat === "repeat-y"
+    // Phone camera uploads are often multi-megapixel. Decoding the full frame
+    // as a GL texture hangs hybris the same way unscaled camera stills did.
+    readonly property int maxSourcePx: {
+        var edge = Math.max(Screen.width, Screen.height) * Theme.pixelRatio
+        return Math.max(1, Math.min(1920, Math.round(edge * 1.25)))
+    }
 
     visible: root.mediaPath.length > 0 || root.imageUrl.length > 0
     clip: true
@@ -137,38 +145,22 @@ Item {
         }
     }
 
-    // Fixed: fills the page and stays put while cards scroll.
+    // One Image: three copies of a multi-megapixel decode competed for GL.
     Image {
-        anchors.fill: parent
-        visible: root.fixed && !root.tile
+        id: picture
+        width: parent.width
+        height: root.fixed ? parent.height
+                           : Math.max(parent.height, root.contentHeight)
+        y: root.fixed ? 0 : -root.contentY
         source: root.imageUrl
         fillMode: root.fillMode
         opacity: root.imageOpacity
         asynchronous: true
         cache: true
-    }
-
-    // Tiled fixed background.
-    Image {
-        anchors.fill: parent
-        visible: root.fixed && root.tile
-        source: root.imageUrl
-        fillMode: Image.Tile
-        opacity: root.imageOpacity
-        asynchronous: true
-        cache: true
-    }
-
-    // Scroll: move with flickable content.
-    Image {
-        width: parent.width
-        height: Math.max(parent.height, root.contentHeight)
-        y: root.fixed ? 0 : -root.contentY
-        visible: !root.fixed
-        source: root.imageUrl
-        fillMode: root.tile ? Image.Tile : root.fillMode
-        opacity: root.imageOpacity
-        asynchronous: true
-        cache: true
+        // Phone JPEGs store pixels sideways and tag EXIF Orientation; without
+        // this they appear rotated 90° relative to the HA frontend.
+        autoTransform: true
+        sourceSize.width: root.maxSourcePx
+        sourceSize.height: root.maxSourcePx
     }
 }

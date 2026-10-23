@@ -18,6 +18,8 @@ Rectangle {
     property var tapHandler
     property bool showBackground: true
     property int fillHeight: 0
+    // Used by full-bleed panel maps; ignored by other cards.
+    property int topContentInset: 0
     property int minContentHeight: 0
     property real contentTopMargin: Theme.paddingMedium
     property real contentBottomMargin: Theme.paddingMedium

@@ -25,7 +25,11 @@ const int kUpdateDebounceMs = 750;
 // HA device_tracker consider_home defaults to 180s. Keep the internal-home
 // webhook fresher than that so overnight Wi‑Fi stays "home".
 const int kHomeHeartbeatMs = 120 * 1000;
+// Brief Ketunkolo reconnects while still at school/daycare must not claim home.
+const int kHomeConfirmMs = 75 * 1000;
 const double kHomeAccuracyFallbackMeters = 100.0;
+const double kHomeAwayGateExtraMeters = 100.0;
+const int kHomeAwayGpsMaxAgeSec = 180;
 // Gap between the first webhook calls after start. Issuing config, sensor
 // registration, and the first state update together stalled the UI thread on
 // slow external endpoints.
@@ -168,6 +172,7 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_locationStaleMinutes(kLocationStaleMinutesDefault)
     , m_homeOnInternal(true)
     , m_usingInternalUrl(false)
+    , m_homeConfirmed(false)
     , m_started(false)
     , m_registrationInFlight(false)
     , m_startupStep(0)
@@ -211,6 +216,10 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
 
     m_homeHeartbeatTimer.setInterval(kHomeHeartbeatMs);
     connect(&m_homeHeartbeatTimer, SIGNAL(timeout()), this, SLOT(onHomeHeartbeatTimeout()));
+
+    m_homeConfirmTimer.setSingleShot(true);
+    m_homeConfirmTimer.setInterval(kHomeConfirmMs);
+    connect(&m_homeConfirmTimer, SIGNAL(timeout()), this, SLOT(onHomeConfirmTimeout()));
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -494,8 +503,10 @@ void SensorCoordinator::onStartupStepTimeout()
         break;
     case 2:
         scheduleSensorUpdate();
-        if (m_homeOnInternal && m_usingInternalUrl)
-            postLocationUpdate(true);
+        if (m_homeOnInternal && m_usingInternalUrl) {
+            m_homeConfirmed = false;
+            m_homeConfirmTimer.start();
+        }
         break;
     default:
         m_startupTimer.stop();
@@ -511,6 +522,8 @@ void SensorCoordinator::stop()
     m_updateDebounce.stop();
     m_startupTimer.stop();
     m_homeHeartbeatTimer.stop();
+    m_homeConfirmTimer.stop();
+    m_homeConfirmed = false;
     m_registerQueue.clear();
     m_registrationInFlight = false;
     setActive(false);
@@ -957,13 +970,18 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
 {
     m_haveLocation = true;
 
-    if (!m_started || !locationReporting() || m_usingInternalUrl)
+    if (!m_started || !locationReporting())
+        return;
+    // Confirmed home-on-internal owns the tracker; ignore GPS until Wi‑Fi drops.
+    // During the home-confirm debounce GPS still flows so a flap at school
+    // cannot overwrite a good away-fix with zone.home.
+    if (m_homeOnInternal && m_usingInternalUrl && m_homeConfirmed)
         return;
     if (!qIsFinite(latitude) || !qIsFinite(longitude))
         return;
 
     const QDateTime now = QDateTime::currentDateTimeUtc();
-    const bool firstFix = !m_lastLocationSent.isValid();
+    const bool firstFix = !m_lastGpsAt.isValid();
     const bool dueByTime = firstFix
             || m_lastLocationSent.msecsTo(now)
             >= minimumLocationIntervalMs(m_locationPreset);
@@ -980,9 +998,12 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     if (!firstFix && moveMeters >= 2000.0) {
         if (!dueByTime)
             return;
-        if (accuracyMeters <= 0 || accuracyMeters > 150.0)
+        if (accuracyMeters <= 0 || accuracyMeters > 100.0)
             return;
     }
+    // Cell/Wi‑Fi dumps with city-sized error circles are noise near home zones.
+    if (accuracyMeters > 250.0 && moveMeters < accuracyMeters)
+        return;
     // Prefer a tighter fix (GPS after Wi‑Fi) even before the interval elapses.
     if (!dueByTime && !dueByMove && !betterAccuracy)
         return;
@@ -998,6 +1019,9 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     m_lastLat = latitude;
     m_lastLon = longitude;
     m_lastAccuracy = accuracyMeters > 0 ? accuracyMeters : m_lastAccuracy;
+    m_lastGpsAt = now;
+    qWarning() << "Helmsman location: post gps" << latitude << longitude
+               << "acc=" << m_lastAccuracy << "moveM=" << moveMeters;
     postLocationUpdate(false);
 }
 
@@ -1006,14 +1030,14 @@ void SensorCoordinator::postLocationUpdate(bool force)
     if (!m_started || !locationReporting() || m_webhookId.isEmpty())
         return;
 
-    const bool atHome = m_homeOnInternal && m_usingInternalUrl;
-    // Internal connectivity is sufficient to determine "home". Use the Home
-    // zone coordinates rather than a leftover GPS fix from an earlier trip.
+    const bool atHome = m_homeOnInternal && m_usingInternalUrl && m_homeConfirmed;
+    // Confirmed home Wi‑Fi: use the Home zone coordinates rather than a
+    // leftover GPS fix from an earlier trip.
     if (atHome && !m_haveHomeCoordinates)
         fetchZones();
     const bool haveHomeGps = atHome && m_haveHomeCoordinates
             && qIsFinite(m_homeLat) && qIsFinite(m_homeLon);
-    const bool haveGps = !m_usingInternalUrl && m_haveLocation
+    const bool haveGps = !atHome && m_haveLocation
             && qIsFinite(m_lastLat) && qIsFinite(m_lastLon);
     if (!atHome && !haveGps)
         return;
@@ -1071,7 +1095,7 @@ void SensorCoordinator::postLocationUpdate(bool force)
 void SensorCoordinator::updateHomeHeartbeat()
 {
     const bool need = m_started && locationReporting()
-            && m_homeOnInternal && m_usingInternalUrl;
+            && m_homeOnInternal && m_usingInternalUrl && m_homeConfirmed;
     if (need) {
         if (!m_homeHeartbeatTimer.isActive())
             m_homeHeartbeatTimer.start();
@@ -1087,11 +1111,38 @@ void SensorCoordinator::onHomeHeartbeatTimeout()
     postLocationUpdate(true);
 }
 
+void SensorCoordinator::onHomeConfirmTimeout()
+{
+    if (!m_started || !locationReporting()
+            || !m_homeOnInternal || !m_usingInternalUrl)
+        return;
+
+    // Recent GPS still places us outside the home fence — Wi‑Fi came back
+    // while we were at school/daycare. Keep waiting; do not snap home.
+    if (m_haveLocation && m_haveHomeCoordinates && m_lastGpsAt.isValid()
+            && m_lastGpsAt.secsTo(QDateTime::currentDateTimeUtc()) < kHomeAwayGpsMaxAgeSec) {
+        const double away = haversineMeters(m_lastLat, m_lastLon, m_homeLat, m_homeLon);
+        const double gate = qMax(150.0, (m_homeRadius > 0 ? m_homeRadius : 0.0)
+                                         + kHomeAwayGateExtraMeters);
+        if (away > gate) {
+            qWarning() << "Helmsman location: defer home confirm, gps still"
+                       << qRound(away) << "m from home";
+            m_homeConfirmTimer.start();
+            return;
+        }
+    }
+
+    m_homeConfirmed = true;
+    updateHomeHeartbeat();
+    qWarning() << "Helmsman location: home confirmed on internal Wi‑Fi";
+    postLocationUpdate(true);
+}
+
 void SensorCoordinator::refreshLocation()
 {
     if (!m_started || !locationReporting())
         return;
-    if (m_homeOnInternal && m_usingInternalUrl) {
+    if (m_homeOnInternal && m_usingInternalUrl && m_homeConfirmed) {
         postLocationUpdate(true);
         return;
     }
@@ -1105,9 +1156,22 @@ void SensorCoordinator::setUsingInternalUrl(bool usingInternal)
     if (m_usingInternalUrl == usingInternal)
         return;
     m_usingInternalUrl = usingInternal;
+
+    if (!usingInternal) {
+        m_homeConfirmed = false;
+        m_homeConfirmTimer.stop();
+        updateHomeHeartbeat();
+        if (m_started && locationReporting())
+            emit locationRefreshRequested();
+        return;
+    }
+
+    // Arriving on home Wi‑Fi: wait before claiming home so edge flaps while
+    // still away cannot teleport the device_tracker back to zone.home.
+    m_homeConfirmed = false;
     updateHomeHeartbeat();
     if (m_started && locationReporting() && m_homeOnInternal)
-        postLocationUpdate(true);
+        m_homeConfirmTimer.start();
 }
 
 void SensorCoordinator::setHomeOnInternal(bool enabled)
@@ -1117,9 +1181,19 @@ void SensorCoordinator::setHomeOnInternal(bool enabled)
     m_homeOnInternal = enabled;
     persistState();
     emit homeOnInternalChanged();
+    if (!enabled) {
+        m_homeConfirmed = false;
+        m_homeConfirmTimer.stop();
+        updateHomeHeartbeat();
+        if (m_started && locationReporting())
+            emit locationRefreshRequested();
+        return;
+    }
     updateHomeHeartbeat();
-    if (m_started && locationReporting())
-        postLocationUpdate(true);
+    if (m_started && locationReporting() && m_usingInternalUrl) {
+        m_homeConfirmed = false;
+        m_homeConfirmTimer.start();
+    }
 }
 
 void SensorCoordinator::ensureOsVersionSensor()
@@ -1166,7 +1240,7 @@ void SensorCoordinator::setHomeCoordinates(double latitude, double longitude, do
     if (changed)
         persistState();
     if (changed && m_started && locationReporting()
-            && m_homeOnInternal && m_usingInternalUrl)
+            && m_homeOnInternal && m_usingInternalUrl && m_homeConfirmed)
         postLocationUpdate(true);
 }
 
@@ -1308,7 +1382,7 @@ void SensorCoordinator::onAppForegrounded()
         return;
     refreshConfig();
     scheduleSensorUpdate();
-    if (locationReporting() && m_homeOnInternal && m_usingInternalUrl)
+    if (locationReporting() && m_homeOnInternal && m_usingInternalUrl && m_homeConfirmed)
         postLocationUpdate(true);
 }
 
