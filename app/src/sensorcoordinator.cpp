@@ -111,6 +111,9 @@ bool zoneFenceFromState(const QVariantMap &state, HassZoneFence *out)
     out->entityId = entityId;
     out->locationName = locationNameForZone(entityId,
                                             !friendly.isEmpty() ? friendly : name);
+    out->icon = attrs.value(QStringLiteral("icon")).toString();
+    if (out->icon.isEmpty())
+        out->icon = state.value(QStringLiteral("icon")).toString();
     out->latitude = lat;
     out->longitude = lon;
     out->radius = radiusValue.isValid() ? radiusValue.toDouble() : -1;
@@ -132,6 +135,7 @@ bool zoneListsEqual(const QList<HassZoneFence> &a,
     for (int i = 0; i < a.size(); ++i) {
         if (a.at(i).entityId != b.at(i).entityId
                 || a.at(i).locationName != b.at(i).locationName
+                || a.at(i).icon != b.at(i).icon
                 || a.at(i).passive != b.at(i).passive
                 || !qFuzzyCompare(a.at(i).latitude + 1.0, b.at(i).latitude + 1.0)
                 || !qFuzzyCompare(a.at(i).longitude + 1.0, b.at(i).longitude + 1.0)
@@ -285,6 +289,69 @@ int SensorCoordinator::locationStaleMinutes() const { return m_locationStaleMinu
 bool SensorCoordinator::homeOnInternal() const { return m_homeOnInternal; }
 QString SensorCoordinator::lastError() const { return m_lastError; }
 QString SensorCoordinator::lastLocationText() const { return m_lastLocationText; }
+QString SensorCoordinator::locationZone() const { return m_locationZone; }
+
+QString SensorCoordinator::locationZoneIcon() const
+{
+    if (m_locationZone.isEmpty())
+        return QStringLiteral("mdi:map-marker-question");
+    if (m_locationZone == QLatin1String("home")) {
+        for (int i = 0; i < m_zones.size(); ++i) {
+            if (m_zones.at(i).entityId == QLatin1String("zone.home")
+                    && !m_zones.at(i).icon.isEmpty())
+                return m_zones.at(i).icon;
+        }
+        return QStringLiteral("mdi:home");
+    }
+    if (m_locationZone == QLatin1String("not_home"))
+        return QStringLiteral("mdi:home-export-outline");
+    for (int i = 0; i < m_zones.size(); ++i) {
+        const HassZoneFence &zone = m_zones.at(i);
+        if (zone.locationName.compare(m_locationZone, Qt::CaseInsensitive) != 0)
+            continue;
+        if (!zone.icon.isEmpty())
+            return zone.icon;
+        break;
+    }
+    return QStringLiteral("mdi:map-marker-radius");
+}
+
+QString SensorCoordinator::computeLocationZone() const
+{
+    if (atHomeOnInternal())
+        return QStringLiteral("home");
+    if (!m_haveLocation || !qIsFinite(m_lastLat) || !qIsFinite(m_lastLon))
+        return QString();
+
+    const HassZoneFence *best = nullptr;
+    double bestRadius = 0;
+    for (int i = 0; i < m_zones.size(); ++i) {
+        const HassZoneFence &zone = m_zones.at(i);
+        if (zone.passive)
+            continue;
+        const double radius = zone.radius > 0 ? zone.radius : 100.0;
+        const double dist = haversineMeters(m_lastLat, m_lastLon,
+                                            zone.latitude, zone.longitude);
+        if (dist > radius)
+            continue;
+        if (!best || radius < bestRadius) {
+            best = &zone;
+            bestRadius = radius;
+        }
+    }
+    if (best)
+        return best->locationName;
+    return QStringLiteral("not_home");
+}
+
+void SensorCoordinator::refreshLocationZone()
+{
+    const QString next = computeLocationZone();
+    if (next == m_locationZone)
+        return;
+    m_locationZone = next;
+    emit locationZoneChanged();
+}
 
 void SensorCoordinator::loadPersistedState()
 {
@@ -1006,6 +1073,7 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     m_lastGpsAt = now;
     qWarning() << "Helmsman location: post gps" << latitude << longitude
                << "acc=" << m_lastAccuracy << "moveM=" << moveMeters;
+    refreshLocationZone();
     postLocationUpdate(false);
 }
 
@@ -1073,6 +1141,7 @@ void SensorCoordinator::postLocationUpdate(bool force)
                 .arg(m_lastLon, 0, 'f', 5)
                 .arg(qMax(0.0, m_lastAccuracy), 0, 'f', 0);
     emit lastLocationTextChanged();
+    refreshLocationZone();
     rebuildStatusList();
 }
 
@@ -1102,6 +1171,7 @@ bool SensorCoordinator::atHomeOnInternal() const
 void SensorCoordinator::claimHomeOnInternal()
 {
     updateHomeHeartbeat();
+    refreshLocationZone();
     if (!m_started || !locationReporting() || !atHomeOnInternal())
         return;
     qWarning() << "Helmsman location: home on internal connection";
@@ -1129,6 +1199,7 @@ void SensorCoordinator::setUsingInternalUrl(bool usingInternal)
 
     if (!usingInternal) {
         updateHomeHeartbeat();
+        refreshLocationZone();
         if (m_started && locationReporting())
             emit locationRefreshRequested();
         return;
@@ -1147,6 +1218,7 @@ void SensorCoordinator::setHomeOnInternal(bool enabled)
     emit homeOnInternalChanged();
     if (!enabled) {
         updateHomeHeartbeat();
+        refreshLocationZone();
         if (m_started && locationReporting())
             emit locationRefreshRequested();
         return;
@@ -1226,6 +1298,11 @@ void SensorCoordinator::applyZoneList(const QList<HassZoneFence> &zones)
         }
     }
     persistZones();
+    const QString before = m_locationZone;
+    refreshLocationZone();
+    // Zone icons may change without the resolved name changing.
+    if (before == m_locationZone)
+        emit locationZoneChanged();
 }
 
 void SensorCoordinator::persistZones() const
@@ -1238,6 +1315,8 @@ void SensorCoordinator::persistZones() const
         QJsonObject obj;
         obj.insert(QStringLiteral("entity_id"), zone.entityId);
         obj.insert(QStringLiteral("name"), zone.locationName);
+        if (!zone.icon.isEmpty())
+            obj.insert(QStringLiteral("icon"), zone.icon);
         obj.insert(QStringLiteral("latitude"), zone.latitude);
         obj.insert(QStringLiteral("longitude"), zone.longitude);
         obj.insert(QStringLiteral("radius"), zone.radius);
@@ -1290,6 +1369,7 @@ void SensorCoordinator::loadPersistedZones()
         m_haveHomeCoordinates = true;
         break;
     }
+    refreshLocationZone();
 }
 
 void SensorCoordinator::fetchZones()

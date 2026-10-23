@@ -19,6 +19,7 @@ class QNetworkReply;
 struct HassZoneFence {
     QString entityId;
     QString locationName;
+    QString icon;
     double latitude;
     double longitude;
     double radius;
@@ -40,6 +41,9 @@ class SensorCoordinator : public QObject
     Q_PROPERTY(bool homeOnInternal READ homeOnInternal WRITE setHomeOnInternal NOTIFY homeOnInternalChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QString lastLocationText READ lastLocationText NOTIFY lastLocationTextChanged)
+    // HA device_tracker-style zone name: "home", "not_home", or a zone name.
+    Q_PROPERTY(QString locationZone READ locationZone NOTIFY locationZoneChanged)
+    Q_PROPERTY(QString locationZoneIcon READ locationZoneIcon NOTIFY locationZoneChanged)
 
 public:
     explicit SensorCoordinator(QObject *parent = nullptr);
@@ -53,6 +57,8 @@ public:
     bool homeOnInternal() const;
     QString lastError() const;
     QString lastLocationText() const;
+    QString locationZone() const;
+    QString locationZoneIcon() const;
 
     // Called by HassClient when webhook credentials / base URL change.
     void configure(const QString &webhookId,
@@ -90,6 +96,7 @@ signals:
     void homeOnInternalChanged();
     void lastErrorChanged();
     void lastLocationTextChanged();
+    void locationZoneChanged();
     void locationRefreshRequested();
 
 private slots:
@@ -184,6 +191,8 @@ private:
     // Setting + internal URL: always report home; GPS must not override.
     bool atHomeOnInternal() const;
     void claimHomeOnInternal();
+    QString computeLocationZone() const;
+    void refreshLocationZone();
 
     QString m_webhookId;
     QString m_cloudhookUrl;
@@ -202,6 +211,7 @@ private:
     bool m_registrationInFlight;
     QString m_lastError;
     QString m_lastLocationText;
+    QString m_locationZone;
     QVariantList m_statusList;
 
     QList<SensorDef> m_defs;
