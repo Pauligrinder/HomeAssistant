@@ -1,5 +1,6 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
+import "../dashboard"
 
 CoverBackground {
     id: cover
@@ -15,6 +16,55 @@ CoverBackground {
     property int coverPage: 0
     property int entitiesGen: 0
     property bool coverActionOdd: false
+    property int locationTick: 0
+
+    readonly property var sensors: hassClient ? hassClient.sensors : null
+    readonly property var dashboard: hassClient ? hassClient.lovelace : null
+    // Both URLs set → show which endpoint is active.
+    readonly property bool dualEndpoint: !!(hassClient
+            && String(hassClient.internalUrl || "").length
+            && String(hassClient.externalUrl || "").length)
+    readonly property string locationZone: {
+        var _ = cover.locationTick
+        if (!cover.sensors)
+            return ""
+        return cover.sensors.locationZone ? String(cover.sensors.locationZone) : ""
+    }
+    readonly property string locationZoneIcon: {
+        var _ = cover.locationTick
+        var zone = cover.locationZone
+        if (cover.dashboard && zone.length) {
+            var id = cover.zoneEntityId(zone)
+            if (id.length) {
+                var icon = cover.dashboard.attribute(id, "icon")
+                if (icon && String(icon).length)
+                    return String(icon)
+            }
+        }
+        if (cover.sensors && cover.sensors.locationZoneIcon)
+            return String(cover.sensors.locationZoneIcon)
+        if (zone === "home")
+            return "mdi:home"
+        if (zone === "not_home")
+            return "mdi:home-export-outline"
+        if (zone.length)
+            return "mdi:map-marker-radius"
+        return "mdi:map-marker-question"
+    }
+    readonly property color locationZoneColor: {
+        var zone = cover.locationZone
+        if (zone === "home")
+            return "#7CFC00"
+        if (zone === "not_home" || !zone.length)
+            return "#FF6B6B"
+        return "#FFD54F"
+    }
+    readonly property string locationZoneLabel: cover.prettyZoneName(cover.locationZone)
+    readonly property string endpointIcon: {
+        if (!cover.dualEndpoint || !hassClient)
+            return ""
+        return hassClient.usingInternalUrl ? "mdi:lan" : "mdi:cloud-outline"
+    }
 
     readonly property var favorites: {
         var _ = cover.entitiesGen
@@ -56,6 +106,49 @@ CoverBackground {
 
     function isSensor(entity) {
         return !!entity && entity.kind === "sensor"
+    }
+
+    function prettyZoneName(state) {
+        var s = String(state || "")
+        if (!s.length)
+            return hassClient && hassClient.loggedIn ? "Locating…" : "Not connected"
+        if (s === "home")
+            return "Home"
+        if (s === "not_home")
+            return "Away"
+        return s.replace(/_/g, " ")
+    }
+
+    function zoneEntityId(state) {
+        var s = String(state || "")
+        if (!s.length || s === "not_home" || s === "unavailable" || s === "unknown")
+            return ""
+        if (s === "home")
+            return "zone.home"
+        if (!cover.dashboard)
+            return "zone." + s
+        var direct = "zone." + s
+        var ent = cover.dashboard.entity(direct)
+        if (ent && (ent.state !== undefined || ent.entity_id))
+            return direct
+        var slug = "zone." + s.toLowerCase().replace(/ /g, "_")
+        ent = cover.dashboard.entity(slug)
+        if (ent && (ent.state !== undefined || ent.entity_id))
+            return slug
+        var zones = cover.dashboard.zones() || []
+        for (var i = 0; i < zones.length; ++i) {
+            var z = zones[i]
+            if (!z)
+                continue
+            var id = String(z.entity_id || "")
+            var attrs = z.attributes || {}
+            var name = String(attrs.friendly_name || attrs.name || "")
+            if (name === s || name.toLowerCase() === s.toLowerCase())
+                return id
+            if (id === direct || id === slug)
+                return id
+        }
+        return slug
     }
 
     // Sensors and lit favorites get the stronger watermark, matching the widget.
@@ -191,6 +284,26 @@ CoverBackground {
     Connections {
         target: (hassClient && hassClient.widget) ? hassClient.widget : null
         onWidgetEntitiesChanged: cover.entitiesGen += 1
+    }
+
+    Connections {
+        target: cover.sensors
+        onLocationZoneChanged: cover.locationTick++
+        onLastLocationTextChanged: cover.locationTick++
+        onHomeOnInternalChanged: cover.locationTick++
+    }
+
+    Connections {
+        target: hassClient
+        onUsingInternalUrlChanged: cover.locationTick++
+        onInternalUrlChanged: cover.locationTick++
+        onExternalUrlChanged: cover.locationTick++
+        onLoggedInChanged: cover.locationTick++
+    }
+
+    Connections {
+        target: cover.dashboard
+        onStatesRevisionChanged: cover.locationTick++
     }
 
     Connections {
@@ -401,7 +514,7 @@ CoverBackground {
         }
     }
 
-    // Idle status
+    // Idle status: instance name + zone (icon/color) + optional endpoint icon
     Column {
         anchors.centerIn: parent
         width: parent.width - Theme.paddingLarge * 2
@@ -422,35 +535,36 @@ CoverBackground {
             font.bold: true
         }
 
-        Label {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.Wrap
-            color: "#CCFFFFFF"
-            font.pixelSize: Theme.fontSizeExtraSmall
-            text: {
-                if (!hassClient)
-                    return ""
-                if (hassClient.loggedIn) {
-                    if (hassClient.internalUrl.length > 0)
-                        return hassClient.usingInternalUrl ? "Internal" : "External"
-                    return "Connected"
-                }
-                if (hassClient.connected)
-                    return "Connected"
-                return "Not connected"
+        Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: Theme.paddingSmall
+
+            MdiIcon {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Theme.iconSizeSmall
+                height: width
+                mdiIcons: cover.mdiIcons
+                name: cover.locationZoneIcon
+                iconColor: cover.locationZoneColor
+            }
+
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                color: cover.locationZoneColor
+                font.pixelSize: Theme.fontSizeSmall
+                font.bold: true
+                text: cover.locationZoneLabel
             }
         }
 
-        Label {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.Wrap
-            truncationMode: TruncationMode.Fade
-            color: "#B3FFFFFF"
-            font.pixelSize: Theme.fontSizeTiny
-            visible: hassClient && hassClient.host.length > 0
-            text: hassClient ? hassClient.host : ""
+        MdiIcon {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Theme.iconSizeSmall
+            height: width
+            visible: cover.endpointIcon.length > 0
+            mdiIcons: cover.mdiIcons
+            name: cover.endpointIcon
+            iconColor: "#CCFFFFFF"
         }
     }
 

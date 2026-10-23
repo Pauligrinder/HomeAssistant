@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.9
+Version:    0.5.10
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -62,6 +62,10 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.10-1
+- Cover shows current zone (icon/color) and endpoint when both URLs are set.
+- History list leaves the active state's end time open-ended.
+
 * Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.9-1
 - Match layout-card column count to the webview scale (pixelRatio × 1.2) and margins.
 

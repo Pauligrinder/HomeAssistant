@@ -48,6 +48,7 @@ Page {
             readonly property string stateValue: String(modelData.state || "")
             readonly property var startDate: modelData.start
             readonly property var endDate: modelData.end
+            readonly property bool ongoing: !!modelData.ongoing
             readonly property bool isZone: page.isZoneState(row.stateValue)
             readonly property string zoneIcon: page.zoneIconFor(row.stateValue)
             readonly property color accent: page.colorForState(row.stateValue)
@@ -117,7 +118,8 @@ Page {
                         wrapMode: Text.Wrap
                         color: Theme.primaryColor
                         font.pixelSize: Theme.fontSizeSmall
-                        text: page.formatPeriod(row.stateValue, row.startDate, row.endDate)
+                        text: page.formatPeriod(row.stateValue, row.startDate, row.endDate,
+                                                row.ongoing)
                     }
                 }
             }
@@ -166,14 +168,15 @@ Page {
             var start = page.parseTime(src[i].last_changed)
             if (!start)
                 continue
-            var end = (i + 1 < src.length)
-                      ? page.parseTime(src[i + 1].last_changed) : now
+            var ongoing = (i + 1 >= src.length)
+            var end = ongoing ? now : page.parseTime(src[i + 1].last_changed)
             if (!end)
                 end = now
             out.push({
                          "state": src[i].state,
                          "start": start,
-                         "end": end
+                         "end": end,
+                         "ongoing": ongoing
                      })
         }
         out.reverse()
@@ -206,23 +209,27 @@ Page {
         return Qt.formatTime(d, "hh:mm")
     }
 
-    function formatRange(start, end) {
-        if (!start || !end)
+    function formatRange(start, end, ongoing) {
+        if (!start)
             return ""
         var today = new Date()
         var startTime = page.timeLabel(start)
+        var startPart = page.sameDay(start, today)
+                        ? startTime
+                        : (page.dayLabel(start) + " " + startTime)
+        // Still-active state: open-ended range ("18:57 - ").
+        if (ongoing)
+            return startPart + " - "
+        if (!end)
+            return startPart
         var endTime = page.timeLabel(end)
-        if (page.sameDay(start, end)) {
-            if (page.sameDay(start, today))
-                return startTime + " - " + endTime
-            return page.dayLabel(start) + " " + startTime + " - " + endTime
-        }
-        return page.dayLabel(start) + " " + startTime
-                + " - " + page.dayLabel(end) + " " + endTime
+        if (page.sameDay(start, end))
+            return startPart + " - " + endTime
+        return startPart + " - " + page.dayLabel(end) + " " + endTime
     }
 
-    function formatPeriod(state, start, end) {
-        return page.prettyState(state) + " - " + page.formatRange(start, end)
+    function formatPeriod(state, start, end, ongoing) {
+        return page.prettyState(state) + ": " + page.formatRange(start, end, ongoing)
     }
 
     function zoneEntityId(state) {
