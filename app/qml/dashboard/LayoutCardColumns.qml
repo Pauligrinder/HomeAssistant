@@ -2,12 +2,15 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 
 // thomasloven/lovelace-layout-card column engine (horizontal + vertical).
-// Columns = max(1, min(floor(avail / width), max_cols)); width defaults to 300,
-// so a phone in portrait is almost always a single stacked column — not a
-// side-by-side CardFlow row.
+// layout-card measures getBoundingClientRect() in CSS px (width default 300).
+// Sailfish QML coordinates are denser — Theme.pixelRatio maps CSS px → QML,
+// same idea as AtlanticDashboardWebView's device scale factor. Without it a
+// 1080-wide phone gets floor(1080/300)=3 columns while the webview stays at 1.
 Item {
     id: root
     property var view: ({})
+    // When embedded as a card (CardLoader), the config arrives as `card`.
+    property var card: null
     property var dashboard
     property var hassClient
     property var mdiIcons
@@ -15,24 +18,32 @@ Item {
     // "vertical"   — next card stays in the same column until layout-break.
     property string mode: "horizontal"
 
-    readonly property var layoutOpts: {
-        if (!view)
-            return ({})
-        if (view.layout && typeof view.layout === "object")
-            return view.layout
+    // CSS px → QML px. Match the webview content scale used for Lovelace.
+    readonly property real cssScale: Math.max(Theme.pixelRatio, 1.0)
+    readonly property var config: {
+        if (root.card && typeof root.card === "object")
+            return root.card
+        if (root.view && typeof root.view === "object")
+            return root.view
         return ({})
     }
-    readonly property int configuredWidth: {
+    readonly property var layoutOpts: {
+        if (root.config.layout && typeof root.config.layout === "object")
+            return root.config.layout
+        return ({})
+    }
+    // Configured sizes are CSS pixels from layout-card.
+    readonly property int configuredWidthCss: {
         var w = Number(root.layoutOpts.width)
         return (isFinite(w) && w > 0) ? Math.round(w) : 300
     }
-    readonly property int configuredMaxWidth: {
+    readonly property int configuredMaxWidthCss: {
         var m = Number(root.layoutOpts.max_width)
         if (isFinite(m) && m > 0)
             return Math.round(m)
         if (root.layoutOpts.width !== undefined && root.layoutOpts.width !== null
                 && String(root.layoutOpts.width).length)
-            return Math.ceil(root.configuredWidth * 1.5)
+            return Math.ceil(root.configuredWidthCss * 1.5)
         return 500
     }
     readonly property int configuredMaxCols: {
@@ -42,28 +53,28 @@ Item {
     readonly property bool rtl: !!(root.layoutOpts.rtl === true
                                   || root.layoutOpts.rtl === "true")
     readonly property int columnCount: {
-        // Match base-column-layout.ts _updateSize().
-        var avail = Math.max(1, Math.floor(root.width))
-        var n = Math.floor(avail / root.configuredWidth)
+        // base-column-layout.ts _updateSize(), with width converted to QML.
+        var availCss = Math.max(1, Math.floor(root.width / root.cssScale))
+        var n = Math.floor(availCss / root.configuredWidthCss)
         n = Math.min(n, root.configuredMaxCols)
         return Math.max(1, n)
     }
-    // Effective per-column width. On a single-column phone, grow to the view
-    // width (layout-card raises max-width under the 2×width media query).
+    // Per-column width in QML px. One column fills the view (layout-card uses
+    // width:100% with max-width only capping multi-column growth).
     readonly property int columnPixelWidth: {
         var gaps = Math.max(0, root.columnCount - 1) * Theme.paddingMedium
         var avail = Math.max(1, Math.floor(root.width - gaps))
         var share = Math.floor(avail / root.columnCount)
-        var maxW = root.configuredMaxWidth
         if (root.columnCount === 1)
-            maxW = Math.max(maxW, root.configuredWidth * 2)
+            return Math.max(1, share)
+        var maxW = Math.round(root.configuredMaxWidthCss * root.cssScale)
         return Math.max(1, Math.min(share, maxW))
     }
     // Rebuild when width-derived column count or the card list changes.
     readonly property int placeRevision: {
         var _ = root.columnCount
         var __ = root.dashboard ? root.dashboard.statesRevision : 0
-        var cards = (root.view && root.view.cards) ? root.view.cards : []
+        var cards = root.config.cards || []
         return cards.length + _ * 1000 + (__ % 1000)
     }
     property var columnCards: []
@@ -102,7 +113,7 @@ Item {
     }
 
     function visibleCards() {
-        var src = (root.view && root.view.cards) ? root.view.cards : []
+        var src = root.config.cards || []
         var out = []
         for (var i = 0; i < src.length; ++i) {
             var c = src[i]

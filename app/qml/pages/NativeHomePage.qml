@@ -188,8 +188,8 @@ Page {
             return panelComp
         if (t === "sidebar" || t.indexOf("sidebar") >= 0)
             return sidebarComp
-        // layout-card column layouts (thomasloven). Portrait phones usually
-        // get one column because floor(width/300) === 1.
+        // layout-card column layouts (thomasloven). CSS width/300, scaled by
+        // Theme.pixelRatio so HD phones match the webview's one column.
         if (t.indexOf("horizontal-layout") >= 0)
             return horizontalComp
         if (t.indexOf("vertical-layout") >= 0)

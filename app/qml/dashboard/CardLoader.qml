@@ -105,11 +105,16 @@ Loader {
         var nested = loader.card && loader.card.cards
         if (!nested || !nested.length)
             return ""
+        // layout-card column engines (not horizontal-stack).
+        if (t.indexOf("horizontal-layout") >= 0)
+            return Qt.resolvedUrl("HorizontalLayout.qml")
+        if (t.indexOf("vertical-layout") >= 0)
+            return Qt.resolvedUrl("VerticalLayout.qml")
         if (t.indexOf("horizontal") >= 0)
             return Qt.resolvedUrl("cards/HorizontalStackCard.qml")
         if (t.indexOf("grid") >= 0)
             return Qt.resolvedUrl("cards/GridCard.qml")
-        // vertical-layout, masonry-layout, and any other cards[] container
+        // masonry-layout and any other cards[] container
         return Qt.resolvedUrl("cards/VerticalStackCard.qml")
     }
 
