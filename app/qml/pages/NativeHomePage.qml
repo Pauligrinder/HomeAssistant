@@ -820,12 +820,20 @@ Page {
                             property bool iconAndTitle: page.viewShowIconAndTitle(tabView)
                             property bool iconOnly: page.viewHasIcon(tabView) && !iconAndTitle
                             property bool titleOnly: !iconOnly && !iconAndTitle
-                            width: tabContent.width
+                            // Icon-only tabs are otherwise just the glyph width.
+                            readonly property int hPad: iconOnly
+                                                        ? Theme.paddingMedium
+                                                        : 0
+                            width: tabContent.width + 2 * hPad
                             height: Theme.itemSizeSmall
+                            opacity: tabTap.pressed ? 0.6 : 1.0
+                            Behavior on opacity {
+                                NumberAnimation { duration: 100 }
+                            }
 
                             Row {
                                 id: tabContent
-                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.centerIn: parent
                                 spacing: Theme.paddingSmall
 
                                 MdiIcon {
@@ -849,6 +857,7 @@ Page {
                             }
 
                             MouseArea {
+                                id: tabTap
                                 anchors.fill: parent
                                 onClicked: page.selectViewIndex(tabItem.viewIdx)
                             }
