@@ -33,12 +33,27 @@ Page {
             return 0
         return Math.max(0, Screen.topCutout.y + Screen.topCutout.height)
     }
+    // Full-bleed panel maps draw under the punch-hole; the map itself pads its
+    // fit/markers. Tab/badge chrome above a map still needs the page inset.
+    readonly property bool mapUnderNotch: {
+        if (!page.panelMapView || page.topCutoutInset <= 0)
+            return false
+        if (page.showViewTabs || page.onSubview)
+            return false
+        var view = page.boundView
+        if (view && view.badges && view.badges.length)
+            return false
+        return true
+    }
     readonly property int viewFillHeight: {
         if (!page.panelMapView)
             return 0
         var h = flick.height - column.y
         var n = 1
-        if (tabFlick.visible) {
+        if (subviewHeader.visible) {
+            h -= subviewHeader.height
+            n++
+        } else if (tabFlick.visible) {
             h -= tabFlick.height
             n++
         }
@@ -79,6 +94,27 @@ Page {
             i = 0
         return views[i] || ({})
     }
+    // Tabs omit subviews and views hidden for this user (HA hui-root).
+    readonly property var tabViews: {
+        var rev = dashboard ? dashboard.configsRevision : 0
+        var uid = dashboard ? dashboard.userId : ""
+        var all = page.boundViews
+        var out = []
+        if (!all || !all.length)
+            return out
+        for (var i = 0; i < all.length; ++i) {
+            var v = all[i]
+            if (!v || v.subview)
+                continue
+            if (!page.viewVisibleToUser(v, uid))
+                continue
+            out.push({ "view": v, "index": i })
+        }
+        return out
+    }
+    readonly property bool onSubview: !!(page.boundView && page.boundView.subview)
+    readonly property bool showViewTabs: !page.onSubview && page.tabViews.length > 1
+    property int returnViewIndex: 0
     // View background wins over the dashboard-wide background.
     readonly property var backgroundConfig: {
         var rev = dashboard ? dashboard.configsRevision : 0
@@ -152,10 +188,12 @@ Page {
             return panelComp
         if (t === "sidebar" || t.indexOf("sidebar") >= 0)
             return sidebarComp
-        // custom:horizontal-layout → wrapping equal-width rows;
-        // custom:vertical-layout / masonry-layout / anything else → masonry.
-        if (t.indexOf("horizontal") >= 0)
+        // layout-card column layouts (thomasloven). Portrait phones usually
+        // get one column because floor(width/300) === 1.
+        if (t.indexOf("horizontal-layout") >= 0)
             return horizontalComp
+        if (t.indexOf("vertical-layout") >= 0)
+            return verticalComp
         return masonryComp
     }
 
@@ -315,12 +353,82 @@ Page {
             hassClient.nativeDashboardEnabled = false
     }
 
+    function viewVisibleToUser(view, userId) {
+        if (!view)
+            return false
+        var vis = view.visible
+        if (vis === undefined || vis === null)
+            return true
+        if (vis === true || vis === "true")
+            return true
+        if (vis === false || vis === "false")
+            return false
+        // Legacy: visible: "<user id>"
+        if (typeof vis === "string")
+            return vis.length > 0 && vis === String(userId || "")
+        // visible: [ { user: "…" }, … ]
+        if (vis.length !== undefined) {
+            var uid = String(userId || "")
+            for (var i = 0; i < vis.length; ++i) {
+                var entry = vis[i]
+                if (entry && String(entry.user || "") === uid)
+                    return true
+            }
+            return false
+        }
+        return true
+    }
+
+    function viewHasIcon(view) {
+        return !!(view && view.icon && String(view.icon).length)
+    }
+
+    function viewShowIconAndTitle(view) {
+        return !!(view && view.show_icon_and_title && page.viewHasIcon(view)
+                  && view.title && String(view.title).length)
+    }
+
+    function viewTabTitle(view) {
+        if (view && view.title && String(view.title).length)
+            return String(view.title)
+        if (view && view.path && String(view.path).length)
+            return String(view.path)
+        return i18n.translation("unnamed_view")
+    }
+
+    function selectViewIndex(index) {
+        var views = page.boundViews
+        if (!views || index < 0 || index >= views.length)
+            return
+        var next = views[index]
+        var cur = page.boundView
+        if (next && next.subview && !(cur && cur.subview))
+            page.returnViewIndex = page.viewIndex
+        page.viewIndex = index
+    }
+
+    function leaveSubview() {
+        var view = page.boundView
+        if (view && view.back_path && String(view.back_path).length) {
+            page.handleNavigate(String(view.back_path))
+            return
+        }
+        var idx = page.returnViewIndex
+        var views = page.boundViews
+        if (views && idx >= 0 && idx < views.length && !(views[idx] && views[idx].subview))
+            page.viewIndex = idx
+        else if (page.tabViews.length)
+            page.viewIndex = page.tabViews[0].index
+        else
+            page.viewIndex = 0
+    }
+
     function selectLocalView(path) {
         if (!path || !page.boundViews)
             return
         for (var i = 0; i < page.boundViews.length; i++) {
             if (page.boundViews[i] && String(page.boundViews[i].path || "") === path) {
-                page.viewIndex = i
+                page.selectViewIndex(i)
                 return
             }
         }
@@ -647,13 +755,50 @@ Page {
             id: column
             width: parent.width
             // Without a page header the first row would otherwise sit against
-            // the very top of the screen. topCutoutInset clears the notch.
-            y: Theme.paddingLarge + page.topCutoutInset
+            // the very top of the screen. Use the cutout clearance when the
+            // punch-hole is present — stacking paddingLarge on top left the
+            // tab bar floating too far below the notch. Panel maps keep y at 0
+            // so tiles bleed under the cutout; MapCard pads content instead.
+            y: {
+                if (page.mapUnderNotch)
+                    return 0
+                if (page.topCutoutInset > 0)
+                    return page.topCutoutInset
+                return Theme.paddingLarge
+            }
             spacing: Theme.paddingMedium
+
+            // Subview: HA shows back + title, not the tab strip.
+            Item {
+                id: subviewHeader
+                visible: page.onSubview
+                width: parent.width
+                height: visible ? Theme.itemSizeSmall : 0
+
+                IconButton {
+                    id: subviewBack
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.horizontalPageMargin - Theme.paddingMedium
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon.source: "image://theme/icon-m-back"
+                    onClicked: page.leaveSubview()
+                }
+
+                Label {
+                    anchors.left: subviewBack.right
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    truncationMode: TruncationMode.Fade
+                    color: Theme.highlightColor
+                    text: page.viewTabTitle(page.boundView)
+                }
+            }
 
             Flickable {
                 id: tabFlick
-                visible: !!(page.boundViews && page.boundViews.length > 1)
+                // Match HA: tabs only when 2+ non-subview, visible views.
+                visible: page.showViewTabs
                 width: parent.width
                 height: visible ? Theme.itemSizeSmall : 0
                 contentWidth: tabRow.width
@@ -665,24 +810,47 @@ Page {
                     spacing: Theme.paddingLarge
                     x: Theme.horizontalPageMargin
                     Repeater {
-                        model: page.boundViews
+                        model: page.tabViews
                         Item {
-                            width: Theme.itemSizeSmall
+                            id: tabItem
+                            property var tab: modelData
+                            property var tabView: tab && tab.view ? tab.view : ({})
+                            property int viewIdx: tab && tab.index !== undefined ? tab.index : -1
+                            property bool selected: viewIdx === page.viewIndex
+                            property bool iconAndTitle: page.viewShowIconAndTitle(tabView)
+                            property bool iconOnly: page.viewHasIcon(tabView) && !iconAndTitle
+                            property bool titleOnly: !iconOnly && !iconAndTitle
+                            width: tabContent.width
                             height: Theme.itemSizeSmall
 
-                            MdiIcon {
-                                anchors.centerIn: parent
-                                mdiIcons: page.mdiIcons
-                                name: modelData && modelData.icon
-                                      ? String(modelData.icon) : "mdi:view-dashboard"
-                                iconColor: index === page.viewIndex
+                            Row {
+                                id: tabContent
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: Theme.paddingSmall
+
+                                MdiIcon {
+                                    visible: tabItem.iconOnly || tabItem.iconAndTitle
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    mdiIcons: page.mdiIcons
+                                    name: tabItem.tabView.icon ? String(tabItem.tabView.icon) : ""
+                                    iconColor: tabItem.selected
+                                               ? Theme.highlightColor : Theme.secondaryColor
+                                    width: Theme.iconSizeSmall
+                                }
+
+                                Label {
+                                    visible: tabItem.iconAndTitle || tabItem.titleOnly
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: page.viewTabTitle(tabItem.tabView)
+                                    color: tabItem.selected
                                            ? Theme.highlightColor : Theme.secondaryColor
-                                width: Theme.iconSizeSmall
+                                    font.pixelSize: Theme.fontSizeSmall
+                                }
                             }
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: page.viewIndex = index
+                                onClicked: page.selectViewIndex(tabItem.viewIdx)
                             }
                         }
                     }
@@ -860,10 +1028,22 @@ Page {
     }
 
     Component {
+        id: verticalComp
+        VerticalLayout {
+            width: viewLoader.width
+            view: page.displayView
+            dashboard: page.dashboard
+            hassClient: page.hassClient
+            mdiIcons: page.mdiIcons
+        }
+    }
+
+    Component {
         id: panelComp
         PanelLayout {
             width: viewLoader.width
             fillHeight: page.viewFillHeight
+            topContentInset: page.mapUnderNotch ? page.topCutoutInset : 0
             view: page.displayView
             dashboard: page.dashboard
             hassClient: page.hassClient

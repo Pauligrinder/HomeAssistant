@@ -13,6 +13,9 @@ Item {
     property var markers: []
     property bool autoFit: false
     property bool interactive: true
+    // Safe-area pad when tiles draw under the punch-hole: shift the geographic
+    // centre and marker fit into the visible band below the cutout.
+    property int topContentInset: 0
     property int zoom: 15
     // Map tiles are plain Images. After a backgrounding their textures are
     // gone and the source URL has not changed, so bump this to decode again.
@@ -34,6 +37,11 @@ Item {
                                   && Math.abs(root.viewLat) <= 90
                                   && Math.abs(root.viewLon) <= 180
     readonly property int avatarSize: Theme.iconSizeMedium
+    // Vertical origin for tiles/markers: centre of the area below the inset.
+    readonly property real contentOriginY: {
+        var inset = Math.max(0, root.topContentInset)
+        return inset + Math.max(0, root.height - inset) / 2
+    }
 
     signal markerClicked(string entityId)
 
@@ -76,7 +84,7 @@ Item {
     }
 
     function markerY(lat, lon) {
-        return root.height / 2
+        return root.contentOriginY
                 + (root.lat2tile(lat, root.zoom) - root.lat2tile(root.viewLat, root.zoom))
                 * root.tileSize
     }
@@ -101,8 +109,9 @@ Item {
         if (pts.length === 1)
             return 15
         var pad = Math.max(root.avatarSize * 2, Math.min(root.width, root.height) * 0.12)
+        var topPad = Math.max(pad, root.topContentInset + pad * 0.5)
         var availW = Math.max(32, root.width - 2 * pad)
-        var availH = Math.max(32, root.height - 2 * pad)
+        var availH = Math.max(32, root.height - topPad - pad)
         for (var z = 17; z >= 2; z--) {
             var minX = Infinity
             var maxX = -Infinity
@@ -202,8 +211,9 @@ Item {
         var cy = root.lat2tile(root.viewLat, z)
         var minX = Math.floor(cx - root.width / (2 * root.tileSize)) - 1
         var maxX = Math.floor(cx + root.width / (2 * root.tileSize)) + 1
-        var minY = Math.max(0, Math.floor(cy - root.height / (2 * root.tileSize)) - 1)
-        var maxY = Math.min(n - 1, Math.floor(cy + root.height / (2 * root.tileSize)) + 1)
+        // Cover the full item (including under the notch), not only the safe band.
+        var minY = Math.max(0, Math.floor(cy - root.contentOriginY / root.tileSize) - 1)
+        var maxY = Math.min(n - 1, Math.floor(cy + (root.height - root.contentOriginY) / root.tileSize) + 1)
         var key = z + ":" + minX + ":" + maxX + ":" + minY + ":" + maxY
         if (key === root.tileKey && tileModel.count > 0)
             return
@@ -258,6 +268,13 @@ Item {
     }
     onMarkersChanged: root.scheduleMarkers()
     onAutoFitChanged: root.scheduleMarkers()
+    onTopContentInsetChanged: {
+        root.tileKey = ""
+        if (root.autoFit)
+            root.scheduleMarkers()
+        else
+            root.scheduleRebuild()
+    }
     Component.onCompleted: {
         root.beenActive = Qt.application.state === Qt.ApplicationActive
         root.scheduleMarkers()
@@ -336,7 +353,7 @@ Item {
                 x: Math.round((model.tx - root.lon2tile(root.viewLon, root.zoom))
                               * root.tileSize + root.width / 2)
                 y: Math.round((model.ty - root.lat2tile(root.viewLat, root.zoom))
-                              * root.tileSize + root.height / 2)
+                              * root.tileSize + root.contentOriginY)
                 property string path: model.imageUrl ? String(model.imageUrl) : ""
                 function applyPath() {
                     if (String(tile.source) === path)
@@ -384,7 +401,7 @@ Item {
             height: width
             radius: width / 2
             x: root.width / 2 - width / 2
-            y: root.height / 2 - height / 2
+            y: root.contentOriginY - height / 2
             color: Theme.rgba(Theme.highlightColor, 0.18)
             border.color: Theme.highlightColor
             border.width: 2
@@ -467,7 +484,7 @@ Item {
         Column {
             visible: root.valid && markerModel.count === 0
             x: root.width / 2 - width / 2
-            y: root.height / 2 - height
+            y: root.contentOriginY - height
             Rectangle {
                 width: Theme.iconSizeSmall
                 height: width

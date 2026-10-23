@@ -2483,6 +2483,163 @@ QVariantList LovelaceCoordinator::zones() const
     return out;
 }
 
+namespace {
+
+bool attributeIsNumber(const QVariant &value)
+{
+    if (!value.isValid() || value.isNull())
+        return false;
+    bool ok = false;
+    value.toDouble(&ok);
+    return ok;
+}
+
+// Mirrors Home Assistant getEntityLocation: lat/lon attributes, or a person
+// resolved through the first active in_zones entry.
+bool entityHasMapLocation(const QVariantMap &stateObj,
+                          const QHash<QString, QVariantMap> &states)
+{
+    const QVariantMap attrs = stateObj.value(QStringLiteral("attributes")).toMap();
+    if (attributeIsNumber(attrs.value(QStringLiteral("latitude")))
+            && attributeIsNumber(attrs.value(QStringLiteral("longitude"))))
+        return true;
+
+    const QString entityId = stateObj.value(QStringLiteral("entity_id")).toString();
+    if (domainOfEntity(entityId) != QLatin1String("person"))
+        return false;
+
+    const QVariantList inZones = attrs.value(QStringLiteral("in_zones")).toList();
+    for (int i = 0; i < inZones.size(); ++i) {
+        const QString zoneId = inZones.at(i).toString();
+        if (zoneId.isEmpty())
+            continue;
+        const QVariantMap zone = states.value(zoneId);
+        if (zone.isEmpty())
+            continue;
+        const QVariantMap zoneAttrs = zone.value(QStringLiteral("attributes")).toMap();
+        if (zoneAttrs.value(QStringLiteral("passive")).toBool())
+            continue;
+        if (attributeIsNumber(zoneAttrs.value(QStringLiteral("latitude")))
+                && attributeIsNumber(zoneAttrs.value(QStringLiteral("longitude"))))
+            return true;
+    }
+    return false;
+}
+
+QString configEntityId(const QVariant &entry)
+{
+    if (entry.type() == QVariant::String)
+        return entry.toString();
+    return entry.toMap().value(QStringLiteral("entity")).toString();
+}
+
+QStringList allLocatedEntityIds(const QHash<QString, QVariantMap> &states,
+                                const QHash<QString, QVariantMap> &registry)
+{
+    QSet<QString> personSources;
+    QStringList located;
+    QHash<QString, QVariantMap>::const_iterator it = states.constBegin();
+    for (; it != states.constEnd(); ++it) {
+        const QString entityId = it.key();
+        const QVariantMap stateObj = it.value();
+        if (!entityHasMapLocation(stateObj, states))
+            continue;
+        located.append(entityId);
+        if (domainOfEntity(entityId) == QLatin1String("person")) {
+            const QString source = stateObj.value(QStringLiteral("attributes")).toMap()
+                    .value(QStringLiteral("source")).toString();
+            if (!source.isEmpty())
+                personSources.insert(source);
+        }
+    }
+
+    QStringList out;
+    out.reserve(located.size());
+    for (int i = 0; i < located.size(); ++i) {
+        const QString entityId = located.at(i);
+        if (personSources.contains(entityId))
+            continue;
+        if (registryHidden(registry.value(entityId)))
+            continue;
+        out.append(entityId);
+    }
+    return out;
+}
+
+QStringList geoLocationEntityIds(const QHash<QString, QVariantMap> &states,
+                                 const QVariantList &sources)
+{
+    if (sources.isEmpty())
+        return QStringList();
+
+    bool includeAll = false;
+    QSet<QString> sourceNames;
+    for (int i = 0; i < sources.size(); ++i) {
+        const QVariant entry = sources.at(i);
+        QString name;
+        if (entry.type() == QVariant::String)
+            name = entry.toString();
+        else
+            name = entry.toMap().value(QStringLiteral("source")).toString();
+        if (name == QLatin1String("all")) {
+            includeAll = true;
+            break;
+        }
+        if (!name.isEmpty())
+            sourceNames.insert(name);
+    }
+
+    QStringList out;
+    QHash<QString, QVariantMap>::const_iterator it = states.constBegin();
+    for (; it != states.constEnd(); ++it) {
+        const QString entityId = it.key();
+        if (domainOfEntity(entityId) != QLatin1String("geo_location"))
+            continue;
+        if (includeAll) {
+            out.append(entityId);
+            continue;
+        }
+        const QString source = it.value().value(QStringLiteral("attributes")).toMap()
+                .value(QStringLiteral("source")).toString();
+        if (sourceNames.contains(source))
+            out.append(entityId);
+    }
+    return out;
+}
+
+} // namespace
+
+QVariantList LovelaceCoordinator::mapCardEntities(const QVariantMap &card) const
+{
+    QVariantList out;
+    QSet<QString> seen;
+
+    const auto appendId = [&](const QString &entityId) {
+        if (entityId.isEmpty() || seen.contains(entityId))
+            return;
+        seen.insert(entityId);
+        out.append(entityId);
+    };
+
+    if (card.value(QStringLiteral("show_all")).toBool()) {
+        const QStringList located = allLocatedEntityIds(m_entities, m_entityRegistry);
+        for (int i = 0; i < located.size(); ++i)
+            appendId(located.at(i));
+        return out;
+    }
+
+    const QVariantList entities = card.value(QStringLiteral("entities")).toList();
+    for (int i = 0; i < entities.size(); ++i)
+        appendId(configEntityId(entities.at(i)));
+
+    const QVariantList geoSources = card.value(QStringLiteral("geo_location_sources")).toList();
+    const QStringList geoIds = geoLocationEntityIds(m_entities, geoSources);
+    for (int i = 0; i < geoIds.size(); ++i)
+        appendId(geoIds.at(i));
+
+    return out;
+}
+
 bool LovelaceCoordinator::isVisible(const QVariant &visibility) const
 {
     const QVariantList conditions = variantListOf(visibility);
@@ -3739,32 +3896,42 @@ void LovelaceCoordinator::onReplyFinished()
         else if (contentType.contains("gif") || data.startsWith("GIF8"))
             suffix = QStringLiteral(".gif");
 
-        // camera_proxy stills are often 1920px; uploading that as a GL texture
-        // has hung hybris. Write a capped JPEG instead of the full frame.
+        // camera_proxy stills and phone-photo dashboard backgrounds are often
+        // multi-megapixel; uploading that as a GL texture has hung hybris.
+        // Re-encode a capped JPEG with EXIF orientation applied so QML does
+        // not show them rotated 90° and does not decode the full frame.
         const bool cameraProxy = tag.startsWith(QLatin1String("/api/camera_proxy/"));
-        if (cameraProxy && !data.isEmpty()) {
+        const bool stillImage = suffix == QLatin1String(".jpg")
+                || suffix == QLatin1String(".png")
+                || suffix == QLatin1String(".webp");
+        if (stillImage && !data.isEmpty()) {
             QBuffer buffer;
             buffer.setData(data);
             buffer.open(QIODevice::ReadOnly);
             QImageReader reader(&buffer);
+            reader.setAutoTransform(true);
             const QSize original = reader.size();
-            const int maxEdge = 640;
-            if (original.isValid()
-                    && (original.width() > maxEdge || original.height() > maxEdge)) {
-                reader.setScaledSize(original.scaled(maxEdge, maxEdge, Qt::KeepAspectRatio));
-            }
-            const QImage scaled = reader.read();
-            if (!scaled.isNull()) {
-                const QString filePath = mediaCachePath(tag, QStringLiteral(".jpg"));
-                if (scaled.save(filePath, "JPG", 80)) {
-                    const QString url = QStringLiteral("file://") + filePath;
-                    m_mediaCache.insert(tag, url);
-                    emit mediaCached(tag, url);
-                    return;
+            const int maxEdge = cameraProxy ? 640 : 1920;
+            const bool needsScale = original.isValid()
+                    && (original.width() > maxEdge || original.height() > maxEdge);
+            // Always re-encode camera stills (small). For other media only when
+            // oversized, so ordinary icons stay byte-identical and fast.
+            if (cameraProxy || needsScale) {
+                if (needsScale)
+                    reader.setScaledSize(original.scaled(maxEdge, maxEdge, Qt::KeepAspectRatio));
+                const QImage scaled = reader.read();
+                if (!scaled.isNull()) {
+                    const QString filePath = mediaCachePath(tag, QStringLiteral(".jpg"));
+                    if (scaled.save(filePath, "JPG", cameraProxy ? 80 : 85)) {
+                        const QString url = QStringLiteral("file://") + filePath;
+                        m_mediaCache.insert(tag, url);
+                        emit mediaCached(tag, url);
+                        return;
+                    }
                 }
+                qWarning() << "Helmsman lovelace: image downscale failed for" << tag
+                           << "falling back to raw bytes";
             }
-            qWarning() << "Helmsman lovelace: camera downscale failed for" << tag
-                       << "falling back to raw bytes";
         }
 
         if (!suffix.isEmpty() && !data.isEmpty()) {
@@ -3782,7 +3949,13 @@ void LovelaceCoordinator::onReplyFinished()
             qWarning() << "Helmsman lovelace: failed to cache raw image for" << tag;
         }
 
-        const QImage image = QImage::fromData(data);
+        // Unknown type: decode with EXIF orientation so a PNG cache is upright.
+        QBuffer fallbackBuffer;
+        fallbackBuffer.setData(data);
+        fallbackBuffer.open(QIODevice::ReadOnly);
+        QImageReader fallbackReader(&fallbackBuffer);
+        fallbackReader.setAutoTransform(true);
+        const QImage image = fallbackReader.read();
         if (image.isNull()) {
             qWarning() << "Helmsman lovelace: invalid image response for" << tag
                        << "content-type=" << reply->header(QNetworkRequest::ContentTypeHeader).toString()

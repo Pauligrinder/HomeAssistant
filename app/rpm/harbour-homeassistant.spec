@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.5
+Version:    0.5.6
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -62,6 +62,14 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.6-1
+- Map cards honor show_all and geo_location_sources; titles overlay the map.
+- layout-card horizontal/vertical packing matches HACS column width rules.
+- View tabs show title and/or icon and respect subview and visible settings.
+- Location reporting stays put near home and seeks less after Wi-Fi snaps.
+- Dashboard backgrounds respect EXIF orientation and load at a smaller size.
+- Maps under the notch keep markers and titles below the cutout.
+
 * Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.4-1
 - Pad native dashboards below the screen notch; content can still scroll
   under it.

@@ -8,6 +8,7 @@ Loader {
     property var hassClient
     property var mdiIcons
     property int fillHeight: 0
+    property int topContentInset: 0
     property int rowHeight: 0
     property int columns: 12
     property int unitWidth: parent ? parent.width : width
@@ -66,6 +67,7 @@ Loader {
                              "hassClient": loader.hassClient,
                              "mdiIcons": loader.mdiIcons,
                              "fillHeight": fill,
+                             "topContentInset": loader.topContentInset,
                              "minContentHeight": loader.minHeight
                          })
     }
@@ -90,6 +92,8 @@ Loader {
                 return Math.round(loader.width)
             return Math.max(loader.fillHeight, loader.rowHeight)
         })
+        if (item.topContentInset !== undefined)
+            item.topContentInset = Qt.binding(function() { return loader.topContentInset })
         if (item.minContentHeight !== undefined)
             item.minContentHeight = Qt.binding(function() { return loader.minHeight })
     }

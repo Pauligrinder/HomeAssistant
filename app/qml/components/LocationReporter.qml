@@ -15,27 +15,41 @@ import Nemo.DBus 2.0
 Item {
     id: reporter
     property var hassClient
+    // Keep listening on home Wi‑Fi too: SensorCoordinator ignores GPS only
+    // after home is confirmed, so edge flaps can still be overruled by a
+    // fresh away-fix during the confirm debounce.
     property bool enabled: hassClient && hassClient.sensors
             ? hassClient.sensors.locationReporting
               && hassClient.sensors.active
-              && !hassClient.usingInternalUrl
             : false
     readonly property int staleMinutes: hassClient && hassClient.sensors
             ? hassClient.sensors.locationStaleMinutes : 15
     readonly property int startDelayMs: 4000
-    readonly property int seekTimeoutMs: 45000
+    readonly property int seekTimeoutMs: 60000
     readonly property int seekUpdateMs: 5000
     readonly property int staleCheckMs: 60000
+    // After a seek that produced nothing usable, retry soon — waiting the full
+    // stale interval left daycare pickups with a single failed burst.
+    readonly property int failedSeekRetryMs: 75000
     // Never post a fix older than this, even if the user's stale interval is
     // longer. Cached GeoClue dumps from other apps (e.g. an old Helsinki fix)
     // were jumping the device_tracker across the country.
     readonly property int maxPostAgeMs: 120000
+    readonly property real maxPostAccuracyM: 120
+    readonly property real confirmJumpM: 400
     property bool seeking: false
+    property bool lastSeekGotFix: false
     property double lastFixAtMs: 0
     property double lastSeekAtMs: 0
     property double lastPostedLat: 0
     property double lastPostedLon: 0
     property bool havePostedFix: false
+    // Large jumps need a second agreeing sample so one MLS blip cannot move us.
+    property double pendingLat: 0
+    property double pendingLon: 0
+    property double pendingAcc: 0
+    property double pendingAtMs: 0
+    property bool havePending: false
 
     function staleMs() {
         return Math.max(5, reporter.staleMinutes) * 60 * 1000
@@ -55,6 +69,12 @@ Item {
         return (reporter.nowMs() - reporter.lastFixAtMs) >= reporter.staleMs()
     }
 
+    function seekCooldownMs() {
+        if (reporter.lastSeekGotFix)
+            return reporter.staleMs()
+        return reporter.failedSeekRetryMs
+    }
+
     function canSelfSeek() {
         if (!reporter.enabled || reporter.seeking)
             return false
@@ -62,7 +82,7 @@ Item {
             return false
         if (reporter.lastSeekAtMs <= 0)
             return true
-        return (reporter.nowMs() - reporter.lastSeekAtMs) >= reporter.staleMs()
+        return (reporter.nowMs() - reporter.lastSeekAtMs) >= reporter.seekCooldownMs()
     }
 
     function accuracyMeters(accuracy) {
@@ -88,7 +108,12 @@ Item {
         return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
     }
 
-    function acceptFix(latitude, longitude, accuracy, timestampSec) {
+    function clearPending() {
+        reporter.havePending = false
+        reporter.pendingAtMs = 0
+    }
+
+    function acceptFix(latitude, longitude, accuracy, timestampSec, source) {
         if (!reporter.enabled || !hassClient || !hassClient.sensors)
             return false
         if (latitude === undefined || longitude === undefined)
@@ -103,13 +128,28 @@ Item {
         var ageMs = now - fixAtMs
         var acc = reporter.accuracyMeters(accuracy)
         var maxAge = reporter.maxAcceptAgeMs()
+        var src = source || "gps"
 
         // Drop other apps' cached GeoClue positions. A PositionSource burst
         // often surfaces those first; posting them made HA jump to Helsinki.
         if (hasTs && ageMs > maxAge) {
             console.log("Helmsman location: reject stale fix ageSec=",
-                        Math.round(ageMs / 1000), "lat=", latitude, "lon=", longitude)
+                        Math.round(ageMs / 1000), "lat=", latitude, "lon=", longitude,
+                        "src=", src)
             return false
+        }
+
+        // Mlsdb (cell/Wi‑Fi) regularly invents city-scale circles; Hybris GPS
+        // is the only source trusted for large moves.
+        if (src === "mls") {
+            if (acc <= 0 || acc > 80)
+                return false
+            if (reporter.havePostedFix) {
+                var mlsJump = reporter.approxMeters(reporter.lastPostedLat, reporter.lastPostedLon,
+                                                    latitude, longitude)
+                if (mlsJump > 300)
+                    return false
+            }
         }
 
         // Untimestamped first hits while seeking are usually the same cache.
@@ -117,6 +157,11 @@ Item {
             var seekAge = now - reporter.lastSeekAtMs
             if (seekAge < 4000 && (acc <= 0 || acc > 75))
                 return false
+        }
+
+        if (acc > reporter.maxPostAccuracyM) {
+            console.log("Helmsman location: reject poor accuracy acc=", acc, "src=", src)
+            return false
         }
 
         // Huge jump from a weak / untimestamped fix: wait for a better one.
@@ -129,10 +174,40 @@ Item {
                                 Math.round(jump), "ageSec=", Math.round(ageMs / 1000))
                     return false
                 }
-                if (acc <= 0 || acc > 150) {
+                if (acc <= 0 || acc > 100) {
                     console.log("Helmsman location: reject inaccurate teleport acc=", acc)
                     return false
                 }
+            }
+
+            // Mid-range jumps (neighbourhood bounce / zone flicker) need two
+            // agreeing samples, unless the fix is already GPS-tight.
+            if (jump > reporter.confirmJumpM && !(acc > 0 && acc <= 35 && ageMs < 20000)) {
+                if (!reporter.havePending
+                        || (now - reporter.pendingAtMs) > 45000) {
+                    reporter.pendingLat = latitude
+                    reporter.pendingLon = longitude
+                    reporter.pendingAcc = acc
+                    reporter.pendingAtMs = now
+                    reporter.havePending = true
+                    console.log("Helmsman location: hold jump pendingM=",
+                                Math.round(jump), "acc=", acc, "src=", src)
+                    return false
+                }
+                var agree = reporter.approxMeters(reporter.pendingLat, reporter.pendingLon,
+                                                  latitude, longitude)
+                if (agree > 75) {
+                    reporter.pendingLat = latitude
+                    reporter.pendingLon = longitude
+                    reporter.pendingAcc = acc
+                    reporter.pendingAtMs = now
+                    console.log("Helmsman location: pending disagree agreeM=",
+                                Math.round(agree), "src=", src)
+                    return false
+                }
+                reporter.clearPending()
+            } else if (jump <= reporter.confirmJumpM) {
+                reporter.clearPending()
             }
         }
 
@@ -142,6 +217,9 @@ Item {
         reporter.lastPostedLat = latitude
         reporter.lastPostedLon = longitude
         reporter.havePostedFix = true
+        reporter.lastSeekGotFix = true
+        console.log("Helmsman location: accept", latitude, longitude,
+                    "acc=", acc, "ageSec=", Math.round(ageMs / 1000), "src=", src)
         hassClient.sensors.updateLocation(latitude, longitude, acc, -1)
 
         // Fresh GPS-quality fix: end the burst early.
@@ -150,12 +228,12 @@ Item {
         return true
     }
 
-    function acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy) {
+    function acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy, source) {
         // LatitudePresent = 1, LongitudePresent = 2
         if (fields !== undefined && fields !== null && fields !== 0
                 && (fields & 3) !== 3)
             return
-        reporter.acceptFix(latitude, longitude, accuracy, timestamp)
+        reporter.acceptFix(latitude, longitude, accuracy, timestamp, source)
     }
 
     function powerGps() {
@@ -173,7 +251,9 @@ Item {
             return
         startDelayTimer.stop()
         reporter.seeking = true
+        reporter.lastSeekGotFix = false
         reporter.lastSeekAtMs = reporter.nowMs()
+        reporter.clearPending()
         seekTimeoutTimer.restart()
         reporter.powerGps()
         positionSource.updateInterval = reporter.seekUpdateMs
@@ -201,13 +281,15 @@ Item {
         if (!reporter.enabled)
             return
         // Force a new acquisition even if the last accepted fix is still
-        // within the stale window — "Update location now" must not reuse it.
+        // within the stale window — "Update location now" / leaving home Wi‑Fi
+        // must not reuse a cached fix.
         if (reporter.seeking)
             reporter.stopSeek()
         startDelayTimer.stop()
         reporter.seeking = true
+        reporter.lastSeekGotFix = false
         reporter.lastSeekAtMs = reporter.nowMs()
-        // Allow untimestamped/cached first hits to be filtered for a few seconds.
+        reporter.clearPending()
         seekTimeoutTimer.restart()
         reporter.powerGps()
         positionSource.updateInterval = reporter.seekUpdateMs
@@ -262,7 +344,7 @@ Item {
             if (position.timestamp && !isNaN(position.timestamp.getTime())
                     && position.timestamp.getTime() > 0)
                 ts = position.timestamp.getTime() / 1000
-            reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts)
+            reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts, "qt")
         }
     }
 
@@ -291,7 +373,7 @@ Item {
                 iface: "org.freedesktop.Geoclue.Position"
                 signalsEnabled: true
                 function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
-                    reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
+                    reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy, "hybris")
                 }
             }
 
@@ -302,7 +384,7 @@ Item {
                 iface: "org.freedesktop.Geoclue.Position"
                 signalsEnabled: true
                 function positionChanged(fields, timestamp, latitude, longitude, altitude, accuracy) {
-                    reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy)
+                    reporter.acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy, "mls")
                 }
             }
         }
