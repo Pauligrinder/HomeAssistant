@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <QDebug>
 #include <QSysInfo>
+#include <QPair>
 #include <QtMath>
 #include <algorithm>
 
@@ -181,9 +182,15 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_haveLocation(false)
     , m_haveHomeCoordinates(false)
     , m_zonesFetchPending(false)
+    , m_haveMotionExtras(false)
+    , m_lastLocationPostOk(true)
     , m_lastLat(0)
     , m_lastLon(0)
     , m_lastAccuracy(-1)
+    , m_lastSpeedMps(-1)
+    , m_lastAltitudeM(-1)
+    , m_lastCourseDeg(-1)
+    , m_lastVerticalAccuracyM(-1)
     , m_homeLat(0)
     , m_homeLon(0)
     , m_homeRadius(-1)
@@ -316,11 +323,37 @@ QString SensorCoordinator::locationZoneIcon() const
     return QStringLiteral("mdi:map-marker-radius");
 }
 
-QString SensorCoordinator::computeLocationZone() const
+double SensorCoordinator::zoneExpandMeters(double accuracyMeters) const
+{
+    if (accuracyMeters <= 0)
+        return 0;
+    // Battery saver: strict radius — no extra GPS, no soft boundary that
+    // would flip zones on fat cell/Wi‑Fi circles.
+    if (m_locationPreset == kLocationPresetBatterySaver)
+        return 0;
+    // Balanced: modest Android-style expand, capped so noisy MLS fixes
+    // cannot swallow neighbouring zones.
+    if (m_locationPreset == kLocationPresetBalanced)
+        return qMin(accuracyMeters, 75.0);
+    // Accurate: full containsWithAccuracy (radius + horizontal accuracy).
+    return accuracyMeters;
+}
+
+bool SensorCoordinator::zoneContains(const HassZoneFence &zone, double latitude,
+                                     double longitude, double accuracyMeters) const
+{
+    const double radius = zone.radius > 0 ? zone.radius : 100.0;
+    const double dist = haversineMeters(latitude, longitude,
+                                        zone.latitude, zone.longitude);
+    return dist <= radius + zoneExpandMeters(accuracyMeters);
+}
+
+QString SensorCoordinator::computeLocationZoneAt(double latitude, double longitude,
+                                                 double accuracyMeters) const
 {
     if (atHomeOnInternal())
         return QStringLiteral("home");
-    if (!m_haveLocation || !qIsFinite(m_lastLat) || !qIsFinite(m_lastLon))
+    if (!qIsFinite(latitude) || !qIsFinite(longitude))
         return QString();
 
     const HassZoneFence *best = nullptr;
@@ -329,11 +362,9 @@ QString SensorCoordinator::computeLocationZone() const
         const HassZoneFence &zone = m_zones.at(i);
         if (zone.passive)
             continue;
-        const double radius = zone.radius > 0 ? zone.radius : 100.0;
-        const double dist = haversineMeters(m_lastLat, m_lastLon,
-                                            zone.latitude, zone.longitude);
-        if (dist > radius)
+        if (!zoneContains(zone, latitude, longitude, accuracyMeters))
             continue;
+        const double radius = zone.radius > 0 ? zone.radius : 100.0;
         if (!best || radius < bestRadius) {
             best = &zone;
             bestRadius = radius;
@@ -342,6 +373,69 @@ QString SensorCoordinator::computeLocationZone() const
     if (best)
         return best->locationName;
     return QStringLiteral("not_home");
+}
+
+QStringList SensorCoordinator::computeInZonesAt(double latitude, double longitude,
+                                                double accuracyMeters) const
+{
+    QList<QPair<double, QString> > hits;
+    for (int i = 0; i < m_zones.size(); ++i) {
+        const HassZoneFence &zone = m_zones.at(i);
+        if (!zoneContains(zone, latitude, longitude, accuracyMeters))
+            continue;
+        const double radius = zone.radius > 0 ? zone.radius : 100.0;
+        hits.append(qMakePair(radius, zone.entityId));
+    }
+    std::sort(hits.begin(), hits.end());
+    QStringList ids;
+    ids.reserve(hits.size());
+    for (int i = 0; i < hits.size(); ++i)
+        ids.append(hits.at(i).second);
+    return ids;
+}
+
+QString SensorCoordinator::computeLocationZone() const
+{
+    if (!m_haveLocation)
+        return atHomeOnInternal() ? QStringLiteral("home") : QString();
+    return computeLocationZoneAt(m_lastLat, m_lastLon, m_lastAccuracy);
+}
+
+int SensorCoordinator::duplicateSuppressMs() const
+{
+    if (m_locationPreset == kLocationPresetBatterySaver)
+        return 30 * 60 * 1000;
+    if (m_locationPreset == kLocationPresetAccurate)
+        return 5 * 60 * 1000;
+    return 15 * 60 * 1000;
+}
+
+bool SensorCoordinator::shouldConfirmZoneTransition(double accuracyMeters) const
+{
+    if (m_locationPreset == kLocationPresetBatterySaver)
+        return false;
+    if (accuracyMeters <= 0)
+        return true;
+    if (m_locationPreset == kLocationPresetAccurate)
+        return accuracyMeters > 50.0;
+    return accuracyMeters > 100.0;
+}
+
+void SensorCoordinator::maybeRequestTransitionSeek(double accuracyMeters)
+{
+    if (!shouldConfirmZoneTransition(accuracyMeters))
+        return;
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    const int cooldownMs = m_locationPreset == kLocationPresetAccurate
+            ? 2 * 60 * 1000
+            : 10 * 60 * 1000;
+    if (m_lastTransitionSeekAt.isValid()
+            && m_lastTransitionSeekAt.msecsTo(now) < cooldownMs)
+        return;
+    m_lastTransitionSeekAt = now;
+    qWarning() << "Helmsman location: confirmatory seek after zone change"
+               << "acc=" << accuracyMeters << "preset=" << m_locationPreset;
+    emit locationRefreshRequested();
 }
 
 void SensorCoordinator::refreshLocationZone()
@@ -674,6 +768,8 @@ void SensorCoordinator::onWebhookFinished()
             }
         }
         setLastError(QStringLiteral("Webhook unreachable"));
+        if (kind == WebhookUpdateLocation)
+            m_lastLocationPostOk = false;
         if (kind == WebhookRegisterSensor) {
             m_registrationInFlight = false;
             registerNextPending();
@@ -1019,7 +1115,9 @@ void SensorCoordinator::updateWifi(const QString &ssid, bool connected)
     }
 }
 
-void SensorCoordinator::updateLocation(double latitude, double longitude, double accuracyMeters, int batteryPercent)
+void SensorCoordinator::updateLocation(double latitude, double longitude, double accuracyMeters,
+                                       int batteryPercent, double speedMps, double altitudeM,
+                                       double courseDeg, double verticalAccuracyM)
 {
     m_haveLocation = true;
 
@@ -1034,6 +1132,8 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     const QDateTime now = QDateTime::currentDateTimeUtc();
     const bool firstFix = !m_lastGpsAt.isValid();
     const bool dueByTime = firstFix
+            || !m_lastLocationPostOk
+            || !m_lastLocationSent.isValid()
             || m_lastLocationSent.msecsTo(now)
             >= minimumLocationIntervalMs(m_locationPreset);
     const double moveMeters = firstFix
@@ -1044,24 +1144,48 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     const bool betterAccuracy = accuracyMeters > 0
             && (m_lastAccuracy <= 0
                 || accuracyMeters + kAccuracyImproveMeters < m_lastAccuracy);
+
+    // Software geofence: post promptly when the resolved zone flips. Uses the
+    // fix we already have — no GPS wake on battery saver.
+    const QString previousZone = m_locationZone;
+    const double probeAccuracy = accuracyMeters > 0 ? accuracyMeters : m_lastAccuracy;
+    const QString nextZone = computeLocationZoneAt(latitude, longitude, probeAccuracy);
+    const bool zoneChanged = !firstFix && !previousZone.isEmpty()
+            && !nextZone.isEmpty() && nextZone != previousZone;
+    const bool dueByZone = zoneChanged;
+
     // A multi-kilometre jump is almost always a stale cached fix from another
     // app (GeoClue). Require a real interval tick and a usable accuracy.
-    if (!firstFix && moveMeters >= 2000.0) {
+    // Zone transitions still win — leaving home for a distant zone is real.
+    if (!firstFix && moveMeters >= 2000.0 && !dueByZone) {
         if (!dueByTime)
             return;
         if (accuracyMeters <= 0 || accuracyMeters > 100.0)
             return;
     }
     // Cell/Wi‑Fi dumps with city-sized error circles are noise near home zones.
-    if (accuracyMeters > 250.0 && moveMeters < accuracyMeters)
+    if (accuracyMeters > 250.0 && moveMeters < accuracyMeters && !dueByZone)
         return;
     // Prefer a tighter fix (GPS after Wi‑Fi) even before the interval elapses.
-    if (!dueByTime && !dueByMove && !betterAccuracy)
+    if (!dueByTime && !dueByMove && !betterAccuracy && !dueByZone)
         return;
-    // Do not replace a good fix with a much worse one unless we moved.
-    if (!firstFix && !dueByMove && accuracyMeters > 0 && m_lastAccuracy > 0
+    // Do not replace a good fix with a much worse one unless we moved or
+    // crossed a zone boundary (report the transition, then maybe seek).
+    if (!firstFix && !dueByMove && !dueByZone
+            && accuracyMeters > 0 && m_lastAccuracy > 0
             && accuracyMeters > m_lastAccuracy * 1.5
             && accuracyMeters - m_lastAccuracy > kAccuracyImproveMeters)
+        return;
+
+    // Same-coordinate suppress (Android-style). Zone changes and failed
+    // posts always send; only suppress after a successful identical report.
+    const QString locationKey = QStringLiteral("%1,%2")
+            .arg(latitude, 0, 'f', 5)
+            .arg(longitude, 0, 'f', 5);
+    if (!dueByZone && !firstFix && m_lastLocationPostOk
+            && locationKey == m_lastSentLocationKey
+            && m_lastLocationSent.isValid()
+            && m_lastLocationSent.msecsTo(now) < duplicateSuppressMs())
         return;
 
     if (batteryPercent >= 0)
@@ -1071,10 +1195,41 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     m_lastLon = longitude;
     m_lastAccuracy = accuracyMeters > 0 ? accuracyMeters : m_lastAccuracy;
     m_lastGpsAt = now;
+    // Motion extras use -1 as "omit" from QML.
+    m_haveMotionExtras = false;
+    if (speedMps >= 0 && qIsFinite(speedMps)) {
+        m_lastSpeedMps = speedMps;
+        m_haveMotionExtras = true;
+    } else {
+        m_lastSpeedMps = -1;
+    }
+    if (altitudeM != -1 && qIsFinite(altitudeM)) {
+        m_lastAltitudeM = altitudeM;
+        m_haveMotionExtras = true;
+    } else {
+        m_lastAltitudeM = -1;
+    }
+    if (courseDeg >= 0 && qIsFinite(courseDeg)) {
+        m_lastCourseDeg = courseDeg;
+        m_haveMotionExtras = true;
+    } else {
+        m_lastCourseDeg = -1;
+    }
+    if (verticalAccuracyM >= 0 && qIsFinite(verticalAccuracyM)) {
+        m_lastVerticalAccuracyM = verticalAccuracyM;
+        m_haveMotionExtras = true;
+    } else {
+        m_lastVerticalAccuracyM = -1;
+    }
+
     qWarning() << "Helmsman location: post gps" << latitude << longitude
-               << "acc=" << m_lastAccuracy << "moveM=" << moveMeters;
+               << "acc=" << m_lastAccuracy << "moveM=" << moveMeters
+               << "zone=" << nextZone
+               << (dueByZone ? "zone-transition" : "");
     refreshLocationZone();
-    postLocationUpdate(false);
+    if (dueByZone)
+        maybeRequestTransitionSeek(m_lastAccuracy);
+    postLocationUpdate(dueByZone);
 }
 
 void SensorCoordinator::postLocationUpdate(bool force)
@@ -1094,8 +1249,9 @@ void SensorCoordinator::postLocationUpdate(bool force)
     if (!atHome && !haveGps)
         return;
 
-    if (!force && m_lastLocationSent.isValid()
-            && m_lastLocationSent.msecsTo(QDateTime::currentDateTimeUtc()) < 2000
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    if (!force && m_lastLocationAttemptAt.isValid()
+            && m_lastLocationAttemptAt.msecsTo(now) < 2000
             && !atHome)
         return;
 
@@ -1116,6 +1272,30 @@ void SensorCoordinator::postLocationUpdate(bool force)
         data.insert(QStringLiteral("gps"), gps);
         if (m_lastAccuracy > 0)
             data.insert(QStringLiteral("gps_accuracy"), qRound(m_lastAccuracy));
+        // in_zones: balanced+ only (Android companion parity). Saver stays
+        // GPS-only so soft-boundary flips cannot inflate webhook chatter.
+        if (m_locationPreset >= kLocationPresetBalanced) {
+            const QStringList inZones = computeInZonesAt(m_lastLat, m_lastLon,
+                                                         m_lastAccuracy);
+            if (!inZones.isEmpty()) {
+                QJsonArray arr;
+                for (int i = 0; i < inZones.size(); ++i)
+                    arr.append(inZones.at(i));
+                data.insert(QStringLiteral("in_zones"), arr);
+            }
+        }
+        // Richer motion attributes on accurate only — free once we have a fix.
+        if (m_locationPreset == kLocationPresetAccurate && m_haveMotionExtras) {
+            if (m_lastSpeedMps >= 0)
+                data.insert(QStringLiteral("speed"), m_lastSpeedMps);
+            if (m_lastAltitudeM != -1)
+                data.insert(QStringLiteral("altitude"), m_lastAltitudeM);
+            if (m_lastCourseDeg >= 0)
+                data.insert(QStringLiteral("course"), m_lastCourseDeg);
+            if (m_lastVerticalAccuracyM >= 0)
+                data.insert(QStringLiteral("vertical_accuracy"),
+                            qRound(m_lastVerticalAccuracyM));
+        }
     }
     if (atHome)
         data.insert(QStringLiteral("location_name"), QStringLiteral("home"));
@@ -1125,24 +1305,29 @@ void SensorCoordinator::postLocationUpdate(bool force)
     QJsonObject body;
     body.insert(QStringLiteral("type"), QStringLiteral("update_location"));
     body.insert(QStringLiteral("data"), data);
+    m_lastLocationAttemptAt = now;
     postWebhook(WebhookUpdateLocation, body);
 
-    m_lastLocationSent = QDateTime::currentDateTimeUtc();
-    if (atHome && haveHomeGps)
-        m_lastLocationText = QStringLiteral("home · %1, %2 (±%3 m)")
+    // Success-gated: stamp m_lastLocationSent / UI text only after HTTP 2xx.
+    if (atHome && haveHomeGps) {
+        m_pendingLocationText = QStringLiteral("home · %1, %2 (±%3 m)")
                 .arg(m_homeLat, 0, 'f', 5)
                 .arg(m_homeLon, 0, 'f', 5)
                 .arg(m_homeRadius > 0 ? m_homeRadius : kHomeAccuracyFallbackMeters, 0, 'f', 0);
-    else if (atHome)
-        m_lastLocationText = QStringLiteral("home (internal connection)");
-    else
-        m_lastLocationText = QStringLiteral("%1, %2 (±%3 m)")
+        m_pendingLocationKey = QStringLiteral("home");
+    } else if (atHome) {
+        m_pendingLocationText = QStringLiteral("home (internal connection)");
+        m_pendingLocationKey = QStringLiteral("home");
+    } else {
+        m_pendingLocationText = QStringLiteral("%1, %2 (±%3 m)")
                 .arg(m_lastLat, 0, 'f', 5)
                 .arg(m_lastLon, 0, 'f', 5)
                 .arg(qMax(0.0, m_lastAccuracy), 0, 'f', 0);
-    emit lastLocationTextChanged();
+        m_pendingLocationKey = QStringLiteral("%1,%2")
+                .arg(m_lastLat, 0, 'f', 5)
+                .arg(m_lastLon, 0, 'f', 5);
+    }
     refreshLocationZone();
-    rebuildStatusList();
 }
 
 void SensorCoordinator::updateHomeHeartbeat()
@@ -1409,8 +1594,21 @@ void SensorCoordinator::handleZones(const QByteArray &data)
 void SensorCoordinator::handleUpdateLocation(const QByteArray &data, int status)
 {
     Q_UNUSED(data);
-    if (status != 200 && status != 201)
+    if (status != 200 && status != 201) {
+        m_lastLocationPostOk = false;
         setLastError(QStringLiteral("update_location failed (HTTP %1)").arg(status));
+        return;
+    }
+    // Only advance the send clock / duplicate key after HA accepted the
+    // webhook — failed posts can retry on the next eligible fix.
+    m_lastLocationPostOk = true;
+    m_lastLocationSent = QDateTime::currentDateTimeUtc();
+    m_lastSentLocationKey = m_pendingLocationKey;
+    if (m_lastLocationText != m_pendingLocationText) {
+        m_lastLocationText = m_pendingLocationText;
+        emit lastLocationTextChanged();
+    }
+    rebuildStatusList();
 }
 
 void SensorCoordinator::onAppForegrounded()

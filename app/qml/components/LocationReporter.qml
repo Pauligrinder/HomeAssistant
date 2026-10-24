@@ -26,8 +26,11 @@ Item {
     readonly property int staleMinutes: hassClient && hassClient.sensors
             ? hassClient.sensors.locationStaleMinutes : 15
     readonly property int startDelayMs: 4000
-    readonly property int seekTimeoutMs: 60000
-    readonly property int seekUpdateMs: 5000
+    readonly property int locationPreset: hassClient && hassClient.sensors
+            ? hassClient.sensors.locationPreset : 1
+    // Accurate may run a slightly longer confirmatory burst; saver/balanced stay short.
+    readonly property int seekTimeoutMs: locationPreset >= 2 ? 90000 : 60000
+    readonly property int seekUpdateMs: locationPreset >= 2 ? 3000 : 5000
     readonly property int staleCheckMs: 60000
     // After a seek that produced nothing usable, retry soon — waiting the full
     // stale interval left daycare pickups with a single failed burst.
@@ -36,7 +39,7 @@ Item {
     // longer. Cached GeoClue dumps from other apps (e.g. an old Helsinki fix)
     // were jumping the device_tracker across the country.
     readonly property int maxPostAgeMs: 120000
-    readonly property real maxPostAccuracyM: 120
+    readonly property real maxPostAccuracyM: locationPreset >= 2 ? 150 : 120
     readonly property real confirmJumpM: 400
     property bool seeking: false
     property bool lastSeekGotFix: false
@@ -114,7 +117,8 @@ Item {
         reporter.pendingAtMs = 0
     }
 
-    function acceptFix(latitude, longitude, accuracy, timestampSec, source) {
+    function acceptFix(latitude, longitude, accuracy, timestampSec, source,
+                       speedMps, altitudeM, courseDeg, verticalAccM) {
         if (!reporter.enabled || !hassClient || !hassClient.sensors)
             return false
         if (latitude === undefined || longitude === undefined)
@@ -221,7 +225,28 @@ Item {
         reporter.lastSeekGotFix = true
         console.log("Helmsman location: accept", latitude, longitude,
                     "acc=", acc, "ageSec=", Math.round(ageMs / 1000), "src=", src)
-        hassClient.sensors.updateLocation(latitude, longitude, acc, -1)
+
+        // Motion extras only matter on accurate; omit (-1) otherwise.
+        var speed = -1
+        var alt = -1
+        var course = -1
+        var vacc = -1
+        if (reporter.locationPreset >= 2) {
+            if (speedMps !== undefined && speedMps !== null
+                    && isFinite(speedMps) && speedMps >= 0)
+                speed = speedMps
+            if (altitudeM !== undefined && altitudeM !== null
+                    && isFinite(altitudeM))
+                alt = altitudeM
+            if (courseDeg !== undefined && courseDeg !== null
+                    && isFinite(courseDeg) && courseDeg >= 0)
+                course = courseDeg
+            if (verticalAccM !== undefined && verticalAccM !== null
+                    && isFinite(verticalAccM) && verticalAccM >= 0)
+                vacc = verticalAccM
+        }
+        hassClient.sensors.updateLocation(latitude, longitude, acc, -1,
+                                          speed, alt, course, vacc)
 
         // Fresh GPS-quality fix: end the burst early.
         if (reporter.seeking && hasTs && ageMs < 30000 && acc > 0 && acc <= 75)
@@ -230,11 +255,16 @@ Item {
     }
 
     function acceptGeoclue(fields, timestamp, latitude, longitude, altitude, accuracy, source) {
-        // LatitudePresent = 1, LongitudePresent = 2
+        // LatitudePresent = 1, LongitudePresent = 2, AltitudePresent = 4
         if (fields !== undefined && fields !== null && fields !== 0
                 && (fields & 3) !== 3)
             return
-        reporter.acceptFix(latitude, longitude, accuracy, timestamp, source)
+        var alt = undefined
+        if (fields !== undefined && fields !== null && (fields & 4)
+                && altitude !== undefined && altitude !== null && isFinite(altitude))
+            alt = altitude
+        reporter.acceptFix(latitude, longitude, accuracy, timestamp, source,
+                           undefined, alt, undefined, undefined)
     }
 
     function powerGps() {
@@ -345,7 +375,16 @@ Item {
             if (position.timestamp && !isNaN(position.timestamp.getTime())
                     && position.timestamp.getTime() > 0)
                 ts = position.timestamp.getTime() / 1000
-            reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts, "qt")
+            var speed = (position.speedValid === true) ? position.speed : undefined
+            var alt = (coord.altitude !== undefined && isFinite(coord.altitude))
+                    ? coord.altitude : undefined
+            var course = (position.directionValid === true)
+                    ? position.direction : undefined
+            var vacc = (typeof position.verticalAccuracyValid !== "undefined"
+                        && position.verticalAccuracyValid === true)
+                    ? position.verticalAccuracy : undefined
+            reporter.acceptFix(coord.latitude, coord.longitude, accuracy, ts, "qt",
+                               speed, alt, course, vacc)
         }
     }
 

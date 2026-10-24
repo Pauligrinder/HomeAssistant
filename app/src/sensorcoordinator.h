@@ -75,7 +75,13 @@ public:
 public slots:
     void updateBattery(int levelPercent, bool charging, const QString &state, const QString &chargerType);
     void updateWifi(const QString &ssid, bool connected);
-    void updateLocation(double latitude, double longitude, double accuracyMeters, int batteryPercent);
+    // Extra motion fields are optional (-1 = omit). Preset gates how they are used.
+    void updateLocation(double latitude, double longitude, double accuracyMeters,
+                        int batteryPercent = -1,
+                        double speedMps = -1,
+                        double altitudeM = -1,
+                        double courseDeg = -1,
+                        double verticalAccuracyM = -1);
     void setUsingInternalUrl(bool usingInternal);
     void setSensorEnabled(const QString &uniqueId, bool enabled);
     void setLocationEnabled(bool enabled);
@@ -192,6 +198,16 @@ private:
     bool atHomeOnInternal() const;
     void claimHomeOnInternal();
     QString computeLocationZone() const;
+    QString computeLocationZoneAt(double latitude, double longitude,
+                                  double accuracyMeters) const;
+    QStringList computeInZonesAt(double latitude, double longitude,
+                                 double accuracyMeters) const;
+    bool zoneContains(const HassZoneFence &zone, double latitude, double longitude,
+                      double accuracyMeters) const;
+    double zoneExpandMeters(double accuracyMeters) const;
+    int duplicateSuppressMs() const;
+    bool shouldConfirmZoneTransition(double accuracyMeters) const;
+    void maybeRequestTransitionSeek(double accuracyMeters);
     void refreshLocationZone();
 
     QString m_webhookId;
@@ -211,6 +227,9 @@ private:
     bool m_registrationInFlight;
     QString m_lastError;
     QString m_lastLocationText;
+    QString m_pendingLocationText;
+    QString m_pendingLocationKey;
+    QString m_lastSentLocationKey;
     QString m_locationZone;
     QVariantList m_statusList;
 
@@ -224,11 +243,19 @@ private:
     bool m_haveLocation;
     bool m_haveHomeCoordinates;
     bool m_zonesFetchPending;
+    bool m_haveMotionExtras;
+    bool m_lastLocationPostOk;
     QDateTime m_lastLocationSent;
+    QDateTime m_lastLocationAttemptAt;
     QDateTime m_lastGpsAt;
+    QDateTime m_lastTransitionSeekAt;
     double m_lastLat;
     double m_lastLon;
     double m_lastAccuracy;
+    double m_lastSpeedMps;
+    double m_lastAltitudeM;
+    double m_lastCourseDeg;
+    double m_lastVerticalAccuracyM;
     double m_homeLat;
     double m_homeLon;
     double m_homeRadius;
