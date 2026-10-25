@@ -2392,6 +2392,8 @@ void HassClient::handleConfig(const QByteArray &data)
         if (m_haVersion != version) {
             m_haVersion = version;
             emit haVersionChanged();
+            if (m_sensors)
+                m_sensors->setHaVersion(m_haVersion);
         }
     }
     persistSession();
@@ -2516,7 +2518,8 @@ void HassClient::configureSensors()
     if (!m_sensors)
         return;
     m_sensors->configure(m_webhookId, m_cloudhookUrl, m_remoteUiUrl,
-                         m_baseUrl, m_accessToken, m_ignoreSslErrors);
+                         m_baseUrl, m_accessToken, m_ignoreSslErrors,
+                         m_haVersion);
 }
 
 void HassClient::scheduleSensorStart(int delayMs)

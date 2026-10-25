@@ -1,6 +1,6 @@
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.11
+Version:    0.5.12
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -62,6 +62,10 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Sun Oct 25 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.12-1
+- Always send location_name so HA zone state matches the cover.
+- Gate in_zones on Core >= 2026.6 so older HA no longer silently drops updates.
+
 * Sat Oct 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.11-1
 - Location presets gate Android-style zone transitions, accuracy matching, and confirmatory GPS seeks.
 - Successful webhook posts advance the send clock; failed location updates can retry.
