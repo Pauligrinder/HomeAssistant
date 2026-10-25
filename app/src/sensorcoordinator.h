@@ -66,7 +66,9 @@ public:
                    const QString &remoteUiUrl,
                    const QString &baseUrl,
                    const QString &accessToken,
-                   bool ignoreSslErrors);
+                   bool ignoreSslErrors,
+                   const QString &haVersion = QString());
+    void setHaVersion(const QString &haVersion);
     void setHomeCoordinates(double latitude, double longitude, double radiusMeters);
     void replaceZones(const QVariantList &states);
     void start();
@@ -200,17 +202,23 @@ private:
     QString computeLocationZone() const;
     QString computeLocationZoneAt(double latitude, double longitude,
                                   double accuracyMeters) const;
+    QString webhookLocationNameAt(double latitude, double longitude,
+                                  double accuracyMeters) const;
+    const HassZoneFence *bestActiveZoneAt(double latitude, double longitude,
+                                          double accuracyMeters) const;
     QStringList computeInZonesAt(double latitude, double longitude,
                                  double accuracyMeters) const;
     bool zoneContains(const HassZoneFence &zone, double latitude, double longitude,
                       double accuracyMeters) const;
     double zoneExpandMeters(double accuracyMeters) const;
+    bool supportsInZones() const;
     int duplicateSuppressMs() const;
     bool shouldConfirmZoneTransition(double accuracyMeters) const;
     void maybeRequestTransitionSeek(double accuracyMeters);
     void refreshLocationZone();
 
     QString m_webhookId;
+    QString m_haVersion;
     QString m_cloudhookUrl;
     QString m_remoteUiUrl;
     QString m_baseUrl;

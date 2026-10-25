@@ -85,6 +85,38 @@ QString locationNameForZone(const QString &entityId, const QString &friendlyName
     return dot >= 0 ? entityId.mid(dot + 1) : entityId;
 }
 
+// HA update_location location_name expects home / not_home / the zone entity
+// slug (zone.work → "work"), matching the Android companion.
+QString webhookLocationNameForEntity(const QString &entityId)
+{
+    if (entityId.isEmpty() || entityId == QLatin1String("zone.home"))
+        return QStringLiteral("home");
+    const int dot = entityId.indexOf(QLatin1Char('.'));
+    return dot >= 0 ? entityId.mid(dot + 1) : entityId;
+}
+
+// Parse "2026.6.0" / "2026.6.0b0" style versions. Missing parts count as 0.
+bool haVersionAtLeast(const QString &version, int major, int minor, int patch)
+{
+    if (version.isEmpty())
+        return false;
+    const QStringList parts = version.split(QLatin1Char('.'));
+    int nums[3] = { 0, 0, 0 };
+    for (int i = 0; i < 3 && i < parts.size(); ++i) {
+        const QString part = parts.at(i);
+        int end = 0;
+        while (end < part.size() && part.at(end).isDigit())
+            ++end;
+        if (end > 0)
+            nums[i] = part.left(end).toInt();
+    }
+    if (nums[0] != major)
+        return nums[0] > major;
+    if (nums[1] != minor)
+        return nums[1] > minor;
+    return nums[2] >= patch;
+}
+
 bool zoneFenceFromState(const QVariantMap &state, HassZoneFence *out)
 {
     const QString entityId = state.value(QStringLiteral("entity_id")).toString();
@@ -348,13 +380,12 @@ bool SensorCoordinator::zoneContains(const HassZoneFence &zone, double latitude,
     return dist <= radius + zoneExpandMeters(accuracyMeters);
 }
 
-QString SensorCoordinator::computeLocationZoneAt(double latitude, double longitude,
-                                                 double accuracyMeters) const
+const HassZoneFence *SensorCoordinator::bestActiveZoneAt(double latitude,
+                                                         double longitude,
+                                                         double accuracyMeters) const
 {
-    if (atHomeOnInternal())
-        return QStringLiteral("home");
     if (!qIsFinite(latitude) || !qIsFinite(longitude))
-        return QString();
+        return nullptr;
 
     const HassZoneFence *best = nullptr;
     double bestRadius = 0;
@@ -370,9 +401,42 @@ QString SensorCoordinator::computeLocationZoneAt(double latitude, double longitu
             bestRadius = radius;
         }
     }
-    if (best)
+    return best;
+}
+
+QString SensorCoordinator::computeLocationZoneAt(double latitude, double longitude,
+                                                 double accuracyMeters) const
+{
+    if (atHomeOnInternal())
+        return QStringLiteral("home");
+    if (!qIsFinite(latitude) || !qIsFinite(longitude))
+        return QString();
+
+    if (const HassZoneFence *best = bestActiveZoneAt(latitude, longitude, accuracyMeters))
         return best->locationName;
     return QStringLiteral("not_home");
+}
+
+QString SensorCoordinator::webhookLocationNameAt(double latitude, double longitude,
+                                                 double accuracyMeters) const
+{
+    if (atHomeOnInternal())
+        return QStringLiteral("home");
+    if (!qIsFinite(latitude) || !qIsFinite(longitude))
+        return QString();
+
+    if (const HassZoneFence *best = bestActiveZoneAt(latitude, longitude, accuracyMeters))
+        return webhookLocationNameForEntity(best->entityId);
+    return QStringLiteral("not_home");
+}
+
+bool SensorCoordinator::supportsInZones() const
+{
+    // Core 2026.6.0 added in_zones to the update_location schema. Older
+    // schemas reject the key (PREVENT_EXTRA) but still return HTTP 200, so
+    // the app thought the post succeeded while HA silently dropped it —
+    // leaving history stuck on home/not_home while the cover showed zones.
+    return haVersionAtLeast(m_haVersion, 2026, 6, 0);
 }
 
 QStringList SensorCoordinator::computeInZonesAt(double latitude, double longitude,
@@ -594,7 +658,8 @@ void SensorCoordinator::configure(const QString &webhookId,
                                   const QString &remoteUiUrl,
                                   const QString &baseUrl,
                                   const QString &accessToken,
-                                  bool ignoreSslErrors)
+                                  bool ignoreSslErrors,
+                                  const QString &haVersion)
 {
     const bool changed = m_webhookId != webhookId
             || m_cloudhookUrl != cloudhookUrl
@@ -609,6 +674,8 @@ void SensorCoordinator::configure(const QString &webhookId,
     m_baseUrl = baseUrl;
     m_accessToken = accessToken;
     m_ignoreSslErrors = ignoreSslErrors;
+    if (!haVersion.isEmpty())
+        m_haVersion = haVersion;
 
     if (changed && m_started && !m_webhookId.isEmpty()) {
         // Endpoint switched (internal<->external). Re-sync through the same
@@ -618,6 +685,13 @@ void SensorCoordinator::configure(const QString &webhookId,
         m_startupTimer.start();
         fetchZones();
     }
+}
+
+void SensorCoordinator::setHaVersion(const QString &haVersion)
+{
+    if (haVersion.isEmpty() || m_haVersion == haVersion)
+        return;
+    m_haVersion = haVersion;
 }
 
 void SensorCoordinator::start()
@@ -1272,18 +1346,6 @@ void SensorCoordinator::postLocationUpdate(bool force)
         data.insert(QStringLiteral("gps"), gps);
         if (m_lastAccuracy > 0)
             data.insert(QStringLiteral("gps_accuracy"), qRound(m_lastAccuracy));
-        // in_zones: balanced+ only (Android companion parity). Saver stays
-        // GPS-only so soft-boundary flips cannot inflate webhook chatter.
-        if (m_locationPreset >= kLocationPresetBalanced) {
-            const QStringList inZones = computeInZonesAt(m_lastLat, m_lastLon,
-                                                         m_lastAccuracy);
-            if (!inZones.isEmpty()) {
-                QJsonArray arr;
-                for (int i = 0; i < inZones.size(); ++i)
-                    arr.append(inZones.at(i));
-                data.insert(QStringLiteral("in_zones"), arr);
-            }
-        }
         // Richer motion attributes on accurate only — free once we have a fix.
         if (m_locationPreset == kLocationPresetAccurate && m_haveMotionExtras) {
             if (m_lastSpeedMps >= 0)
@@ -1297,8 +1359,27 @@ void SensorCoordinator::postLocationUpdate(bool force)
                             qRound(m_lastVerticalAccuracyM));
         }
     }
-    if (atHome)
-        data.insert(QStringLiteral("location_name"), QStringLiteral("home"));
+
+    // Always send location_name so HA's device_tracker state matches the cover
+    // (GPS-only matching can disagree with our accuracy-aware fences).
+    QString locationName;
+    QStringList inZones;
+    if (atHome) {
+        locationName = QStringLiteral("home");
+        inZones.append(QStringLiteral("zone.home"));
+    } else if (haveGps) {
+        locationName = webhookLocationNameAt(m_lastLat, m_lastLon, m_lastAccuracy);
+        inZones = computeInZonesAt(m_lastLat, m_lastLon, m_lastAccuracy);
+    }
+    if (!locationName.isEmpty())
+        data.insert(QStringLiteral("location_name"), locationName);
+    // in_zones only on Core >= 2026.6 — older cores reject the key silently.
+    if (supportsInZones() && (atHome || haveGps)) {
+        QJsonArray arr;
+        for (int i = 0; i < inZones.size(); ++i)
+            arr.append(inZones.at(i));
+        data.insert(QStringLiteral("in_zones"), arr);
+    }
     if (battery > 0)
         data.insert(QStringLiteral("battery"), battery);
 
