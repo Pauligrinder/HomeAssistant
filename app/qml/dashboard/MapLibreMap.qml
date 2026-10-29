@@ -329,14 +329,9 @@ Item {
     onAutoFitChanged: root.scheduleMarkers()
     onWidthChanged: root.scheduleMarkers()
     onHeightChanged: root.scheduleMarkers()
-    onLatitudeChanged: {
-        if (!root.autoFit && isFinite(root.latitude) && isFinite(root.longitude))
-            root.setCenter(root.latitude, root.longitude, root.zoom)
-    }
-    onLongitudeChanged: {
-        if (!root.autoFit && isFinite(root.latitude) && isFinite(root.longitude))
-            root.setCenter(root.latitude, root.longitude, root.zoom)
-    }
+    // Do not push lat/lon back into map.center while the user pans — that
+    // fights MapLibre's gesture and rubber-bands the camera. External property
+    // updates still apply via rebuildMarkers when !userMoved.
 
     Connections {
         // Avoid binding while dashboard is still undefined (warns onMediaCached).

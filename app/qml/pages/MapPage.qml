@@ -15,6 +15,9 @@ Page {
     property bool autoFit: true
 
     allowedOrientations: Orientation.All
+    // MapLibre pans via a nested Flickable; Silica back-swipe steals horizontal
+    // drags and rubber-bands the map. Use an explicit back control instead.
+    backNavigation: false
 
     MapLibreMap {
         id: map
@@ -26,7 +29,7 @@ Page {
         zoom: page.zoom
         autoFit: page.autoFit
         interactive: true
-        topContentInset: Theme.paddingLarge
+        topContentInset: Theme.itemSizeLarge
         onMarkerClicked: {
             if (page.dashboard)
                 page.dashboard.openMoreInfo(entityId)
@@ -44,13 +47,20 @@ Page {
         z: 40
     }
 
+    MapBackButton {
+        anchors.left: parent.left
+        anchors.top: parent.top
+        z: 50
+        onClicked: pageStack.pop()
+    }
+
     Label {
         id: headerLabel
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.topMargin: Theme.paddingLarge + Theme.paddingMedium
-        anchors.leftMargin: Theme.horizontalPageMargin
+        anchors.leftMargin: Theme.itemSizeLarge
         anchors.rightMargin: Theme.horizontalPageMargin
         z: 41
         text: page.title.length ? page.title : i18n.translation("map")

@@ -148,7 +148,8 @@ Page {
             return false
         return page.viewIsEmptyOrWebHtml(page.boundView)
     }
-    backNavigation: !page.followDefault
+    // Panel MapLibre maps need horizontal pan; Silica back-swipe steals it.
+    backNavigation: !page.followDefault && !page.panelMapView
 
     function cardIsWebHtml(card) {
         if (!card)
@@ -1077,39 +1078,13 @@ Page {
         }
     }
 
-    // Keep back-swipe dots readable on bright map tiles with a soft backdrop.
-    Item {
+    // Explicit back control on panel maps (backNavigation is off so pan works).
+    MapBackButton {
         anchors.left: parent.left
         anchors.top: parent.top
-        width: Theme.itemSizeLarge
-        height: Theme.itemSizeLarge
-        clip: true
         z: 50
-        visible: page.panelMapView && page.backNavigation
-
-        Rectangle {
-            // Wide, faint base for smooth fade.
-            width: Theme.itemSizeLarge * 0.95
-            height: Theme.itemSizeLarge * 0.82
-            radius: height / 2
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: -Math.round(width * 0.60)
-            color: "#000000"
-            opacity: 0.22
-        }
-
-        Rectangle {
-            // Small denser core exactly where the dots sit.
-            width: Theme.itemSizeSmall * 0.95
-            height: Theme.itemSizeSmall * 0.95
-            radius: width / 2
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.left: parent.left
-            anchors.leftMargin: -Math.round(width * 0.40)
-            color: "#000000"
-            opacity: 0.32
-        }
+        visible: page.panelMapView && !page.followDefault
+        onClicked: pageStack.pop()
     }
 
     Component.onCompleted: {
