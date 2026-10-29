@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.13
+Version:    0.6.01
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -89,10 +89,11 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
-* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.13-1
+* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.01-1
 - Interactive MapLibre fullscreen maps; strategy map views; vendored Chum libs.
 - Cover/Events favorites for locks, covers, fans, and similar domains.
 - History range picker with day separators; zone-exit hysteresis.
+- Map pages use a pill back button so horizontal pan works.
 
 * Sun Oct 25 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.12-1
 - Always send location_name so HA zone state matches the cover.
