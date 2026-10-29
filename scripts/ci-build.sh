@@ -76,7 +76,7 @@ docker run --rm --privileged \
         fi
         sb2 -t "${TARGET}" -m sdk-install -R zypper --non-interactive in -y patchelf \
             >/dev/null 2>&1 || true
-        # sdk-install above mutates the original target; mb2's default snapshot
+        # sdk-install above mutates the original target; mb2 default snapshot
         # reset needs sudo that CI images do not grant. Build on the target itself.
         mb2 --target "${TARGET}" --no-snapshot=force build
         if [ ! -f "RPMS/${RPM_NAME}" ]; then
