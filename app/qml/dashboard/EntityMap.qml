@@ -13,6 +13,8 @@ Item {
     property var markers: []
     property bool autoFit: false
     property bool interactive: true
+    // Dashboard cards hide zoom; fullscreen MapLibre handles interaction.
+    property bool showZoomControls: true
     // Safe-area pad when tiles draw under the punch-hole: shift the geographic
     // centre and marker fit into the visible band below the cutout.
     property int topContentInset: 0
@@ -317,7 +319,9 @@ Item {
     }
 
     Connections {
-        target: dashboard
+        // Avoid binding while dashboard is still undefined (warns onMediaCached).
+        target: root.dashboard ? root.dashboard : null
+        ignoreUnknownSignals: true
         onMediaCached: {
             var i
             for (i = 0; i < tileModel.count; i++) {
@@ -472,9 +476,12 @@ Item {
                     anchors.bottom: parent.bottom
                 }
 
+                // Compact dashboard cards set interactive:false; only the
+                // card-level MouseArea should receive taps (open fullscreen).
                 MouseArea {
                     anchors.fill: parent
                     enabled: root.interactive && model.mid && model.mid.length
+                    visible: enabled
                     preventStealing: true
                     onClicked: root.markerClicked(model.mid)
                 }
@@ -521,6 +528,7 @@ Item {
         anchors.bottom: parent.bottom
         anchors.margins: Theme.paddingSmall
         spacing: Theme.paddingSmall
+        visible: root.showZoomControls
 
         IconButton {
             icon.source: "image://theme/icon-m-remove"

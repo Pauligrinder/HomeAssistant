@@ -148,7 +148,8 @@ Page {
             return false
         return page.viewIsEmptyOrWebHtml(page.boundView)
     }
-    backNavigation: !page.followDefault
+    // Panel MapLibre maps need horizontal pan; Silica back-swipe steals it.
+    backNavigation: !page.followDefault && !page.panelMapView
 
     function cardIsWebHtml(card) {
         if (!card)
@@ -711,11 +712,17 @@ Page {
         anchors.bottomMargin: page.cardPageCount > 1
                              ? Theme.itemSizeSmall + Theme.paddingMedium : 0
         contentHeight: page.panelMapView ? height : (column.y + column.height + Theme.paddingLarge)
+        // Panel maps are interactive MapLibre; vertical flick would steal pans.
+        interactive: !page.panelMapView
         clip: true
         // Keep the ambience / background visible between cards.
         // (SilicaFlickable is transparent by default.)
 
         PullDownMenu {
+            // Panel maps consume the top drag for map gestures; this menu
+            // cannot be pulled there, so hide it and rely on back-swipe.
+            visible: !page.panelMapView
+            enabled: !page.panelMapView
             MenuItem {
                 text: i18n.translation("edit_dashboard")
                 visible: {
@@ -1069,6 +1076,15 @@ Page {
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
         }
+    }
+
+    // Explicit back control on panel maps (backNavigation is off so pan works).
+    MapBackButton {
+        anchors.left: parent.left
+        anchors.top: parent.top
+        z: 50
+        visible: page.panelMapView && !page.followDefault
+        onClicked: pageStack.pop()
     }
 
     Component.onCompleted: {

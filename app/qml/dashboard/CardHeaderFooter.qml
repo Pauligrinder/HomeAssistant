@@ -137,6 +137,8 @@ Item {
                 points: graph.points
                 hours: graph.hours
                 unit: graph.unit
+                entityId: graph.entityId
+                dashboard: extra.dashboard
                 showTitle: false
                 compact: true
                 chartHeight: Theme.itemSizeMedium

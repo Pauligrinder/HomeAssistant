@@ -205,15 +205,57 @@ QString entityDomain(const QString &entityId)
 QString entityKind(const QString &entityId)
 {
     const QString domain = entityDomain(entityId);
-    if (domain == QLatin1String("switch"))
-        return QStringLiteral("switch");
-    if (domain == QLatin1String("script"))
-        return QStringLiteral("script");
-    if (domain == QLatin1String("climate"))
-        return QStringLiteral("climate");
-    if (domain == QLatin1String("light"))
-        return QStringLiteral("light");
+    if (domain == QLatin1String("light")
+            || domain == QLatin1String("switch")
+            || domain == QLatin1String("script")
+            || domain == QLatin1String("climate")
+            || domain == QLatin1String("lock")
+            || domain == QLatin1String("cover")
+            || domain == QLatin1String("fan")
+            || domain == QLatin1String("input_boolean")
+            || domain == QLatin1String("humidifier")
+            || domain == QLatin1String("siren")
+            || domain == QLatin1String("valve")
+            || domain == QLatin1String("remote")
+            || domain == QLatin1String("scene")
+            || domain == QLatin1String("button")
+            || domain == QLatin1String("vacuum")
+            || domain == QLatin1String("media_player"))
+        return domain;
+    // Group with buttons in the cover / events pickers.
+    if (domain == QLatin1String("input_button"))
+        return QStringLiteral("button");
     return QString();
+}
+
+bool isActionKind(const QString &kind)
+{
+    return kind == QLatin1String("script")
+            || kind == QLatin1String("scene")
+            || kind == QLatin1String("button");
+}
+
+bool entityIsOn(const QString &kind, const QString &status, bool available)
+{
+    if (!available || isActionKind(kind))
+        return false;
+    if (kind == QLatin1String("climate"))
+        return status != QLatin1String("off");
+    if (kind == QLatin1String("lock"))
+        return status == QLatin1String("locked")
+                || status == QLatin1String("locking");
+    if (kind == QLatin1String("cover") || kind == QLatin1String("valve"))
+        return status == QLatin1String("open")
+                || status == QLatin1String("opening");
+    if (kind == QLatin1String("vacuum"))
+        return status == QLatin1String("cleaning")
+                || status == QLatin1String("on")
+                || status == QLatin1String("returning")
+                || status == QLatin1String("paused");
+    if (kind == QLatin1String("media_player"))
+        return status == QLatin1String("playing")
+                || status == QLatin1String("on");
+    return status == QLatin1String("on");
 }
 
 bool isFavoriteEntity(const QString &entityId)
@@ -753,14 +795,43 @@ QString graphCacheKey(const QVariantList &pts, bool bars, qint64 nowBucket)
 
 QString defaultIconFor(const QString &kind, bool on)
 {
-    if (kind == QLatin1String("switch"))
+    if (kind == QLatin1String("switch") || kind == QLatin1String("input_boolean"))
         return on ? QStringLiteral("mdi:toggle-switch")
                   : QStringLiteral("mdi:toggle-switch-off");
     if (kind == QLatin1String("script"))
         return QStringLiteral("mdi:script-text");
+    if (kind == QLatin1String("scene"))
+        return QStringLiteral("mdi:palette");
+    if (kind == QLatin1String("button"))
+        return QStringLiteral("mdi:gesture-tap-button");
     if (kind == QLatin1String("climate"))
         return on ? QStringLiteral("mdi:air-conditioner")
                   : QStringLiteral("mdi:fan-off");
+    if (kind == QLatin1String("lock"))
+        return on ? QStringLiteral("mdi:lock")
+                  : QStringLiteral("mdi:lock-open-variant");
+    if (kind == QLatin1String("cover"))
+        return on ? QStringLiteral("mdi:window-open")
+                  : QStringLiteral("mdi:window-closed");
+    if (kind == QLatin1String("fan"))
+        return on ? QStringLiteral("mdi:fan")
+                  : QStringLiteral("mdi:fan-off");
+    if (kind == QLatin1String("humidifier"))
+        return on ? QStringLiteral("mdi:air-humidifier")
+                  : QStringLiteral("mdi:air-humidifier-off");
+    if (kind == QLatin1String("siren"))
+        return on ? QStringLiteral("mdi:bullhorn")
+                  : QStringLiteral("mdi:bullhorn-outline");
+    if (kind == QLatin1String("valve"))
+        return on ? QStringLiteral("mdi:valve-open")
+                  : QStringLiteral("mdi:valve-closed");
+    if (kind == QLatin1String("remote"))
+        return QStringLiteral("mdi:remote");
+    if (kind == QLatin1String("vacuum"))
+        return QStringLiteral("mdi:robot-vacuum");
+    if (kind == QLatin1String("media_player"))
+        return on ? QStringLiteral("mdi:play-circle")
+                  : QStringLiteral("mdi:pause-circle");
     if (kind == QLatin1String("graph"))
         return QStringLiteral("mdi:chart-bar");
     if (kind == QLatin1String("sensor"))
@@ -1266,12 +1337,24 @@ void WidgetCoordinator::refreshAvailable()
 void WidgetCoordinator::toggleLight(const QString &entityId)
 {
     const QString kind = entityKind(entityId);
+    if (kind.isEmpty())
+        return;
+
+    QJsonObject body;
+    body.insert(QStringLiteral("entity_id"), entityId);
+
     if (kind == QLatin1String("script")) {
         runScript(entityId);
         return;
     }
-    if (kind.isEmpty())
+    if (kind == QLatin1String("scene")) {
+        callService(QStringLiteral("scene"), QStringLiteral("turn_on"), body);
         return;
+    }
+    if (kind == QLatin1String("button")) {
+        callService(entityDomain(entityId), QStringLiteral("press"), body);
+        return;
+    }
 
     const QVariantMap current = entityById(entityId);
     const bool wasOn = current.value(QStringLiteral("on")).toBool();
@@ -1284,13 +1367,48 @@ void WidgetCoordinator::toggleLight(const QString &entityId)
         }
         m_expectOn.insert(entityId, !wasOn);
         applyOptimistic(entityId, patch);
-        QJsonObject body;
-        body.insert(QStringLiteral("entity_id"), entityId);
         callService(QStringLiteral("climate"),
                     wasOn ? QStringLiteral("turn_off") : QStringLiteral("turn_on"),
                     body);
         return;
     }
+    if (kind == QLatin1String("lock")) {
+        patch.insert(QStringLiteral("state"),
+                     wasOn ? QStringLiteral("unlocked") : QStringLiteral("locked"));
+        m_expectOn.insert(entityId, !wasOn);
+        applyOptimistic(entityId, patch);
+        callService(QStringLiteral("lock"),
+                    wasOn ? QStringLiteral("unlock") : QStringLiteral("lock"),
+                    body);
+        return;
+    }
+    if (kind == QLatin1String("cover") || kind == QLatin1String("valve")) {
+        patch.insert(QStringLiteral("state"),
+                     wasOn ? QStringLiteral("closed") : QStringLiteral("open"));
+        m_expectOn.insert(entityId, !wasOn);
+        applyOptimistic(entityId, patch);
+        callService(kind, QStringLiteral("toggle"), body);
+        return;
+    }
+    if (kind == QLatin1String("media_player")) {
+        patch.insert(QStringLiteral("state"),
+                     wasOn ? QStringLiteral("paused") : QStringLiteral("playing"));
+        m_expectOn.insert(entityId, !wasOn);
+        applyOptimistic(entityId, patch);
+        callService(QStringLiteral("media_player"),
+                    QStringLiteral("media_play_pause"),
+                    body);
+        return;
+    }
+    if (kind == QLatin1String("vacuum")) {
+        patch.insert(QStringLiteral("state"),
+                     wasOn ? QStringLiteral("docked") : QStringLiteral("cleaning"));
+        m_expectOn.insert(entityId, !wasOn);
+        applyOptimistic(entityId, patch);
+        callService(QStringLiteral("vacuum"), QStringLiteral("toggle"), body);
+        return;
+    }
+
     patch.insert(QStringLiteral("state"), wasOn ? QStringLiteral("off") : QStringLiteral("on"));
     if (kind == QLatin1String("light")) {
         if (wasOn) {
@@ -1304,9 +1422,6 @@ void WidgetCoordinator::toggleLight(const QString &entityId)
     }
     m_expectOn.insert(entityId, !wasOn);
     applyOptimistic(entityId, patch);
-
-    QJsonObject body;
-    body.insert(QStringLiteral("entity_id"), entityId);
     callService(kind, QStringLiteral("toggle"), body);
 }
 
@@ -2204,12 +2319,7 @@ QVariantMap WidgetCoordinator::entityFromState(const QJsonObject &state) const
     const QString status = state.value(QStringLiteral("state")).toString();
     const bool available = status != QLatin1String("unavailable")
             && status != QLatin1String("unknown");
-    const bool onOff = kind != QLatin1String("script");
-    const bool on = !onOff
-            ? false
-            : (kind == QLatin1String("climate")
-               ? (available && status != QLatin1String("off"))
-               : status == QLatin1String("on"));
+    const bool on = entityIsOn(kind, status, available);
     const bool dimmable = kind == QLatin1String("light") && isLightDimmable(attrs);
     QString name = attrs.value(QStringLiteral("friendly_name")).toString();
     if (name.isEmpty())
@@ -2572,10 +2682,8 @@ QString WidgetCoordinator::watermarkIconPath(const QVariantMap &entity) const
     QString icon = entity.value(QStringLiteral("icon")).toString();
     const QString kind = entity.value(QStringLiteral("kind")).toString();
     const bool on = entity.value(QStringLiteral("on")).toBool();
-    if (kind == QLatin1String("script")) {
-        if (icon.isEmpty())
-            icon = defaultIconFor(kind, false);
-    } else if (kind == QLatin1String("graph") || kind == QLatin1String("sensor")) {
+    if (isActionKind(kind) || kind == QLatin1String("graph")
+            || kind == QLatin1String("sensor")) {
         if (icon.isEmpty())
             icon = defaultIconFor(kind, false);
     } else if (on) {
@@ -2586,14 +2694,20 @@ QString WidgetCoordinator::watermarkIconPath(const QVariantMap &entity) const
     } else if (kind == QLatin1String("climate")) {
         if (icon == QLatin1String("mdi:air-conditioner"))
             icon = QStringLiteral("mdi:fan-off");
+    } else if (kind == QLatin1String("lock") && !on
+               && (icon == QLatin1String("mdi:lock")
+                   || icon == QLatin1String("mdi:lock-outline"))) {
+        icon = QStringLiteral("mdi:lock-open-variant");
+    } else if ((kind == QLatin1String("switch") || kind == QLatin1String("input_boolean"))
+               && !on && icon == QLatin1String("mdi:toggle-switch")) {
+        icon = QStringLiteral("mdi:toggle-switch-off");
     } else if (!icon.contains(QLatin1String("-outline"))
-               && kind != QLatin1String("switch")) {
+               && kind != QLatin1String("switch")
+               && kind != QLatin1String("input_boolean")
+               && kind != QLatin1String("lock")) {
         const QString outline = icon + QStringLiteral("-outline");
         if (m_iconRenderer->hasIcon(outline))
             icon = outline;
-    } else if (kind == QLatin1String("switch") && !on
-               && icon == QLatin1String("mdi:toggle-switch")) {
-        icon = QStringLiteral("mdi:toggle-switch-off");
     }
 
     auto cached = m_iconPathCache.constFind(icon);

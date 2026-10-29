@@ -29,12 +29,21 @@ Item {
     height: implicitHeight
     visible: (entities && entities.length > 0) || statusText.length > 0
 
+    function prettyEntityState(entity) {
+        if (!entity)
+            return ""
+        var s = entity.state ? String(entity.state) : ""
+        if (!s.length)
+            return entity.on === true ? "On" : "Off"
+        return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ")
+    }
+
     function stateLabel(entity) {
         if (!entity)
             return ""
         if (entity.available === false)
             return entity.state || "unavailable"
-        if (entity.kind === "script")
+        if (entity.kind === "script" || entity.kind === "scene" || entity.kind === "button")
             return ""
         if (entity.kind === "climate")
             return root.climateLabel(entity)
@@ -42,6 +51,9 @@ Item {
             return root.graphLabel(entity)
         if (entity.dimmable === true && entity.on === true)
             return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
+        if (entity.kind === "lock" || entity.kind === "cover" || entity.kind === "valve"
+                || entity.kind === "vacuum" || entity.kind === "media_player")
+            return root.prettyEntityState(entity)
         return entity.on === true ? "On" : "Off"
     }
 
@@ -321,6 +333,8 @@ Item {
                             color: Theme.primaryColor
                             font.pixelSize: Theme.fontSizeSmall
                             font.bold: modelData.kind !== "script"
+                                       && modelData.kind !== "scene"
+                                       && modelData.kind !== "button"
                                        && (modelData.kind === "graph"
                                            || modelData.kind === "sensor"
                                            || modelData.on === true)

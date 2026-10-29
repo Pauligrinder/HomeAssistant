@@ -427,13 +427,94 @@ QVariantMap configMapFromResult(const QVariant &result)
     return map;
 }
 
+QString strategyTypeOf(const QVariantMap &object)
+{
+    const QVariant strategy = object.value(QStringLiteral("strategy"));
+    if (strategy.type() == QVariant::String)
+        return strategy.toString();
+    return strategy.toMap().value(QStringLiteral("type")).toString();
+}
+
+// Mirrors HA map-view-strategy: a full-bleed panel with one show-all map card.
+QVariantMap generateMapStrategyView(const QVariantMap &strategy)
+{
+    QVariantMap card;
+    card.insert(QStringLiteral("type"), QStringLiteral("map"));
+    card.insert(QStringLiteral("auto_fit"), true);
+    card.insert(QStringLiteral("show_all"), true);
+
+    QVariantMap view;
+    view.insert(QStringLiteral("type"), QStringLiteral("panel"));
+    const QString title = strategy.value(QStringLiteral("title")).toString();
+    view.insert(QStringLiteral("title"),
+                title.isEmpty() ? QStringLiteral("Map") : title);
+    const QString icon = strategy.value(QStringLiteral("icon")).toString();
+    view.insert(QStringLiteral("icon"),
+                icon.isEmpty() ? QStringLiteral("mdi:map") : icon);
+    view.insert(QStringLiteral("cards"), QVariantList() << card);
+    return view;
+}
+
+QVariantMap expandLovelaceStrategies(QVariantMap config)
+{
+    QVariantMap mapStrategy;
+    mapStrategy.insert(QStringLiteral("type"), QStringLiteral("map"));
+
+    const QString dashType = strategyTypeOf(config);
+    if (dashType == QLatin1String("map")) {
+        QVariantMap strategy = config.value(QStringLiteral("strategy")).toMap();
+        if (strategy.isEmpty())
+            strategy = mapStrategy;
+        config.insert(QStringLiteral("views"),
+                      QVariantList() << generateMapStrategyView(strategy));
+        config.remove(QStringLiteral("strategy"));
+        return config;
+    }
+
+    QVariantList views = variantListOf(config.value(QStringLiteral("views")));
+    bool changed = false;
+    for (int i = 0; i < views.size(); ++i) {
+        QVariantMap view = views.at(i).toMap();
+        if (strategyTypeOf(view) != QLatin1String("map"))
+            continue;
+        QVariantMap strategy = view.value(QStringLiteral("strategy")).toMap();
+        if (strategy.isEmpty())
+            strategy = mapStrategy;
+        QVariantMap generated = generateMapStrategyView(strategy);
+        const QString title = view.value(QStringLiteral("title")).toString();
+        if (!title.isEmpty())
+            generated.insert(QStringLiteral("title"), title);
+        const QString icon = view.value(QStringLiteral("icon")).toString();
+        if (!icon.isEmpty())
+            generated.insert(QStringLiteral("icon"), icon);
+        const QString path = view.value(QStringLiteral("path")).toString();
+        if (!path.isEmpty())
+            generated.insert(QStringLiteral("path"), path);
+        views[i] = generated;
+        changed = true;
+    }
+    if (changed)
+        config.insert(QStringLiteral("views"), views);
+    return config;
+}
+
 bool configHasRenderableViews(const QVariant &result)
 {
     QVariantMap map = configMapFromResult(result);
     QVariantList views = variantListOf(map.value(QStringLiteral("views")));
     if (views.isEmpty() && result.type() == QVariant::List)
         views = result.toList();
-    return !views.isEmpty();
+    if (!views.isEmpty()) {
+        for (int i = 0; i < views.size(); ++i) {
+            const QVariantMap view = views.at(i).toMap();
+            if (!variantListOf(view.value(QStringLiteral("cards"))).isEmpty()
+                    || !variantListOf(view.value(QStringLiteral("sections"))).isEmpty()
+                    || strategyTypeOf(view) == QLatin1String("map"))
+                return true;
+        }
+    }
+    // Dashboard strategy (e.g. type: map) has no views until we expand it.
+    return strategyTypeOf(map) == QLatin1String("map");
 }
 
 bool isConfigNotFound(const QVariantMap &error)
@@ -1814,7 +1895,10 @@ void LovelaceCoordinator::applyConfig(const QVariant &result)
     if (map.isEmpty() && result.type() == QVariant::List) {
         map.insert(QStringLiteral("views"), result.toList());
     }
+    map = expandLovelaceStrategies(map);
     const QVariantList views = variantListOf(map.value(QStringLiteral("views")));
+    // Unexpanded / unknown strategies (areas, home, …) still fall back to the
+    // generated overview. Map strategy is expanded above into a panel map.
     if (map.isEmpty() || (map.contains(QStringLiteral("strategy")) && views.isEmpty())) {
         applyGeneratedConfig();
         return;
@@ -1826,7 +1910,7 @@ void LovelaceCoordinator::applyConfig(const QVariant &result)
 
 void LovelaceCoordinator::commitConfig(const QVariantMap &config)
 {
-    m_currentConfig = config;
+    m_currentConfig = expandLovelaceStrategies(config);
     m_views = normalizeViews(m_currentConfig);
     if (m_currentViewIndex >= m_views.size())
         m_currentViewIndex = 0;
@@ -2372,28 +2456,210 @@ QVariant LovelaceCoordinator::attribute(const QString &entityId, const QString &
     return m_entities.value(entityId).value(QStringLiteral("attributes")).toMap().value(key);
 }
 
+QString LovelaceCoordinator::entityDeviceClass(const QString &entityId) const
+{
+    const QVariantMap attrs = m_entities.value(entityId)
+            .value(QStringLiteral("attributes")).toMap();
+    const QVariantMap registry = m_entityRegistry.value(entityId);
+    QString deviceClass = attrs.value(QStringLiteral("device_class")).toString();
+    if (deviceClass.isEmpty())
+        deviceClass = registry.value(QStringLiteral("device_class")).toString();
+    if (deviceClass.isEmpty())
+        deviceClass = registry.value(QStringLiteral("original_device_class")).toString();
+    return deviceClass;
+}
+
+QString LovelaceCoordinator::binarySensorStateLabel(const QString &deviceClass,
+                                                    bool on) const
+{
+    HelmsmanI18n *i18n = HelmsmanI18n::instance();
+    // Match Home Assistant binary_sensor device_class on/off meanings.
+    // Keep each translation() call as a plain QStringLiteral so check-i18n
+    // can see the key.
+    if (deviceClass == QLatin1String("door")
+            || deviceClass == QLatin1String("garage_door")
+            || deviceClass == QLatin1String("opening")
+            || deviceClass == QLatin1String("window")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_open"));
+        return i18n->translation(QStringLiteral("state_closed"));
+    }
+    if (deviceClass == QLatin1String("lock")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_unlocked"));
+        return i18n->translation(QStringLiteral("state_locked"));
+    }
+    if (deviceClass == QLatin1String("moisture")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_wet"));
+        return i18n->translation(QStringLiteral("state_dry"));
+    }
+    if (deviceClass == QLatin1String("motion")
+            || deviceClass == QLatin1String("gas")
+            || deviceClass == QLatin1String("smoke")
+            || deviceClass == QLatin1String("carbon_monoxide")
+            || deviceClass == QLatin1String("sound")
+            || deviceClass == QLatin1String("vibration")
+            || deviceClass == QLatin1String("tamper")
+            || deviceClass == QLatin1String("power")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_detected"));
+        return i18n->translation(QStringLiteral("state_clear"));
+    }
+    if (deviceClass == QLatin1String("occupancy")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_occupied"));
+        return i18n->translation(QStringLiteral("state_clear"));
+    }
+    if (deviceClass == QLatin1String("presence")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_home"));
+        return i18n->translation(QStringLiteral("state_away"));
+    }
+    if (deviceClass == QLatin1String("connectivity")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_connected"));
+        return i18n->translation(QStringLiteral("state_disconnected"));
+    }
+    if (deviceClass == QLatin1String("plug")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_plugged_in"));
+        return i18n->translation(QStringLiteral("state_unplugged"));
+    }
+    if (deviceClass == QLatin1String("battery")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_low"));
+        return i18n->translation(QStringLiteral("state_normal"));
+    }
+    if (deviceClass == QLatin1String("battery_charging")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_charging"));
+        return i18n->translation(QStringLiteral("state_not_charging"));
+    }
+    if (deviceClass == QLatin1String("cold")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_cold"));
+        return i18n->translation(QStringLiteral("state_normal"));
+    }
+    if (deviceClass == QLatin1String("heat")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_hot"));
+        return i18n->translation(QStringLiteral("state_normal"));
+    }
+    if (deviceClass == QLatin1String("light")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_light_detected"));
+        return i18n->translation(QStringLiteral("state_no_light"));
+    }
+    if (deviceClass == QLatin1String("problem")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_problem"));
+        return i18n->translation(QStringLiteral("state_ok"));
+    }
+    if (deviceClass == QLatin1String("running")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_running"));
+        return i18n->translation(QStringLiteral("state_not_running"));
+    }
+    if (deviceClass == QLatin1String("safety")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_unsafe"));
+        return i18n->translation(QStringLiteral("state_safe"));
+    }
+    if (deviceClass == QLatin1String("moving")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_moving"));
+        return i18n->translation(QStringLiteral("state_not_moving"));
+    }
+    if (deviceClass == QLatin1String("update")) {
+        if (on)
+            return i18n->translation(QStringLiteral("state_update_available"));
+        return i18n->translation(QStringLiteral("state_up_to_date"));
+    }
+    return QString();
+}
+
+QString LovelaceCoordinator::namedStateLabel(const QString &state) const
+{
+    HelmsmanI18n *i18n = HelmsmanI18n::instance();
+    if (state == QLatin1String("open"))
+        return i18n->translation(QStringLiteral("state_open"));
+    if (state == QLatin1String("closed"))
+        return i18n->translation(QStringLiteral("state_closed"));
+    if (state == QLatin1String("opening"))
+        return i18n->translation(QStringLiteral("state_opening"));
+    if (state == QLatin1String("closing"))
+        return i18n->translation(QStringLiteral("state_closing"));
+    if (state == QLatin1String("locked"))
+        return i18n->translation(QStringLiteral("state_locked"));
+    if (state == QLatin1String("unlocked"))
+        return i18n->translation(QStringLiteral("state_unlocked"));
+    if (state == QLatin1String("locking"))
+        return i18n->translation(QStringLiteral("state_locking"));
+    if (state == QLatin1String("unlocking"))
+        return i18n->translation(QStringLiteral("state_unlocking"));
+    if (state == QLatin1String("jammed"))
+        return i18n->translation(QStringLiteral("state_jammed"));
+    if (state == QLatin1String("stopped"))
+        return i18n->translation(QStringLiteral("state_stopped"));
+    if (state == QLatin1String("on"))
+        return i18n->translation(QStringLiteral("on"));
+    if (state == QLatin1String("off"))
+        return i18n->translation(QStringLiteral("off"));
+    if (state == QLatin1String("home"))
+        return i18n->translation(QStringLiteral("state_home"));
+    if (state == QLatin1String("not_home") || state == QLatin1String("away"))
+        return i18n->translation(QStringLiteral("state_away"));
+    return QString();
+}
+
+QString LovelaceCoordinator::formatStateValue(const QString &entityId,
+                                              const QString &state) const
+{
+    HelmsmanI18n *i18n = HelmsmanI18n::instance();
+    if (state == QLatin1String("unavailable"))
+        return i18n->translation(QStringLiteral("unavailable"));
+    if (state == QLatin1String("unknown") || state.isEmpty())
+        return i18n->translation(QStringLiteral("unknown"));
+
+    const QString domain = domainOfEntity(entityId);
+    if (domain == QLatin1String("script")) {
+        if (state == QLatin1String("on"))
+            return i18n->translation(QStringLiteral("running"));
+        return i18n->translation(QStringLiteral("run"));
+    }
+
+    if (domain == QLatin1String("binary_sensor")
+            && (state == QLatin1String("on") || state == QLatin1String("off"))) {
+        const QString label = binarySensorStateLabel(entityDeviceClass(entityId),
+                                                     state == QLatin1String("on"));
+        if (!label.isEmpty())
+            return label;
+    }
+
+    const QString named = namedStateLabel(state);
+    if (!named.isEmpty())
+        return named;
+
+    QString pretty = state;
+    pretty.replace(QLatin1Char('_'), QLatin1Char(' '));
+    if (!pretty.isEmpty())
+        pretty[0] = pretty[0].toUpper();
+    return pretty;
+}
+
 QString LovelaceCoordinator::formatState(const QString &entityId) const
 {
     const QVariantMap st = m_entities.value(entityId);
     const QString state = st.value(QStringLiteral("state")).toString();
     const QVariantMap attrs = st.value(QStringLiteral("attributes")).toMap();
     const QString unit = attrs.value(QStringLiteral("unit_of_measurement")).toString();
-    if (state == QLatin1String("unavailable"))
-        return QStringLiteral("Unavailable");
-    if (state == QLatin1String("unknown"))
-        return QStringLiteral("Unknown");
-    if (domainOfEntity(entityId) == QLatin1String("script")) {
-        if (state == QLatin1String("on"))
-            return HelmsmanI18n::instance()->translation(QStringLiteral("running"));
-        return HelmsmanI18n::instance()->translation(QStringLiteral("run"));
-    }
-    if (!unit.isEmpty())
+    if (!unit.isEmpty()
+            && state != QLatin1String("unavailable")
+            && state != QLatin1String("unknown")
+            && !state.isEmpty())
         return state + QLatin1Char(' ') + unit;
-    QString pretty = state;
-    pretty.replace(QLatin1Char('_'), QLatin1Char(' '));
-    if (!pretty.isEmpty())
-        pretty[0] = pretty[0].toUpper();
-    return pretty;
+    return formatStateValue(entityId, state);
 }
 
 QString LovelaceCoordinator::areaName(const QString &areaId) const
@@ -3485,6 +3751,34 @@ void LovelaceCoordinator::fetchHistory(const QStringList &entityIds, int hours)
     query.addQueryItem(QStringLiteral("filter_entity_id"), entityIds.join(QLatin1Char(',')));
     query.addQueryItem(QStringLiteral("minimal_response"), QStringLiteral("true"));
     query.addQueryItem(QStringLiteral("significant_changes_only"), QStringLiteral("false"));
+    getJson(path + QLatin1Char('?') + query.toString(QUrl::FullyEncoded),
+            QStringLiteral("history"), entityIds.join(QLatin1Char(',')));
+}
+
+void LovelaceCoordinator::fetchHistoryRange(const QStringList &entityIds,
+                                            const QString &startIso,
+                                            const QString &endIso)
+{
+    if (entityIds.isEmpty() || m_baseUrl.isEmpty() || m_accessToken.isEmpty())
+        return;
+    QDateTime start = QDateTime::fromString(startIso, Qt::ISODate);
+    QDateTime end = QDateTime::fromString(endIso, Qt::ISODate);
+    if (!start.isValid())
+        start = QDateTime::currentDateTimeUtc().addSecs(-24 * 3600);
+    if (!end.isValid())
+        end = QDateTime::currentDateTimeUtc();
+    start = start.toUTC();
+    end = end.toUTC();
+    if (end < start)
+        qSwap(start, end);
+
+    QString path = QStringLiteral("/api/history/period/%1")
+            .arg(start.toString(Qt::ISODate));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("filter_entity_id"), entityIds.join(QLatin1Char(',')));
+    query.addQueryItem(QStringLiteral("minimal_response"), QStringLiteral("true"));
+    query.addQueryItem(QStringLiteral("significant_changes_only"), QStringLiteral("false"));
+    query.addQueryItem(QStringLiteral("end_time"), end.toString(Qt::ISODate));
     getJson(path + QLatin1Char('?') + query.toString(QUrl::FullyEncoded),
             QStringLiteral("history"), entityIds.join(QLatin1Char(',')));
 }

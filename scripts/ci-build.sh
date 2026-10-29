@@ -29,6 +29,11 @@ echo "Building ${RPM_NAME}"
 echo "  image=$IMAGE"
 echo "  target=$TARGET"
 
+# Chum OBS tree arch segment (i486 target uses i486 in the repo path).
+CHUM_ARCH="$ARCH"
+CHUM_REPO_URL="${CHUM_REPO_URL:-https://repo.sailfishos.org/obs/sailfishos:/chum/4.6_${CHUM_ARCH}/}"
+CHUM_REPO_NAME="${CHUM_REPO_NAME:-sailfishos-chum}"
+
 docker pull "$IMAGE"
 
 mkdir -p "$ROOT/RPMS"
@@ -46,6 +51,8 @@ docker run --rm --privileged \
     -e ARCH="$ARCH" \
     -e TARGET="$TARGET" \
     -e RPM_NAME="$RPM_NAME" \
+    -e CHUM_REPO_NAME="$CHUM_REPO_NAME" \
+    -e CHUM_REPO_URL="$CHUM_REPO_URL" \
     "$IMAGE" \
     /bin/bash -lc '
         set -e
@@ -58,7 +65,20 @@ docker run --rm --privileged \
             -e "s/^Version:.*/Version:    ${VERSION}/" \
             -e "s/^Release:.*/Release:    ${RELEASE}/" \
             rpm/harbour-homeassistant.spec
-        mb2 --target "${TARGET}" build
+        # MapLibre comes from SailfishOS:Chum; vendor into the RPM at install time.
+        if ! sb2 -t "${TARGET}" -R rpm -q mapboxgl-qml >/dev/null 2>&1; then
+          echo "Adding SailfishOS:Chum and installing MapLibre build deps..."
+          sb2 -t "${TARGET}" -m sdk-install -R ssu ar "${CHUM_REPO_NAME}" "${CHUM_REPO_URL}" || true
+          sb2 -t "${TARGET}" -m sdk-install -R ssu ur || true
+          sb2 -t "${TARGET}" -m sdk-install -R zypper --non-interactive ref || true
+          sb2 -t "${TARGET}" -m sdk-install -R zypper --non-interactive in -y \
+              mapboxgl-qml qmaplibregl qmaplibregl-devel
+        fi
+        sb2 -t "${TARGET}" -m sdk-install -R zypper --non-interactive in -y patchelf \
+            >/dev/null 2>&1 || true
+        # sdk-install above mutates the original target; mb2 default snapshot
+        # reset needs sudo that CI images do not grant. Build on the target itself.
+        mb2 --target "${TARGET}" --no-snapshot=force build
         if [ ! -f "RPMS/${RPM_NAME}" ]; then
             echo "Expected RPM not found: RPMS/${RPM_NAME}" >&2
             ls -la RPMS || true

@@ -60,7 +60,11 @@ Page {
     }
 
     readonly property bool hasPickableEntities: {
-        var kinds = ["light", "switch", "climate", "script", "sensor"]
+        var kinds = [
+            "light", "switch", "input_boolean", "lock", "cover", "fan",
+            "climate", "humidifier", "siren", "valve", "remote", "vacuum",
+            "media_player", "script", "scene", "button", "sensor"
+        ]
         if (page.eventsViewMode)
             kinds.push("graph")
         for (var i = 0; i < kinds.length; ++i) {
@@ -216,8 +220,20 @@ Page {
                     var items = [
                         { "title": i18n.translation("lights"), "kind": "light" },
                         { "title": i18n.translation("switches"), "kind": "switch" },
+                        { "title": i18n.translation("helpers"), "kind": "input_boolean" },
+                        { "title": i18n.translation("locks"), "kind": "lock" },
+                        { "title": i18n.translation("covers"), "kind": "cover" },
+                        { "title": i18n.translation("fans"), "kind": "fan" },
                         { "title": i18n.translation("air_conditioners"), "kind": "climate" },
-                        { "title": i18n.translation("scripts"), "kind": "script" }
+                        { "title": i18n.translation("humidifiers"), "kind": "humidifier" },
+                        { "title": i18n.translation("sirens"), "kind": "siren" },
+                        { "title": i18n.translation("valves"), "kind": "valve" },
+                        { "title": i18n.translation("remotes"), "kind": "remote" },
+                        { "title": i18n.translation("vacuums"), "kind": "vacuum" },
+                        { "title": i18n.translation("media_players"), "kind": "media_player" },
+                        { "title": i18n.translation("scripts"), "kind": "script" },
+                        { "title": i18n.translation("scenes"), "kind": "scene" },
+                        { "title": i18n.translation("buttons"), "kind": "button" }
                     ]
                     if (page.eventsViewMode)
                         items.push({ "title": i18n.translation("graphs"), "kind": "graph" })

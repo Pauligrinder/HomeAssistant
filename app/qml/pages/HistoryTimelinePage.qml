@@ -8,42 +8,78 @@ Page {
     property var hassClient
     property var mdiIcons
     property string entityId: ""
-    property int hours: 24
     property var dashboard: hassClient ? hassClient.lovelace : null
     property var points: []
+    property var rows: []
     property bool loading: true
+    property date rangeStart: new Date(new Date().getTime() - 24 * 3600 * 1000)
+    property date rangeEnd: new Date()
+    property bool pendingTimeForStart: false
+    // Open time picker only after this page is Active again (date dialog gone).
+    property bool openTimeWhenActive: false
 
-    readonly property var periods: {
-        var src = page.points
-        return page.buildPeriods(src)
+    onStatusChanged: {
+        if (status === PageStatus.Active && page.openTimeWhenActive) {
+            page.openTimeWhenActive = false
+            page.openTimeDialog(page.pendingTimeForStart)
+        }
     }
 
     SilicaListView {
         id: list
         anchors.fill: parent
-        model: page.periods
+        model: page.rows
         spacing: Theme.paddingMedium
-        header: PageHeader {
-            title: i18n.translation("history")
-            description: page.hours === 24 ? i18n.translation("last_24_hours")
-                                           : i18n.translation("last_hours").arg(page.hours)
+
+        header: Column {
+            width: list.width
+            spacing: Theme.paddingMedium
+
+            PageHeader {
+                title: i18n.translation("history")
+                description: page.rangeLabel()
+            }
+
+            ValueButton {
+                width: parent.width
+                label: "Start"
+                value: page.dateTimeLabel(page.rangeStart)
+                onClicked: page.openDateDialog(true)
+            }
+
+            ValueButton {
+                width: parent.width
+                label: "End"
+                value: page.dateTimeLabel(page.rangeEnd)
+                onClicked: page.openDateDialog(false)
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: page.loading ? i18n.translation("loading") : i18n.translation("refresh")
+                enabled: !page.loading
+                onClicked: page.refresh()
+            }
         }
 
         ViewPlaceholder {
-            enabled: !page.loading && page.periods.length === 0
+            enabled: !page.loading && page.rows.length === 0
             text: i18n.translation("no_history")
         }
 
         BusyIndicator {
             anchors.centerIn: parent
             size: BusyIndicatorSize.Large
-            running: page.loading && page.periods.length === 0
+            running: page.loading && page.rows.length === 0
         }
 
         delegate: Item {
             id: row
             width: list.width
-            height: Math.max(card.implicitHeight, Theme.itemSizeMedium)
+            readonly property bool isHeader: modelData.kind === "day"
+            height: isHeader
+                    ? (dayLabel.implicitHeight + Theme.paddingLarge)
+                    : Math.max(card.implicitHeight, Theme.itemSizeMedium)
 
             readonly property string stateValue: String(modelData.state || "")
             readonly property var startDate: modelData.start
@@ -53,9 +89,26 @@ Page {
             readonly property string zoneIcon: page.zoneIconFor(row.stateValue)
             readonly property color accent: page.colorForState(row.stateValue)
 
+            // Plain Label: SectionHeader offsets by horizontalPageMargin while
+            // still using full parent width, which spills past the right edge.
+            Label {
+                id: dayLabel
+                visible: row.isHeader
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Theme.horizontalPageMargin
+                anchors.rightMargin: Theme.horizontalPageMargin
+                anchors.verticalCenter: parent.verticalCenter
+                truncationMode: TruncationMode.Fade
+                color: Theme.highlightColor
+                font.pixelSize: Theme.fontSizeMedium
+                text: String(modelData.day || "")
+            }
+
             // Timeline rail
             Rectangle {
                 id: rail
+                visible: !row.isHeader
                 anchors.top: index === 0 ? dot.verticalCenter : parent.top
                 anchors.bottom: index === list.count - 1 ? dot.verticalCenter : parent.bottom
                 x: Theme.horizontalPageMargin + Theme.paddingSmall
@@ -65,6 +118,7 @@ Page {
 
             Rectangle {
                 id: dot
+                visible: !row.isHeader
                 width: Theme.paddingMedium + Theme.paddingSmall
                 height: width
                 radius: width / 2
@@ -78,6 +132,7 @@ Page {
 
             Rectangle {
                 id: card
+                visible: !row.isHeader
                 anchors.left: rail.right
                 anchors.leftMargin: Theme.paddingMedium
                 anchors.right: parent.right
@@ -134,6 +189,7 @@ Page {
             if (entityId !== page.entityId)
                 return
             page.points = points
+            page.rows = page.buildRows(points)
             page.loading = false
         }
     }
@@ -144,11 +200,15 @@ Page {
 
     function refresh() {
         page.points = []
+        page.rows = []
         page.loading = true
-        if (dashboard && page.entityId.length)
-            dashboard.fetchHistory([page.entityId], page.hours > 0 ? page.hours : 24)
-        else
+        if (dashboard && page.entityId.length) {
+            var startIso = page.rangeStart.toISOString()
+            var endIso = page.rangeEnd.toISOString()
+            dashboard.fetchHistoryRange([page.entityId], startIso, endIso)
+        } else {
             page.loading = false
+        }
     }
 
     function parseTime(stamp) {
@@ -160,30 +220,110 @@ Page {
         return isNaN(t) ? null : new Date(t)
     }
 
-    function buildPeriods(src) {
+    function buildRows(src) {
         src = src || []
-        var out = []
-        var now = new Date()
+        var points = []
         for (var i = 0; i < src.length; ++i) {
-            var start = page.parseTime(src[i].last_changed)
-            if (!start)
+            var t = page.parseTime(src[i].last_changed)
+            if (!t)
                 continue
-            var ongoing = (i + 1 >= src.length)
-            var end = ongoing ? now : page.parseTime(src[i + 1].last_changed)
-            if (!end)
-                end = now
-            out.push({
-                         "state": src[i].state,
-                         "start": start,
-                         "end": end,
-                         "ongoing": ongoing
-                     })
+            points.push({
+                            "state": src[i].state,
+                            "start": t
+                        })
         }
-        out.reverse()
-        return out
+        points.sort(function(a, b) { return a.start.getTime() - b.start.getTime() })
+
+        var periods = []
+        var rangeEnd = page.rangeEnd && !isNaN(page.rangeEnd.getTime())
+                ? page.rangeEnd : new Date()
+        for (var j = 0; j < points.length; ++j) {
+            var start = points[j].start
+            var end = (j + 1 < points.length) ? points[j + 1].start : rangeEnd
+            if (!end || end < start)
+                end = start
+            periods.push({
+                             "kind": "period",
+                             "state": points[j].state,
+                             "start": start,
+                             "end": end,
+                             "ongoing": (j + 1 >= points.length
+                                         && Math.abs(end.getTime() - (new Date()).getTime()) < 2 * 60 * 1000)
+                         })
+        }
+        periods.reverse()
+
+        var rows = []
+        var lastDay = ""
+        for (var k = 0; k < periods.length; ++k) {
+            var d = periods[k].start
+            var key = d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate()
+            if (key !== lastDay) {
+                rows.push({ "kind": "day", "day": page.dayLabel(d) })
+                lastDay = key
+            }
+            rows.push(periods[k])
+        }
+        return rows
+    }
+
+    function dateTimeLabel(d) {
+        if (!d || isNaN(d.getTime()))
+            return "—"
+        return Qt.formatDate(d, "yyyy-MM-dd") + " " + Qt.formatTime(d, "hh:mm")
+    }
+
+    function rangeLabel() {
+        return page.dateTimeLabel(page.rangeStart) + " - " + page.dateTimeLabel(page.rangeEnd)
+    }
+
+    function openDateDialog(forStart) {
+        var base = forStart ? page.rangeStart : page.rangeEnd
+        var dialog = pageStack.push("Sailfish.Silica.DatePickerDialog", {
+                                        date: base
+                                    })
+        dialog.accepted.connect(function() {
+            var picked = dialog.date
+            if (!picked || isNaN(picked.getTime()))
+                return
+            var current = forStart ? page.rangeStart : page.rangeEnd
+            var merged = new Date(picked.getFullYear(), picked.getMonth(), picked.getDate(),
+                                  current.getHours(), current.getMinutes(), 0, 0)
+            if (forStart)
+                page.rangeStart = merged
+            else
+                page.rangeEnd = merged
+            page.pendingTimeForStart = forStart
+            page.openTimeWhenActive = true
+        })
+    }
+
+    function openTimeDialog(forStart) {
+        var base = forStart ? page.rangeStart : page.rangeEnd
+        var dialog = pageStack.push("Sailfish.Silica.TimePickerDialog", {
+                                        hour: base.getHours(),
+                                        minute: base.getMinutes(),
+                                        hourMode: DateTime.TwentyFourHours
+                                    })
+        dialog.accepted.connect(function() {
+            var current = forStart ? page.rangeStart : page.rangeEnd
+            var merged = new Date(current.getFullYear(), current.getMonth(), current.getDate(),
+                                  dialog.hour, dialog.minute, 0, 0)
+            if (forStart)
+                page.rangeStart = merged
+            else
+                page.rangeEnd = merged
+            if (page.rangeEnd < page.rangeStart) {
+                var tmp = page.rangeStart
+                page.rangeStart = page.rangeEnd
+                page.rangeEnd = tmp
+            }
+        })
     }
 
     function prettyState(state) {
+        if (page.dashboard && page.entityId.length)
+            return page.dashboard.formatStateValue(page.entityId, String(state || ""))
         var s = String(state || "")
         if (!s.length)
             return i18n.translation("unknown")
@@ -212,20 +352,16 @@ Page {
     function formatRange(start, end, ongoing) {
         if (!start)
             return ""
-        var today = new Date()
-        var startTime = page.timeLabel(start)
-        var startPart = page.sameDay(start, today)
-                        ? startTime
-                        : (page.dayLabel(start) + " " + startTime)
-        // Still-active state: open-ended range ("18:57 - ").
+        // Day is shown by the section header; keep period rows to times only.
+        var startPart = page.timeLabel(start)
         if (ongoing)
             return startPart + " - "
         if (!end)
             return startPart
-        var endTime = page.timeLabel(end)
-        if (page.sameDay(start, end))
-            return startPart + " - " + endTime
-        return startPart + " - " + page.dayLabel(end) + " " + endTime
+        var endPart = page.timeLabel(end)
+        if (!page.sameDay(start, end))
+            endPart = page.dayLabel(end) + " " + endPart
+        return startPart + " - " + endPart
     }
 
     function formatPeriod(state, start, end, ongoing) {

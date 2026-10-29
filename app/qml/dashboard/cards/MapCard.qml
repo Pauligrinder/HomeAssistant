@@ -9,6 +9,9 @@ CardChrome {
     contentBottomMargin: fillHeight > 0 ? 0 : Theme.paddingSmall
     contentHorizontalMargin: fillHeight > 0 ? 0 : Theme.paddingMedium
     showBackground: fillHeight <= 0
+    // Panel (type: panel) map views fill the page — use MapLibre in-place.
+    // Compact cards keep the light raster preview and open MapPage on tap.
+    readonly property bool panelMap: root.fillHeight > 0
     readonly property bool showAll: !!(card && card.show_all)
     readonly property bool hasGeoSources: !!(card && card.geo_location_sources
                                              && card.geo_location_sources.length)
@@ -120,25 +123,73 @@ CardChrome {
         return out
     }
 
+    function openFullscreenMap() {
+        if (!pageStack)
+            return
+        pageStack.push(Qt.resolvedUrl("../../pages/MapPage.qml"), {
+                           hassClient: root.hassClient,
+                           mdiIcons: root.mdiIcons,
+                           markers: root.located,
+                           title: (card && card.title) ? String(card.title) : "",
+                           autoFit: true
+                       })
+    }
+
     Item {
         width: parent.width
-        height: {
-            if (root.fillHeight > 0)
-                return root.fillHeight
-            return Math.round(width * 0.75)
-        }
+        // Prefer chrome height over fillHeight so CardLoader cannot bind-loop
+        // fillHeight ↔ contentHeight when this is a panel map.
+        height: root.panelMap
+                ? Math.max(1, root.height)
+                : Math.round(width * 0.75)
         clip: true
 
-        EntityMap {
+        Loader {
+            id: mapLoader
             anchors.fill: parent
-            dashboard: root.dashboard
-            markers: root.located
-            autoFit: true
-            interactive: true
-            topContentInset: root.topContentInset
-            onMarkerClicked: {
-                if (dashboard)
-                    dashboard.openMoreInfo(entityId)
+            // Defer MapLibre until the panel is actually sized; constructing it
+            // at fillHeight 0 during layout passes has been crashing on device.
+            active: root.panelMap ? root.height > Theme.itemSizeLarge : true
+            sourceComponent: root.panelMap ? mapLibreComp : entityMapComp
+        }
+
+        Component {
+            id: entityMapComp
+            Item {
+                anchors.fill: parent
+
+                EntityMap {
+                    anchors.fill: parent
+                    dashboard: root.dashboard
+                    markers: root.located
+                    autoFit: true
+                    interactive: false
+                    showZoomControls: false
+                    topContentInset: root.topContentInset
+                }
+
+                // Above markers: whole-card tap opens MapPage; pins are not links.
+                MouseArea {
+                    anchors.fill: parent
+                    z: 20
+                    onClicked: root.openFullscreenMap()
+                }
+            }
+        }
+
+        Component {
+            id: mapLibreComp
+            MapLibreMap {
+                anchors.fill: parent
+                dashboard: root.dashboard
+                markers: root.located
+                autoFit: true
+                interactive: true
+                topContentInset: root.topContentInset
+                onMarkerClicked: {
+                    if (root.dashboard)
+                        root.dashboard.openMoreInfo(entityId)
+                }
             }
         }
 

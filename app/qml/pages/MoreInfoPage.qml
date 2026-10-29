@@ -252,7 +252,27 @@ Page {
                     item.accuracy = Qt.binding(function() { return page.locationRadius })
                     item.autoFit = false
                     item.interactive = false
+                    item.showZoomControls = false
                     item.markers = Qt.binding(function() { return page.mapMarkers() })
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: mapLoader.status === Loader.Ready
+                    onClicked: {
+                        pageStack.push(Qt.resolvedUrl("MapPage.qml"), {
+                                           hassClient: page.hassClient,
+                                           mdiIcons: page.mdiIcons,
+                                           markers: page.mapMarkers(),
+                                           latitude: page.latitude,
+                                           longitude: page.longitude,
+                                           zoom: 15,
+                                           title: page.dashboard
+                                                  ? page.dashboard.friendlyName(page.entityId)
+                                                  : page.entityId,
+                                           autoFit: false
+                                       })
+                    }
                 }
             }
 

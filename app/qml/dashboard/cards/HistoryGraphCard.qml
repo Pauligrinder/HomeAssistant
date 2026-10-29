@@ -105,6 +105,8 @@ CardChrome {
             points: root.pointsFor(root.entityIdOf(modelData))
             hours: root.hours
             unit: root.entityUnit(root.entityIdOf(modelData))
+            entityId: root.entityIdOf(modelData)
+            dashboard: root.dashboard
             title: root.showNames
                    ? root.entityName(modelData, root.entityIdOf(modelData)) : ""
             accent: root.entityColor(modelData)

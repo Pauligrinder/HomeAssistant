@@ -1,6 +1,10 @@
+# Harbour packages must not provide/require private bundled libs.
+%define __provides_exclude_from ^%{_datadir}/.*$
+%define __requires_exclude ^libQMapLibre.*$
+
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.5.12
+Version:    0.6.01
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -11,6 +15,7 @@ Requires:   qt5-qtdeclarative
 Requires:   qt5-qtgraphicaleffects
 Requires:   qt5-qtnetwork
 Requires:   qt5-qtpositioning
+Requires:   qt5-qtdeclarative-import-positioning
 Requires:   qt5-qtdbus
 Requires:   sailfish-components-webview-qt5
 Requires:   nemo-qml-plugin-dbus-qt5
@@ -25,6 +30,9 @@ BuildRequires:  pkgconfig(Qt5Network)
 BuildRequires:  pkgconfig(Qt5Positioning)
 BuildRequires:  pkgconfig(Qt5DBus)
 BuildRequires:  pkgconfig(qt5embedwidget)
+BuildRequires:  mapboxgl-qml >= 2.0.0
+BuildRequires:  qmaplibregl >= 2.0.0
+BuildRequires:  patchelf
 BuildRequires:  desktop-file-utils
 
 %description
@@ -51,6 +59,25 @@ desktop-file-install --delete-original \
   --dir %{buildroot}%{_datadir}/applications \
   %{buildroot}%{_datadir}/applications/*.desktop
 
+# Vendor MapLibre (same Harbour pattern as Pure Maps / Latauskartta).
+mkdir -p %{buildroot}%{_datadir}/%{name}/lib/qml/MapboxMap
+cp -a %{_libdir}/libQMapLibre.so.3* %{buildroot}%{_datadir}/%{name}/lib/ || \
+  cp -a %{_libdir}/libQMapLibre.so* %{buildroot}%{_datadir}/%{name}/lib/
+cp -a %{_libdir}/qt5/qml/MapboxMap/* %{buildroot}%{_datadir}/%{name}/lib/qml/MapboxMap/
+# Sailfish QtPositioning import is 5.4 in allowed Harbour APIs.
+if [ -f %{buildroot}%{_datadir}/%{name}/lib/qml/MapboxMap/MapboxMapGestureArea.qml ]; then
+  sed -i 's/QtPositioning 5.3/QtPositioning 5.4/g' \
+    %{buildroot}%{_datadir}/%{name}/lib/qml/MapboxMap/MapboxMapGestureArea.qml
+fi
+chmod -x %{buildroot}%{_datadir}/%{name}/lib/*.so* 2>/dev/null || true
+chmod -x %{buildroot}%{_datadir}/%{name}/lib/qml/MapboxMap/*.so* 2>/dev/null || true
+# Point the QML plugin at the private lib dir (device may lack system MapLibre).
+for so in %{buildroot}%{_datadir}/%{name}/lib/qml/MapboxMap/*.so* \
+          %{buildroot}%{_datadir}/%{name}/lib/libQMapLibre.so*; do
+  [ -e "$so" ] || continue
+  patchelf --set-rpath %{_datadir}/%{name}/lib "$so"
+done
+
 %files
 %defattr(-,root,root,-)
 %{_bindir}/%{name}
@@ -62,6 +89,12 @@ desktop-file-install --delete-original \
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.01-1
+- Interactive MapLibre fullscreen maps; strategy map views; vendored Chum libs.
+- Cover/Events favorites for locks, covers, fans, and similar domains.
+- History range picker with day separators; zone-exit hysteresis.
+- Map pages use a pill back button so horizontal pan works.
+
 * Sun Oct 25 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.12-1
 - Always send location_name so HA zone state matches the cover.
 - Gate in_zones on Core >= 2026.6 so older HA no longer silently drops updates.
