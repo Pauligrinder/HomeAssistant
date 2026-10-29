@@ -8,6 +8,9 @@ TARGET="${TARGET:-SailfishOS-5.2.0.15-aarch64}"
 STATE_FILE="$ROOT/.build-release"
 PRO_FILE="$ROOT/app/harbour-homeassistant.pro"
 SPEC_IN_CONTAINER="/home/mersdk/app/rpm/harbour-homeassistant.spec"
+CHUM_REPO_NAME="${CHUM_REPO_NAME:-sailfishos-chum}"
+# Matches SailfishOS 4.6+/5.x Chum OBS trees used on aarch64 devices.
+CHUM_REPO_URL="${CHUM_REPO_URL:-https://repo.sailfishos.org/obs/sailfishos:/chum/4.6_aarch64/}"
 
 # App version comes from the .pro file (single source of truth).
 VERSION="$(sed -n 's/^VERSION *= *//p' "$PRO_FILE" | head -1 | tr -d '[:space:]')"
@@ -36,6 +39,20 @@ if ! docker inspect "$CONTAINER" >/dev/null 2>&1; then
 fi
 
 docker start "$CONTAINER" >/dev/null
+
+# Ensure SailfishOS:Chum MapLibre packages exist in the build target.
+docker exec -u mersdk "$CONTAINER" bash -lc "
+set -e
+TARGET='$TARGET'
+if ! sb2 -t \"\$TARGET\" -R rpm -q mapboxgl-qml >/dev/null 2>&1; then
+  echo 'Adding SailfishOS:Chum and installing MapLibre build deps...'
+  sb2 -t \"\$TARGET\" -m sdk-install -R ssu ar '$CHUM_REPO_NAME' '$CHUM_REPO_URL' || true
+  sb2 -t \"\$TARGET\" -m sdk-install -R ssu ur || true
+  sb2 -t \"\$TARGET\" -m sdk-install -R zypper --non-interactive ref || true
+  sb2 -t \"\$TARGET\" -m sdk-install -R zypper --non-interactive in -y mapboxgl-qml qmaplibregl qmaplibregl-devel
+fi
+sb2 -t \"\$TARGET\" -m sdk-install -R zypper --non-interactive in -y patchelf >/dev/null 2>&1 || true
+"
 
 docker exec "$CONTAINER" sudo rm -rf /home/mersdk/app || true
 docker cp "$ROOT/app" "$CONTAINER":/home/mersdk/app

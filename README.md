@@ -62,7 +62,8 @@ app/
    Native tiles honour Lovelace grid rows, light favorite-color swatches,
    and icons from the entity registry. Lovelace map cards and entity
    locations with coordinates
-   render natively (OpenStreetMap tiles, person pictures as markers). Camera
+   render natively (raster OpenStreetMap tiles on the dashboard; tap opens a
+   fullscreen MapLibre / OpenFreeMap map with the same markers). Camera
    details play a live MJPEG stream. Lovelace `confirmation` on native
    scripts and taps shows a full-screen swipe Allow/Deny prompt.
 6. **Sensors** — After mobile_app registration, Helmsman reports battery level/
@@ -71,7 +72,7 @@ app/
    battery-saving, balanced, or accurate location mode. GPS is not kept
    running: Helmsman reuses other apps’ location fixes and only requests its
    own when the last fix is older than a configurable stale time (default 15
-   minutes).    On the internal URL, GPS stays off; Helmsman can optionally
+   minutes). On the internal URL, GPS stays off; Helmsman can optionally
    report the device as `home` from the connection alone, including the Home
    zone coordinates so it still appears on the map, and repeats that
    report about once a minute so Home Assistant does not time out to away.
@@ -113,7 +114,9 @@ app/
 
 ## Build
 
-Docker Platform SDK flow:
+Docker Platform SDK flow. The script adds [SailfishOS:Chum](https://chum.sailfishos.org/)
+so `mapboxgl-qml` and `qmaplibregl` are available as build dependencies, then
+copies those libs into the app package for fullscreen maps:
 
 ```sh
 docker pull coderus/sailfishos-platform-sdk-aarch64
@@ -124,9 +127,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.5.12-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.5.13-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.5.12-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.5.13-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`,

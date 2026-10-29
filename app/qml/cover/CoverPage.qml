@@ -181,17 +181,31 @@ CoverBackground {
         return unit ? (shown + " " + unit) : shown
     }
 
+    function prettyEntityState(entity) {
+        if (!entity)
+            return ""
+        var s = entity.state ? String(entity.state) : ""
+        if (!s.length)
+            return entity.on ? "On" : "Off"
+        return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ")
+    }
+
     function favoriteStateLabel(entity) {
         if (!entity)
             return ""
         if (entity.available === false)
             return entity.state || "unavailable"
-        if (entity.kind === "script")
+        if (entity.kind === "script" || entity.kind === "scene" || entity.kind === "button")
             return ""
         if (cover.isSensor(entity))
             return cover.sensorLabel(entity)
         if (entity.dimmable === true && entity.on)
             return "On · " + Math.round(Number(entity.brightnessPct) || 0) + "%"
+        if (entity.kind === "climate")
+            return entity.on ? cover.prettyEntityState(entity) : "Off"
+        if (entity.kind === "lock" || entity.kind === "cover" || entity.kind === "valve"
+                || entity.kind === "vacuum" || entity.kind === "media_player")
+            return cover.prettyEntityState(entity)
         return entity.on ? "On" : "Off"
     }
 
@@ -206,7 +220,7 @@ CoverBackground {
             return ""
         if (!entity || entity.available === false)
             return "image://theme/icon-cover-refresh"
-        if (entity.kind === "script")
+        if (entity.kind === "script" || entity.kind === "scene" || entity.kind === "button")
             return "image://theme/icon-cover-play"
         if (entity.on)
             return "image://theme/icon-cover-pause"
@@ -219,6 +233,10 @@ CoverBackground {
         var icon = entity.icon ? String(entity.icon) : ""
         if (entity.kind === "script")
             return icon.length ? icon : "mdi:script-text"
+        if (entity.kind === "scene")
+            return icon.length ? icon : "mdi:palette"
+        if (entity.kind === "button")
+            return icon.length ? icon : "mdi:gesture-tap-button"
         if (cover.isSensor(entity))
             return icon.length ? icon : "mdi:chart-line"
         if (entity.kind === "climate") {
@@ -228,10 +246,34 @@ CoverBackground {
                 return "mdi:fan-off"
             return icon
         }
-        if (entity.kind === "switch") {
+        if (entity.kind === "lock") {
+            if (entity.on === true)
+                return icon.length ? icon : "mdi:lock"
+            if (!icon.length || icon === "mdi:lock" || icon === "mdi:lock-outline")
+                return "mdi:lock-open-variant"
+            return icon
+        }
+        if (entity.kind === "cover") {
+            if (entity.on === true)
+                return icon.length ? icon : "mdi:window-open"
+            return icon.length ? icon : "mdi:window-closed"
+        }
+        if (entity.kind === "fan") {
+            if (entity.on === true)
+                return icon.length ? icon : "mdi:fan"
+            return icon.length ? icon : "mdi:fan-off"
+        }
+        if (entity.kind === "switch" || entity.kind === "input_boolean") {
             if (entity.on === true)
                 return icon.length ? icon : "mdi:toggle-switch"
             return icon.length ? icon : "mdi:toggle-switch-off"
+        }
+        if (entity.kind === "vacuum")
+            return icon.length ? icon : "mdi:robot-vacuum"
+        if (entity.kind === "media_player") {
+            if (entity.on === true)
+                return icon.length ? icon : "mdi:play-circle"
+            return icon.length ? icon : "mdi:pause-circle"
         }
         if (entity.on === true)
             return icon.length ? icon : "mdi:lightbulb"

@@ -160,6 +160,54 @@ bool zoneIdLess(const HassZoneFence &a, const HassZoneFence &b)
     return a.entityId < b.entityId;
 }
 
+const HassZoneFence *zoneByLocationName(const QList<HassZoneFence> &zones,
+                                        const QString &locationName)
+{
+    if (locationName.isEmpty()
+            || locationName == QLatin1String("home")
+            || locationName == QLatin1String("not_home"))
+        return nullptr;
+    for (int i = 0; i < zones.size(); ++i) {
+        const HassZoneFence &zone = zones.at(i);
+        if (zone.locationName.compare(locationName, Qt::CaseInsensitive) == 0)
+            return &zone;
+    }
+    return nullptr;
+}
+
+QString stabilizeZoneName(const QString &candidate,
+                          const QString &current,
+                          double latitude,
+                          double longitude,
+                          double accuracyMeters,
+                          const QList<HassZoneFence> &zones)
+{
+    if (candidate != QLatin1String("not_home"))
+        return candidate;
+    if (current.isEmpty()
+            || current == QLatin1String("home")
+            || current == QLatin1String("not_home"))
+        return candidate;
+    if (!qIsFinite(latitude) || !qIsFinite(longitude))
+        return candidate;
+
+    const HassZoneFence *zone = zoneByLocationName(zones, current);
+    if (!zone || zone->passive)
+        return candidate;
+
+    const double radius = zone->radius > 0 ? zone->radius : 100.0;
+    const double dist = haversineMeters(latitude, longitude,
+                                        zone->latitude, zone->longitude);
+    // Keep the previous non-home zone while the fix is still near the
+    // boundary, so jittery Wi-Fi/cell circles do not flap to away.
+    const double leaveTolerance = accuracyMeters > 0
+            ? qBound(75.0, accuracyMeters, 250.0)
+            : 75.0;
+    if (dist <= radius + leaveTolerance)
+        return current;
+    return candidate;
+}
+
 bool zoneListsEqual(const QList<HassZoneFence> &a,
                     const QList<HassZoneFence> &b)
 {
@@ -462,7 +510,9 @@ QString SensorCoordinator::computeLocationZone() const
 {
     if (!m_haveLocation)
         return atHomeOnInternal() ? QStringLiteral("home") : QString();
-    return computeLocationZoneAt(m_lastLat, m_lastLon, m_lastAccuracy);
+    const QString raw = computeLocationZoneAt(m_lastLat, m_lastLon, m_lastAccuracy);
+    return stabilizeZoneName(raw, m_locationZone, m_lastLat, m_lastLon,
+                             m_lastAccuracy, m_zones);
 }
 
 int SensorCoordinator::duplicateSuppressMs() const
@@ -1223,7 +1273,9 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
     // fix we already have — no GPS wake on battery saver.
     const QString previousZone = m_locationZone;
     const double probeAccuracy = accuracyMeters > 0 ? accuracyMeters : m_lastAccuracy;
-    const QString nextZone = computeLocationZoneAt(latitude, longitude, probeAccuracy);
+    const QString nextZoneRaw = computeLocationZoneAt(latitude, longitude, probeAccuracy);
+    const QString nextZone = stabilizeZoneName(nextZoneRaw, previousZone,
+                                               latitude, longitude, probeAccuracy, m_zones);
     const bool zoneChanged = !firstFix && !previousZone.isEmpty()
             && !nextZone.isEmpty() && nextZone != previousZone;
     const bool dueByZone = zoneChanged;
@@ -1368,8 +1420,23 @@ void SensorCoordinator::postLocationUpdate(bool force)
         locationName = QStringLiteral("home");
         inZones.append(QStringLiteral("zone.home"));
     } else if (haveGps) {
-        locationName = webhookLocationNameAt(m_lastLat, m_lastLon, m_lastAccuracy);
+        const QString resolvedZone = stabilizeZoneName(
+                    computeLocationZoneAt(m_lastLat, m_lastLon, m_lastAccuracy),
+                    m_locationZone, m_lastLat, m_lastLon, m_lastAccuracy, m_zones);
+        if (resolvedZone == QLatin1String("home")
+                || resolvedZone == QLatin1String("not_home")
+                || resolvedZone.isEmpty()) {
+            locationName = resolvedZone;
+        } else if (const HassZoneFence *zone = zoneByLocationName(m_zones, resolvedZone)) {
+            locationName = webhookLocationNameForEntity(zone->entityId);
+        } else {
+            locationName = resolvedZone;
+        }
         inZones = computeInZonesAt(m_lastLat, m_lastLon, m_lastAccuracy);
+        if (const HassZoneFence *zone = zoneByLocationName(m_zones, resolvedZone)) {
+            if (!inZones.contains(zone->entityId))
+                inZones.prepend(zone->entityId);
+        }
     }
     if (!locationName.isEmpty())
         data.insert(QStringLiteral("location_name"), locationName);

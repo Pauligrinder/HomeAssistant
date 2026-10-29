@@ -711,11 +711,17 @@ Page {
         anchors.bottomMargin: page.cardPageCount > 1
                              ? Theme.itemSizeSmall + Theme.paddingMedium : 0
         contentHeight: page.panelMapView ? height : (column.y + column.height + Theme.paddingLarge)
+        // Panel maps are interactive MapLibre; vertical flick would steal pans.
+        interactive: !page.panelMapView
         clip: true
         // Keep the ambience / background visible between cards.
         // (SilicaFlickable is transparent by default.)
 
         PullDownMenu {
+            // Panel maps consume the top drag for map gestures; this menu
+            // cannot be pulled there, so hide it and rely on back-swipe.
+            visible: !page.panelMapView
+            enabled: !page.panelMapView
             MenuItem {
                 text: i18n.translation("edit_dashboard")
                 visible: {
@@ -1068,6 +1074,41 @@ Page {
             dashboard: page.dashboard
             hassClient: page.hassClient
             mdiIcons: page.mdiIcons
+        }
+    }
+
+    // Keep back-swipe dots readable on bright map tiles with a soft backdrop.
+    Item {
+        anchors.left: parent.left
+        anchors.top: parent.top
+        width: Theme.itemSizeLarge
+        height: Theme.itemSizeLarge
+        clip: true
+        z: 50
+        visible: page.panelMapView && page.backNavigation
+
+        Rectangle {
+            // Wide, faint base for smooth fade.
+            width: Theme.itemSizeLarge * 0.95
+            height: Theme.itemSizeLarge * 0.82
+            radius: height / 2
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: -Math.round(width * 0.60)
+            color: "#000000"
+            opacity: 0.22
+        }
+
+        Rectangle {
+            // Small denser core exactly where the dots sit.
+            width: Theme.itemSizeSmall * 0.95
+            height: Theme.itemSizeSmall * 0.95
+            radius: width / 2
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: -Math.round(width * 0.40)
+            color: "#000000"
+            opacity: 0.32
         }
     }
 

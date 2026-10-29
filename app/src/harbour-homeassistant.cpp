@@ -2,11 +2,14 @@
 #include <QGuiApplication>
 #include <QQuickItem>
 #include <QQuickView>
+#include <QQmlEngine>
 #include <QtQml>
 #include <QNetworkProxy>
 #include <QNetworkProxyFactory>
 #include <QLocale>
 #include <QStringList>
+#include <QDir>
+#include <QByteArray>
 
 #include "appsettings.h"
 #include "helmsmani18n.h"
@@ -17,6 +20,11 @@
 #include "mdiiconrenderer.h"
 #include "sensorcoordinator.h"
 #include "widgetcoordinator.h"
+
+static QString bundledLibDir()
+{
+    return QStringLiteral("/usr/share/harbour-helmsman/lib");
+}
 
 // Loads translations/en.json, then the first matching <lang>.json for the
 // preferred Settings override, else the Home Assistant profile language,
@@ -44,9 +52,23 @@ static void loadTranslations()
 
 int main(int argc, char *argv[])
 {
+    const QString libDir = bundledLibDir();
+    const QString qmlDir = libDir + QStringLiteral("/qml");
+    // Vendored MapLibre must be findable before the QML engine loads MapboxMap.
+    if (QDir(libDir).exists()) {
+        const QByteArray cur = qgetenv("LD_LIBRARY_PATH");
+        QByteArray next = libDir.toUtf8();
+        if (!cur.isEmpty()) {
+            next += ':';
+            next += cur;
+        }
+        qputenv("LD_LIBRARY_PATH", next);
+    }
+
     QGuiApplication *app = SailfishApp::application(argc, argv);
     app->setOrganizationName(QStringLiteral("org.helmsman"));
     app->setApplicationName(QStringLiteral("harbour-helmsman"));
+    app->addLibraryPath(libDir);
 
     // ConnMan's system proxy lookup blocks the GUI for a long time when
     // Wi-Fi vanishes. Helmsman never needs an HTTP proxy to reach HA.
@@ -76,6 +98,8 @@ int main(int argc, char *argv[])
                 QStringLiteral("Use HassClient.lovelace.cameraStream"));
 
     QQuickView *view = SailfishApp::createView();
+    if (QDir(qmlDir).exists())
+        view->engine()->addImportPath(qmlDir);
     view->rootContext()->setContextProperty(QStringLiteral("i18n"), HelmsmanI18n::instance());
     view->rootContext()->setContextProperty(QStringLiteral("debugSettings"), HelmsmanDebug::instance());
     HelmsmanLog::watchEngine(view->engine());

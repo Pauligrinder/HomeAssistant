@@ -9,6 +9,8 @@ Item {
     property int hours: 24
     property string unit: ""
     property string title: ""
+    property string entityId: ""
+    property var dashboard: null
     property color accent: Theme.highlightColor
     property bool compact: false
     property bool showTitle: true
@@ -214,6 +216,8 @@ Item {
                     ? root.stateCollapse.restCount : 0
             return i18n.translation("history_rest", n)
         }
+        if (root.dashboard && root.entityId.length)
+            return root.dashboard.formatStateValue(root.entityId, s)
         if (!s.length)
             return i18n.translation("unknown")
         if (s === "unavailable")

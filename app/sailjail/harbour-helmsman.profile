@@ -20,5 +20,7 @@ whitelist ${HOME}/.cache/wpe
 mkdir     ${HOME}/Documents/Helmsman
 whitelist ${HOME}/Documents/Helmsman
 
-env LD_LIBRARY_PATH=/usr/lib64/wpe-compat:/usr/lib/wpe-compat:/usr/lib64:/usr/lib:/opt/wpe-sfos/lib
+# Vendored MapLibre lives under the app datadir; keep it ahead of system libs.
+env LD_LIBRARY_PATH=/usr/share/harbour-helmsman/lib:/usr/lib64/wpe-compat:/usr/lib/wpe-compat:/usr/lib64:/usr/lib:/opt/wpe-sfos/lib
 env WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1
+noblacklist /usr/share/harbour-helmsman/lib

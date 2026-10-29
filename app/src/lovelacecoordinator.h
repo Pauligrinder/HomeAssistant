@@ -139,6 +139,8 @@ public slots:
     bool entityEntryVisible(const QVariant &entry) const;
     QVariant attribute(const QString &entityId, const QString &key) const;
     QString formatState(const QString &entityId) const;
+    // Same labels as formatState, for a historical / override state string.
+    QString formatStateValue(const QString &entityId, const QString &state) const;
     QString areaName(const QString &areaId) const;
     QVariantList areaEntities(const QString &areaId) const;
     QVariantList relatedEntities(const QString &entityId) const;
@@ -163,6 +165,9 @@ public slots:
     void cancelPendingAction();
 
     void fetchHistory(const QStringList &entityIds, int hours = 24);
+    void fetchHistoryRange(const QStringList &entityIds,
+                           const QString &startIso,
+                           const QString &endIso);
     void fetchStatistics(const QStringList &entityIds);
     void prefetchMedia(const QString &path);
     QString cachedMediaUrl(const QString &path) const;
@@ -294,6 +299,9 @@ private:
     void finishServiceCommand(int commandId, bool success);
     void clearOptimisticPending();
     QString resolvedEntityIcon(const QString &entityId) const;
+    QString entityDeviceClass(const QString &entityId) const;
+    QString binarySensorStateLabel(const QString &deviceClass, bool on) const;
+    QString namedStateLabel(const QString &state) const;
     QString iconFromComponentResources(const QString &domain,
                                        const QString &deviceClass,
                                        const QString &state) const;
