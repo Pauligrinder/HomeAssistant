@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network gui positioning dbus qml quick
 LIBS += -ldl
 
-VERSION = 0.6.01
+VERSION = 0.6.02
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 # Private MapLibre libs shipped under /usr/share/harbour-helmsman/lib

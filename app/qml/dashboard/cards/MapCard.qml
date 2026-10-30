@@ -12,6 +12,19 @@ CardChrome {
     // Panel (type: panel) map views fill the page — use MapLibre in-place.
     // Compact cards keep the light raster preview and open MapPage on tap.
     readonly property bool panelMap: root.fillHeight > 0
+    // Walk up to the hosting Silica Page so MapLibre can be torn down cleanly
+    // when the page becomes Inactive (popping a map dashboard was aborting).
+    readonly property Item hostPage: {
+        var p = parent
+        while (p) {
+            if (p.hasOwnProperty && p.hasOwnProperty("status")
+                    && p.hasOwnProperty("orientationTransitionRunning"))
+                return p
+            p = p.parent
+        }
+        return null
+    }
+    readonly property bool mapPageActive: !hostPage || hostPage.status === PageStatus.Active
     readonly property bool showAll: !!(card && card.show_all)
     readonly property bool hasGeoSources: !!(card && card.geo_location_sources
                                              && card.geo_location_sources.length)
@@ -124,12 +137,36 @@ CardChrome {
     }
 
     function openFullscreenMap() {
-        if (!pageStack)
+        if (!pageStack || pageStack.busy)
             return
-        pageStack.push(Qt.resolvedUrl("../../pages/MapPage.qml"), {
+        // Snapshot markers — do not pass a live binding into the page push.
+        // Nested Loader contexts (e.g. collapsable-cards) can invalidate the
+        // source list while MapPage is constructing MapLibre.
+        var src = root.located || []
+        var markers = []
+        for (var i = 0; i < src.length; i++) {
+            var m = src[i]
+            if (!m)
+                continue
+            var lat = Number(m.lat)
+            var lon = Number(m.lon)
+            if (!isFinite(lat) || !isFinite(lon))
+                continue
+            markers.push({
+                             "id": String(m.id || ""),
+                             "lat": lat,
+                             "lon": lon,
+                             "name": String(m.name || ""),
+                             "picture": String(m.picture || "")
+                         })
+        }
+        // Absolute install path: MapCard is often created via Loader.setSource
+        // from nested containers (collapsable-cards), where relative
+        // Qt.resolvedUrl can point outside qml/pages and crash on push.
+        pageStack.push(Qt.resolvedUrl("/usr/share/harbour-helmsman/qml/pages/MapPage.qml"), {
                            hassClient: root.hassClient,
                            mdiIcons: root.mdiIcons,
-                           markers: root.located,
+                           markers: markers,
                            title: (card && card.title) ? String(card.title) : "",
                            autoFit: true
                        })
@@ -137,19 +174,23 @@ CardChrome {
 
     Item {
         width: parent.width
-        // Prefer chrome height over fillHeight so CardLoader cannot bind-loop
-        // fillHeight ↔ contentHeight when this is a panel map.
+        // Use fillHeight directly — binding body height to root.height fed
+        // implicitHeight back into CardLoader and looped fillHeight.
         height: root.panelMap
-                ? Math.max(1, root.height)
+                ? Math.max(1, root.fillHeight)
                 : Math.round(width * 0.75)
         clip: true
 
         Loader {
             id: mapLoader
             anchors.fill: parent
-            // Defer MapLibre until the panel is actually sized; constructing it
-            // at fillHeight 0 during layout passes has been crashing on device.
-            active: root.panelMap ? root.height > Theme.itemSizeLarge : true
+            // Defer MapLibre until sized; drop it as soon as the host page is
+            // Inactive so GL/MapLibre is not destroyed mid-frame on pop.
+            active: {
+                if (root.panelMap)
+                    return root.fillHeight > Theme.itemSizeLarge && root.mapPageActive
+                return true
+            }
             sourceComponent: root.panelMap ? mapLibreComp : entityMapComp
         }
 

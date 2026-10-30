@@ -48,23 +48,38 @@ Column {
         }
     }
 
-    Column {
+    // Build nested cards only while expanded. Keeping map/EntityMap alive at
+    // height 0 inside a clipped collapsed column has crashed on open/tap.
+    Loader {
+        id: nestedLoader
         width: parent.width
-        spacing: Theme.paddingSmall
-        visible: root.expanded
-        height: visible ? implicitHeight : 0
-        clip: true
+        active: root.expanded
+        // Keep height while active so the collapse toggle does not jump to 0
+        // before the Loader tears down on the next frame.
+        height: active && item ? item.height : 0
+        sourceComponent: nestedComp
+    }
 
-        Repeater {
-            model: (root.card && root.card.cards) ? root.card.cards : []
-            CardLoader {
-                width: root.width
-                unitWidth: root.width
-                columns: 12
-                card: modelData
-                dashboard: root.dashboard
-                hassClient: root.hassClient
-                mdiIcons: root.mdiIcons
+    Component {
+        id: nestedComp
+        Column {
+            width: nestedLoader.width
+            spacing: Theme.paddingSmall
+
+            Repeater {
+                model: (root.card && root.card.cards) ? root.card.cards : []
+                CardLoader {
+                    width: parent.width
+                    unitWidth: parent.width
+                    columns: 12
+                    // Never inherit a panel fillHeight into nested cards — a map
+                    // inside a collapsable is a compact preview, not a panel map.
+                    fillHeight: 0
+                    card: modelData
+                    dashboard: root.dashboard
+                    hassClient: root.hassClient
+                    mdiIcons: root.mdiIcons
+                }
             }
         }
     }
