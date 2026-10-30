@@ -19,20 +19,32 @@ Page {
     // drags and rubber-bands the map. Use an explicit back control instead.
     backNavigation: false
 
-    MapLibreMap {
-        id: map
+    // Destroy MapLibre before the page finishes popping — tearing it down with
+    // the Page caused mali heap corruption (exit 134) when leaving map views.
+    Loader {
+        id: mapLoader
         anchors.fill: parent
-        dashboard: page.dashboard
-        markers: page.markers
-        latitude: page.latitude
-        longitude: page.longitude
-        zoom: page.zoom
-        autoFit: page.autoFit
-        interactive: true
-        topContentInset: Theme.itemSizeLarge
-        onMarkerClicked: {
-            if (page.dashboard)
-                page.dashboard.openMoreInfo(entityId)
+        active: page.status === PageStatus.Active
+                || page.status === PageStatus.Activating
+        sourceComponent: mapComp
+    }
+
+    Component {
+        id: mapComp
+        MapLibreMap {
+            anchors.fill: parent
+            dashboard: page.dashboard
+            markers: page.markers
+            latitude: page.latitude
+            longitude: page.longitude
+            zoom: page.zoom
+            autoFit: page.autoFit
+            interactive: true
+            topContentInset: Theme.itemSizeLarge
+            onMarkerClicked: {
+                if (page.dashboard)
+                    page.dashboard.openMoreInfo(entityId)
+            }
         }
     }
 

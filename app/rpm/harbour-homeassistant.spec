@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.01
+Version:    0.6.02
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -89,6 +89,10 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.02-1
+- Tear down MapLibre before page pop to avoid Mali heap aborts.
+- Fix map cards inside collapsable-cards; break MapCard fillHeight loop.
+
 * Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.01-1
 - Interactive MapLibre fullscreen maps; strategy map views; vendored Chum libs.
 - Cover/Events favorites for locks, covers, fans, and similar domains.
