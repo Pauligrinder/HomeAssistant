@@ -248,6 +248,8 @@ Item {
                             width: cell.width
                             unitWidth: width
                             columns: 12
+                            fillHeight: 0
+                            panelMap: false
                             card: {
                                 var c = cell.entry || ({})
                                 // Full column width — ignore sections-grid spans.

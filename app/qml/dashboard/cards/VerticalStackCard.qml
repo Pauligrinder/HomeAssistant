@@ -18,6 +18,9 @@ Column {
             width: root.width
             unitWidth: root.width
             columns: 12
+            // Nested maps must stay compact EntityMap previews, never panel MapLibre.
+            fillHeight: 0
+            panelMap: false
             card: modelData
             dashboard: root.dashboard
             hassClient: root.hassClient

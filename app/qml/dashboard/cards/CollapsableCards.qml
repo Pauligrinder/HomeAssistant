@@ -102,6 +102,7 @@ Column {
                     unitWidth: parent.width
                     columns: 12
                     fillHeight: 0
+                    panelMap: false
                     card: modelData
                     dashboard: root.dashboard
                     hassClient: root.hassClient

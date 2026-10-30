@@ -202,6 +202,8 @@ Item {
         width: root.width
         unitWidth: root.width
         columns: 12
+        fillHeight: 0
+        panelMap: false
         card: root.resolvedCard
         dashboard: root.dashboard
         hassClient: root.hassClient

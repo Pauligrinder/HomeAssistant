@@ -6,12 +6,13 @@ CardChrome {
     id: root
     tapEnabled: false
     contentTopMargin: 0
-    contentBottomMargin: fillHeight > 0 ? 0 : Theme.paddingSmall
-    contentHorizontalMargin: fillHeight > 0 ? 0 : Theme.paddingMedium
-    showBackground: fillHeight <= 0
-    // Panel (type: panel) map views fill the page — use MapLibre in-place.
-    // Compact cards keep the light raster preview and open MapPage on tap.
-    readonly property bool panelMap: root.fillHeight > 0
+    contentBottomMargin: panelMap ? 0 : Theme.paddingSmall
+    contentHorizontalMargin: panelMap ? 0 : Theme.paddingMedium
+    showBackground: !panelMap
+    // Set only by PanelLayout via CardLoader. Do not derive from fillHeight:
+    // CardFlow assigns rowHeight into fillHeight for equal-height rows, which
+    // wrongly turned maps inside vertical-stack / grid / sections into MapLibre.
+    property bool panelMap: false
     // Walk up to the hosting Silica Page so MapLibre can be torn down cleanly
     // when the page becomes Inactive (popping a map dashboard was aborting).
     readonly property Item hostPage: {

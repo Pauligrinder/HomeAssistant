@@ -22,6 +22,8 @@ Column {
             columns: 12
             fillHeight: index === 0 ? layout.fillHeight : 0
             topContentInset: index === 0 ? layout.topContentInset : 0
+            // Sole place that opts a map into in-place MapLibre.
+            panelMap: index === 0 && layout.fillHeight > 0
             card: {
                 var c = modelData || {}
                 c._columns = 12
