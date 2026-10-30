@@ -13,12 +13,42 @@ Column {
     width: parent ? parent.width : Screen.width
     spacing: Theme.paddingSmall
 
+    // Visual expand state (chevron / title). Nested content is armed separately
+    // so the same tap that expands cannot also hit a freshly created map.
     property bool expanded: {
         var v = card ? card.defaultOpen : false
         if (v === true || v === "true")
             return true
-        // desktop-only / contain-toggled → start collapsed on the phone.
         return false
+    }
+    property bool nestedReady: false
+
+    onExpandedChanged: {
+        showNestedTimer.stop()
+        if (root.expanded) {
+            // defaultOpen path: allow nested content on first frame, but still
+            // block the opening click via nestedReady delay when toggled.
+            if (nestedReady)
+                return
+            showNestedTimer.start()
+        } else {
+            nestedReady = false
+        }
+    }
+
+    Timer {
+        id: showNestedTimer
+        interval: 280
+        onTriggered: {
+            if (root.expanded)
+                root.nestedReady = true
+        }
+    }
+
+    Component.onCompleted: {
+        // Start expanded from defaultOpen without waiting for a click.
+        if (root.expanded)
+            root.nestedReady = true
     }
 
     BackgroundItem {
@@ -48,14 +78,13 @@ Column {
         }
     }
 
-    // Build nested cards only while expanded. Keeping map/EntityMap alive at
-    // height 0 inside a clipped collapsed column has crashed on open/tap.
+    // Build nested cards only after expand is armed. Creating a map MouseArea
+    // in the same event as the toggle click used to open MapPage immediately
+    // while the section still looked collapsed.
     Loader {
         id: nestedLoader
         width: parent.width
-        active: root.expanded
-        // Keep height while active so the collapse toggle does not jump to 0
-        // before the Loader tears down on the next frame.
+        active: root.nestedReady
         height: active && item ? item.height : 0
         sourceComponent: nestedComp
     }
@@ -72,9 +101,8 @@ Column {
                     width: parent.width
                     unitWidth: parent.width
                     columns: 12
-                    // Never inherit a panel fillHeight into nested cards — a map
-                    // inside a collapsable is a compact preview, not a panel map.
                     fillHeight: 0
+                    panelMap: false
                     card: modelData
                     dashboard: root.dashboard
                     hassClient: root.hassClient

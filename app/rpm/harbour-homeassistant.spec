@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.02
+Version:    0.6.03
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -89,6 +89,11 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.03-1
+- Delay nested collapsable content so expand tap does not open the map.
+- Sink MapPage input so taps cannot fall through to the dashboard below.
+- Only type:panel views use in-place MapLibre; stacks/grids stay EntityMap.
+
 * Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.02-1
 - Tear down MapLibre before page pop to avoid Mali heap aborts.
 - Fix map cards inside collapsable-cards; break MapCard fillHeight loop.

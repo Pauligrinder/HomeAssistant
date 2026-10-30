@@ -19,6 +19,8 @@ Item {
         id: loader
         width: root.width
         unitWidth: root.width
+        fillHeight: 0
+        panelMap: false
         card: root.card && root.card.card ? root.card.card : ({})
         dashboard: root.dashboard
         hassClient: root.hassClient

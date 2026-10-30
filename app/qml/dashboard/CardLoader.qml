@@ -10,6 +10,10 @@ Loader {
     property int fillHeight: 0
     property int topContentInset: 0
     property int rowHeight: 0
+    // True only for the root card of a type: panel view. Must not follow
+    // fillHeight/rowHeight — CardFlow equalizes row heights and would otherwise
+    // turn every map in a stack/grid/section into an in-place MapLibre (crash).
+    property bool panelMap: false
     property int columns: 12
     property int unitWidth: parent ? parent.width : width
     readonly property int rowUnit: Theme.itemSizeSmall
@@ -61,15 +65,19 @@ Loader {
         var fill = Math.max(loader.fillHeight, loader.rowHeight)
         if (card && card._square)
             fill = Math.round(loader.width)
-        loader.setSource(loader.cardSource, {
-                             "card": loader.card,
-                             "dashboard": loader.dashboard,
-                             "hassClient": loader.hassClient,
-                             "mdiIcons": loader.mdiIcons,
-                             "fillHeight": fill,
-                             "topContentInset": loader.topContentInset,
-                             "minContentHeight": loader.minHeight
-                         })
+        var props = {
+            "card": loader.card,
+            "dashboard": loader.dashboard,
+            "hassClient": loader.hassClient,
+            "mdiIcons": loader.mdiIcons,
+            "fillHeight": fill,
+            "topContentInset": loader.topContentInset,
+            "minContentHeight": loader.minHeight
+        }
+        // MapCard only — other card types reject unknown initial properties.
+        if (loader.card && String(loader.card.type || "") === "map")
+            props.panelMap = loader.panelMap
+        loader.setSource(loader.cardSource, props)
     }
 
     onCardSourceChanged: loader.loadCard()
@@ -96,6 +104,8 @@ Loader {
             item.topContentInset = Qt.binding(function() { return loader.topContentInset })
         if (item.minContentHeight !== undefined)
             item.minContentHeight = Qt.binding(function() { return loader.minHeight })
+        if (item.panelMap !== undefined)
+            item.panelMap = Qt.binding(function() { return loader.panelMap })
     }
 
     // layout-card and similar custom containers: render nested cards instead of

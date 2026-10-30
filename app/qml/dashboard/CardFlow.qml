@@ -120,6 +120,8 @@ Item {
                         columns: flow.columns
                         unitWidth: column.width
                         rowHeight: cardRow.maxNatural
+                        // rowHeight feeds fillHeight for equal rows; never panel MapLibre.
+                        panelMap: false
                         onNaturalHeightChanged: cardRow.refreshRowHeight()
                         Component.onCompleted: cardRow.refreshRowHeight()
                         Component.onDestruction: cardRow.refreshRowHeight()

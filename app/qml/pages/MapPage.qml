@@ -19,11 +19,27 @@ Page {
     // drags and rubber-bands the map. Use an explicit back control instead.
     backNavigation: false
 
+    // Opaque sink so taps never fall through to the dashboard underneath while
+    // MapLibre is loading or when the GL item does not accept a click.
+    Rectangle {
+        anchors.fill: parent
+        color: "#000000"
+        z: 0
+    }
+    MouseArea {
+        anchors.fill: parent
+        z: 0
+        // Swallow presses that miss map gestures / chrome.
+        onPressed: mouse.accepted = true
+        onClicked: {}
+    }
+
     // Destroy MapLibre before the page finishes popping — tearing it down with
     // the Page caused mali heap corruption (exit 134) when leaving map views.
     Loader {
         id: mapLoader
         anchors.fill: parent
+        z: 1
         active: page.status === PageStatus.Active
                 || page.status === PageStatus.Activating
         sourceComponent: mapComp
