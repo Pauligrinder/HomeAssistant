@@ -808,14 +808,19 @@ Page {
                 visible: page.showViewTabs
                 width: parent.width
                 height: visible ? Theme.itemSizeSmall : 0
-                contentWidth: tabRow.width
+                // Non-primary dashboards show the Silica back indicator; keep
+                // the first tab clear of that hit target / visual.
+                readonly property int leftPad: page.followDefault
+                                              ? Theme.horizontalPageMargin
+                                              : Theme.itemSizeLarge
+                contentWidth: tabRow.x + tabRow.width + Theme.horizontalPageMargin
                 clip: true
                 flickableDirection: Flickable.HorizontalFlick
 
                 Row {
                     id: tabRow
                     spacing: Theme.paddingLarge
-                    x: Theme.horizontalPageMargin
+                    x: tabFlick.leftPad
                     Repeater {
                         model: page.tabViews
                         Item {

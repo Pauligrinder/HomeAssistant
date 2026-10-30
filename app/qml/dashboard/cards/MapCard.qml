@@ -5,9 +5,11 @@ import ".."
 CardChrome {
     id: root
     tapEnabled: false
+    // Full-bleed like picture cards — horizontal padding left a gutter that
+    // made compact EntityMap previews look narrower than their chrome box.
     contentTopMargin: 0
-    contentBottomMargin: panelMap ? 0 : Theme.paddingSmall
-    contentHorizontalMargin: panelMap ? 0 : Theme.paddingMedium
+    contentBottomMargin: 0
+    contentHorizontalMargin: 0
     showBackground: !panelMap
     // Set only by PanelLayout via CardLoader. Do not derive from fillHeight:
     // CardFlow assigns rowHeight into fillHeight for equal-height rows, which
@@ -175,11 +177,19 @@ CardChrome {
 
     Item {
         width: parent.width
-        // Use fillHeight directly — binding body height to root.height fed
-        // implicitHeight back into CardLoader and looped fillHeight.
-        height: root.panelMap
-                ? Math.max(1, root.fillHeight)
-                : Math.round(width * 0.75)
+        // Panel maps: page fill. Compact maps: stretch into CardFlow/row
+        // fillHeight (EntityMap only — panelMap stays false). Natural aspect
+        // when the cell does not assign a taller box.
+        height: {
+            if (root.panelMap)
+                return Math.max(1, root.fillHeight)
+            if (root.fillHeight > 0) {
+                return Math.max(1, root.fillHeight
+                                - root.contentTopMargin
+                                - root.contentBottomMargin)
+            }
+            return Math.round(width * 0.75)
+        }
         clip: true
 
         Loader {

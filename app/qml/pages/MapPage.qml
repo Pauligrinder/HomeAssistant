@@ -9,9 +9,10 @@ Page {
     property var dashboard: hassClient ? hassClient.lovelace : null
     property var markers: []
     property string title: ""
-    property real latitude: NaN
-    property real longitude: NaN
-    property real zoom: 15
+    // Finite defaults only — MapLibre aborts on NaN center (domain_error / exit 134).
+    property real latitude: 64.95
+    property real longitude: 25.75
+    property real zoom: 5
     property bool autoFit: true
 
     allowedOrientations: Orientation.All
@@ -36,12 +37,14 @@ Page {
 
     // Destroy MapLibre before the page finishes popping — tearing it down with
     // the Page caused mali heap corruption (exit 134) when leaving map views.
+    // Wait until Active and sized; Activating at 0×0 has also aborted MapLibre.
     Loader {
         id: mapLoader
         anchors.fill: parent
         z: 1
         active: page.status === PageStatus.Active
-                || page.status === PageStatus.Activating
+                && page.width > Theme.itemSizeLarge
+                && page.height > Theme.itemSizeLarge
         sourceComponent: mapComp
     }
 

@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.03
+Version:    0.6.04
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -89,44 +89,49 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
-* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.03-1
+* Fri Oct 30 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.04-1
+- Fix MapPage crash on open: never seed MapLibre with NaN center / zero size.
+- Let compact EntityMap cards fill their chrome (no side padding / row height).
+- Pad the view tab bar left of the back indicator on non-primary dashboards.
+
+* Fri Oct 30 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.03-1
 - Delay nested collapsable content so expand tap does not open the map.
 - Sink MapPage input so taps cannot fall through to the dashboard below.
 - Only type:panel views use in-place MapLibre; stacks/grids stay EntityMap.
 
-* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.02-1
+* Fri Oct 30 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.02-1
 - Tear down MapLibre before page pop to avoid Mali heap aborts.
 - Fix map cards inside collapsable-cards; break MapCard fillHeight loop.
 
-* Fri Oct 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.6.01-1
+* Fri Oct 30 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.01-1
 - Interactive MapLibre fullscreen maps; strategy map views; vendored Chum libs.
 - Cover/Events favorites for locks, covers, fans, and similar domains.
 - History range picker with day separators; zone-exit hysteresis.
 - Map pages use a pill back button so horizontal pan works.
 
-* Sun Oct 25 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.12-1
+* Sun Oct 25 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.12-1
 - Always send location_name so HA zone state matches the cover.
 - Gate in_zones on Core >= 2026.6 so older HA no longer silently drops updates.
 
-* Sat Oct 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.11-1
+* Sat Oct 24 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.11-1
 - Location presets gate Android-style zone transitions, accuracy matching, and confirmatory GPS seeks.
 - Successful webhook posts advance the send clock; failed location updates can retry.
 
-* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.10-1
+* Fri Oct 23 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.10-1
 - Cover shows current zone (icon/color) and endpoint when both URLs are set.
 - History list leaves the active state's end time open-ended.
 
-* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.9-1
+* Fri Oct 23 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.9-1
 - Match layout-card column count to the webview scale (pixelRatio × 1.2) and margins.
 
-* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.8-1
+* Fri Oct 23 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.8-1
 - Scale layout-card column width by Theme.pixelRatio so phones match the webview.
 
-* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.7-1
+* Fri Oct 23 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.7-1
 - Internal connection always reports home when the setting is enabled.
 - Icon-only view tabs get horizontal padding and a press opacity fade.
 
-* Fri Oct 23 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.6-1
+* Fri Oct 23 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.6-1
 - Map cards honor show_all and geo_location_sources; titles overlay the map.
 - layout-card horizontal/vertical packing matches HACS column width rules.
 - View tabs show title and/or icon and respect subview and visible settings.
@@ -134,20 +139,20 @@ done
 - Dashboard backgrounds respect EXIF orientation and load at a smaller size.
 - Maps under the notch keep markers and titles below the cutout.
 
-* Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.4-1
+* Wed Oct 21 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.4-1
 - Pad native dashboards below the screen notch; content can still scroll
   under it.
 - Honor Lovelace view and dashboard background images.
 - Person more-info shows the entity picture as a circular avatar when set.
 
-* Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.3-1
+* Wed Oct 21 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.3-1
 - Native renderers for common HACS cards: horizon, auto-entities, mushroom
   title/light, collapsable cards, and blank button-card spacers.
 - Button cards toggle on tap and open details on hold; double-tap waits
   briefly when double_tap_action is set.
 - Unknown custom components show a clear unsupported message.
 
-* Wed Oct 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.2-1
+* Wed Oct 21 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.2-1
 - Unknown Lovelace roots such as custom:horizontal-layout still show their
   cards; horizontal and vertical layout words pick a sensible packing.
 - Ignore stale GeoClue / cached GPS fixes so location does not jump to an
@@ -156,59 +161,59 @@ done
   including battery helpers.
 - Collapse noisy history legends when a sensor has many states.
 
-* Mon Oct 12 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.1-1
+* Mon Oct 12 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.1-1
 - Picture-glance no longer freezes the phone when a live camera opens.
 - Glance tap opens camera details, and live video resumes after returning.
 - Picture, picture-entity, and picture-elements size to the image and fill
   the card without a chrome strip under the photo.
 
-* Fri Oct 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.5.0-1
+* Fri Oct 09 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.5.0-1
 - Cards, chips, and rows dim while pressed so a tap is visible.
 - Button cards honor show_name, show_icon, show_state, icon_height, and color.
 - Grid cards place one child per cell, so a row of buttons no longer wraps
   early or overflows the view.
 
-* Fri Oct 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.9-1
+* Fri Oct 09 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.9-1
 - Settings has a Debug section. File logging can be turned off, and touch
   actions can be written into the same daily log.
 
-* Thu Oct 08 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.8-1
+* Thu Oct 08 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.8-1
 - Switching from the web dashboard to native opens the dashboard that was
   on screen, or the profile default, instead of the generated Overview.
 - A view with more than 50 cards is split into pages, with previous and
   next arrows, so Overview does not freeze the app.
 
-* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.7-1
+* Wed Oct 07 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.7-1
 - Pictures redraw the first time the app returns from the background.
 - Rounded pictures, including map faces, are scaled and center-cropped
   instead of showing the top-left corner of the photo.
 
-* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.6-1
+* Wed Oct 07 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.6-1
 - Pictures load on the first open. Returning from the background still redraws
   them after Sailfish drops their textures, without clearing the source while
   the first decode is in progress.
 - Each picture, map tile, cover watermark, and Events view icon shows its own
   spinner while it is loading.
 
-* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.5-1
+* Wed Oct 07 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.5-1
 - Events view settings describes the Helmsman widget under its switch.
 - Pictures, maps, camera streams, the cover, and Events view icons redraw
   after the app returns from the background. Sailfish drops their OpenGL
   textures, and an image that still says it is ready will not load again
   until its source is assigned once more.
 
-* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.4-1
+* Wed Oct 07 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.4-1
 - Interface texts now come from one plain file per language, so a translation
   can be updated by editing the text next to its key.
 
-* Wed Oct 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.3-1
+* Wed Oct 07 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.3-1
 - Native dashboard no longer freezes on "Loading dashboard" when the phone
   cannot create OpenGL framebuffers. Rounded pictures, map photos, the cover
   glyph, and the calendar grid are drawn in software.
 - History and apex charts keep their last frame when the app is backgrounded.
 - Settings copy for the cover, Events View, and connection is shorter.
 
-* Tue Oct 06 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.2-1
+* Tue Oct 06 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.2-1
 - Edit dashboard from the native pulley opens that dashboard in the webview
   in edit mode, for administrators on storage-mode dashboards only.
 - More-info lights: brightness, color temperature, color, and group members.
@@ -216,7 +221,7 @@ done
   show action buttons.
 - Keep a separate webview blur snapshot per dashboard and for Settings.
 
-* Wed Sep 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.4.1-1
+* Wed Sep 30 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.4.1-1
 - Native Silica Lovelace is the default home screen; empty or custom-HTML
   dashboards offer a switch back to webview-based dashboards.
 - More-info shows last changed/updated and a state history timeline for
@@ -226,7 +231,7 @@ done
 - Picture elements cards render image overlays, action buttons, and
   conditional elements more faithfully.
 
-* Thu Sep 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.18-1
+* Thu Sep 24 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.18-1
 - Native dashboard Settings opens Helmsman settings; add a Home Assistant
   settings button that opens the web UI /config page.
 - Hide Lovelace items when visibility conditions fail or the entity is
@@ -234,7 +239,7 @@ done
 - Todo lists keep completed items collapsed behind a toggle, and allow
   renaming items while editing.
 
-* Tue Sep 22 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.17-1
+* Tue Sep 22 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.17-1
 - Translate the native UI into Finnish plus many European and East Asian
   locales, with a searchable language picker. System follows the Home
   Assistant profile language when signed in.
@@ -244,31 +249,31 @@ done
 - Todo completed lists can expand/collapse; custom calendar week
   navigation follows “now” until you page away.
 
-* Fri Sep 18 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.16-1
+* Fri Sep 18 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.16-1
 - Apply native dashboard actions immediately and show a spinner until
   Home Assistant confirms the new state.
 
-* Fri Sep 18 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.15-1
+* Fri Sep 18 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.15-1
 - Keep the UI alive when Wi-Fi drops: open the HA websocket on an
   IO thread, skip ConnMan proxy lookup, and retry after a stuck TLS
   connect instead of freezing the event loop.
 - Parse custom calendar titles with the same Wilma subject mapping
   as the Lovelace JS card.
 
-* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.14-1
+* Thu Sep 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.14-1
 - Stack extra native dashboards so the Silica back swipe reveals
   the previous dashboard instead of an empty underlay.
 - Rename the native pulley item to Settings.
 - Stop Home Assistant settings from flashing a duplicate Back to
   dashboard row while scrolling.
 
-* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.13-1
+* Thu Sep 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.13-1
 - Restore the Silica back swipe on a non-default native dashboard
   via an underlay page, without stacking a second live home.
 - Stop Home Assistant settings from flashing when tapping Back to
   dashboard, and set its subtitle to Return to the native dashboard.
 
-* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.12-1
+* Thu Sep 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.12-1
 - Stop stacking a second native home page, which made dashboard
   changes and back swipes run twice.
 - Return to the default native dashboard from the left edge.
@@ -277,7 +282,7 @@ done
 - Keep a way out of HA settings: swipe back on /config, and Back
   to dashboard under Companion app.
 
-* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.11-1
+* Thu Sep 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.11-1
 - Keep the Silica page-back swipe off while the settings web view
   has in-page history, and restore it at the entry URL.
 - When the native dashboard is on, offer Back to dashboard under
@@ -285,16 +290,16 @@ done
 - A native dashboard other than the default is swipe-back to the
   default dashboard.
 
-* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.10-1
+* Thu Sep 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.10-1
 - Restore the page-back swipe on Home Assistant settings and drop
   the extra header that covered the /config web view.
 
-* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.9-1
+* Thu Sep 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.9-1
 - Open Home Assistant settings from the native dashboard pulley.
 - Disable the page-back swipe on /config so HA can navigate, and
   offer Return to dashboard from the settings pulley instead.
 
-* Thu Sep 17 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.8-1
+* Thu Sep 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.8-1
 - Show a 24h history graph on entity details when the state is
   numeric, plus related device sensors and controls.
 - Keep the UI alive when leaving home Wi-Fi: close the old TLS
@@ -303,25 +308,25 @@ done
 - Native todo-list cards show items, honour a custom title, and
   support add, reorder, and delete.
 
-* Tue Sep 15 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.7-1
+* Tue Sep 15 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.7-1
 - Do not reserve a title row on glance cards that have no title.
 
-* Tue Sep 15 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.6-1
+* Tue Sep 15 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.6-1
 - Lay out glance cards in a compact column grid: five columns by
   default, or the configured count, wrapping with empty space on the
   right instead of stretching tiles.
 
-* Tue Sep 15 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.5-1
+* Tue Sep 15 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.5-1
 - Open sidebar add-ons at their ingress or iframe URL so the Home
   Assistant header and sidebar never load.
 - Keep the UI alive when Wi-Fi drops and Helmsman switches to the
   external URL instead of freezing on a reused Qt 5.6 SSL websocket.
 
-* Sun Sep 13 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.4-1
+* Sun Sep 13 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.4-1
 - Open sidebar add-on pages in the web view and stay on that path
   instead of bouncing back to the default dashboard.
 
-* Sun Sep 13 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.3-1
+* Sun Sep 13 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.3-1
 - Include sidebar add-ons next to Lovelace dashboards in the Change
   dashboard picker. Lovelace-like panels stay native; ingress panels
   open in the web view.
@@ -334,7 +339,7 @@ done
 - Write daily diagnostic logs to Documents/Helmsman for lockups and
   connection faults.
 
-* Thu Sep 10 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.2-1
+* Thu Sep 10 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.2-1
 - Play live camera streams on the native details page from Home Assistant
   MJPEG, instead of a still snapshot.
 - Draw Lovelace map cards and entity locations with OpenStreetMap tiles.
@@ -345,7 +350,7 @@ done
 - Choose the Home Assistant web UI engine (stock Gecko, ESR153, or Atlantic
   WPE) from settings. A Sailjail profile lets Atlantic's WebKit load.
 
-* Wed Sep 09 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.1-1
+* Wed Sep 09 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.1-1
 - Honour Lovelace confirmation on the native dashboard with an Allow/Deny
   prompt for scripts and taps that define it.
 - Optional Gecko ESR153 webview when sailfish-browser-next153 is installed;
@@ -354,7 +359,7 @@ done
   Helmsman.
 - Draw native dashboard MDI icons from the font instead of cached PNGs.
 
-* Mon Sep 07 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.3.0-1
+* Mon Sep 07 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.3.0-1
 - Render native cards for the person-status, custom-calendar, and ApexCharts
   custom Lovelace cards.
 - Fix dashboard icons by keeping the MDI renderer out of the QML scope that
@@ -372,47 +377,47 @@ done
   the events view.
 - Read calendars over REST and keep data URIs out of media requests.
 
-* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.24-1
+* Fri Sep 04 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.24-1
 - Fix native dashboard images by fetching binary media correctly, following
   redirects, validating responses, and refreshing entity-backed images.
 - Render dashboard MDI icons after the renderer becomes ready and provide a
   fallback for unknown icons.
 - Add page margins and more space between native dashboard cards.
 
-* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.23-1
+* Fri Sep 04 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.23-1
 - Fix the native dashboard: switching dashboards and view tabs now works,
   cards receive their config before they load so images and content appear,
   and entity state changes reach the UI live instead of freezing at the
   first value. Entities-card rows for toggleable entities show a switch.
 
-* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.22-1
+* Fri Sep 04 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.22-1
 - Load native Lovelace dashboards that have no saved config (auto-gen
   Overview) instead of showing "No config found." Selecting a listed
   dashboard now requests that dashboard's url_path.
 
-* Fri Sep 04 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.21-1
+* Fri Sep 04 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.21-1
 - Optional native Lovelace dashboard renderer (Settings → Dashboard), off
   by default. The Home Assistant web UI remains the home screen until it
   is turned on. Custom cards, energy, and the map still open in the web
   view.
 
-* Thu Sep 03 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.20-1
+* Thu Sep 03 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.20-1
 - Keep each stale location acquisition active for up to 45 seconds so a
   cached or coarse first result can be replaced by a current GPS fix.
 - Preserve the provider timestamp when scheduling the next acquisition.
 
-* Thu Sep 03 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.19-1
+* Thu Sep 03 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.19-1
 - Ping the Home Assistant notification websocket every two minutes and
   reconnect if pong is missing, so a half-open socket no longer reports
   Client is not connected.
 
-* Wed Sep 02 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.18-1
+* Wed Sep 02 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.18-1
 - Recognize Nordpool-style series on data and prices_by_date attributes,
   not only raw_today/today/prices, and ignore timestamp sensor states
   when showing the current graph value.
 - Draw min and max values on Events View graph and history watermarks.
 
-* Wed Sep 02 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.16-1
+* Wed Sep 02 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.16-1
 - Move Events View reorder and remove (drag onto the bin) from the
   widget into Events View favorites settings.
 - Draw Events View graph and sensor history watermarks in the app and
@@ -421,7 +426,7 @@ done
 - Add search on cover and Events View favorites that filters every
   entity list, and keep long sensor lists collapsed until you type.
 
-* Tue Sep 01 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.15-1
+* Tue Sep 01 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.15-1
 - Keep reporting home on the internal connection so Home Assistant does
   not time the device tracker out to away.
 - Add Update location now in settings.
@@ -438,7 +443,7 @@ done
 - Events View can also show any sensor: the current value, with the last
   24 hours as a watermark graph on the card.
 
-* Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.14-1
+* Mon Aug 31 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.14-1
 - Tell Events View when Helmsman is not running, and offer Choose
   favorites when nothing is selected.
 - Add a Settings → Events view description for the Helmsman widget.
@@ -449,21 +454,21 @@ done
 - Events View long-press on a light also offers color temperature and
   common-color swatches when the bulb supports them.
 
-* Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.13-1
+* Mon Aug 31 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.13-1
 - Fix launch showing a blank white screen: LocationReporter bound
   PositionSource.updateTimeout, which is not in the QtPositioning 5.2
   import, so the main window failed to load.
 - Instantiate GeoClue D-Bus listeners only after location reporting is
   enabled, so GPS activation cannot block the first frame.
 
-* Mon Aug 31 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.12-1
+* Mon Aug 31 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.12-1
 - Add native switches to disable individual mobile_app sensors from settings.
 - Add location settings: update mode, optional home-on-internal, and a stale
   timeout (default 15 minutes) before Helmsman requests GPS itself.
 - Stop continuous GPS: reuse other apps' GeoClue fixes, and never fetch GPS
   on an internal connection.
 
-* Sun Aug 30 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.11-1
+* Sun Aug 30 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.11-1
 - Add a third-party Events View widget for selected lights, registered via
   lipstick eventswidgets JSON without overriding system files.
 - Keep cover and Events View favorites as separate lists; existing cover
@@ -472,12 +477,12 @@ done
   Tap toggles a light; long-press on dimmable lights opens brightness.
 - Refresh the widget only while the Events View is visible.
 
-* Sat Aug 29 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.10-1
+* Sat Aug 29 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.10-1
 - Fix cover favorites freezing the app the same way sensors did: the cover
   poller no longer fetches states from inside the login reply handler or
   immediately on an internal/external switch.
 
-* Fri Aug 28 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.9-1
+* Fri Aug 28 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.9-1
 - Fix the app freezing on launch and on internal/external switches: mobile_app
   sensors now start after the dashboard has loaded, and their first webhook
   calls are spaced out instead of all firing at once.
@@ -487,56 +492,56 @@ done
 - Revert the 0.2.8 endpoint changes (request timeouts, internal-to-external
   fallback, splash error screen) that were chasing the wrong root cause.
 
-* Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.8-1
+* Thu Aug 27 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.8-1
 - Treat Wi-Fi as connected only when it is ConnMan's default route (online).
 - If the internal URL times out, fall back to the external address.
 - Show a connection-failed error with Settings on the splash instead of hanging.
 - Report Wi-Fi as null in Home Assistant when it is not connected.
 
-* Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.7-1
+* Thu Aug 27 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.7-1
 - Fix external connections freezing the app after sign-in (cover poller
   no longer downloads every Home Assistant state on the UI thread).
 - Load the dashboard via /lovelace and then switch to the default panel,
   so Nabu Casa no longer gets stuck on a root-URL auth bounce.
 
-* Thu Aug 27 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.6-1
+* Thu Aug 27 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.6-1
 - Show selected lights on the app cover, with paging when there are many.
 - Leave Internal URL empty when there is only one address; skip switching.
 - Open Home Assistant's default dashboard; Companion app opens Helmsman settings.
 - Refresh access tokens before they expire so cover and push stay authenticated.
 
-* Wed Aug 26 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.5-1
+* Wed Aug 26 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.5-1
 - Report battery, Wi-Fi, OS version, and location via the mobile_app webhook.
 - Mark the device as home when using the internal URL (configurable).
 - Improve location seeking with Wi-Fi/GPS hybrid fixes and ConnMan GPS power.
 
-* Mon Aug 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.4-2
+* Mon Aug 24 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.4-2
 - Switch to the external URL on mobile data instead of staying on the LAN address.
 - Renew the access token before it expires so the push channel stops causing
   invalid-authentication warnings in Home Assistant.
 
-* Mon Aug 24 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.4-1
+* Mon Aug 24 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.4-1
 - Keep the live dashboard on resume instead of showing the loading overlay.
 
-* Fri Aug 21 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.2-1
+* Fri Aug 21 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.2-1
 - Internal/external URL configuration with WiFi-based endpoint selection.
 - Theme-aware dashboard loading overlay; larger cover watermarks.
 
-* Thu Aug 20 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.2.0-1
+* Thu Aug 20 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.2.0-1
 - Fix app cover when notifications include tag or group data.
 
-* Thu Aug 20 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.9-1
+* Thu Aug 20 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.1.9-1
 - Register as mobile_app and receive notifications over WebSocket.
 
-* Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.3-1
+* Wed Aug 19 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.1.3-1
 - Rename app/package to Helmsman (harbour-helmsman).
 
-* Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.2-1
+* Wed Aug 19 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.1.2-1
 - Launch directly on connection screen; restore session in background.
 
-* Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.1-1
+* Wed Aug 19 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.1.1-1
 - Fix startup routing to connection/login screens.
 - Embed Lovelace dashboard via WebView with token handoff.
 
-* Wed Aug 19 2026 Pauli Kettunen <pauli.kettunen@sarkain.fi> - 0.1.0-1
+* Wed Aug 19 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.1.0-1
 - Initial packaging: instance connection and login with OTP.
