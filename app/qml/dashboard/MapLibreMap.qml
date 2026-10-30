@@ -406,8 +406,13 @@ Item {
         onErrorChanged: console.log("Helmsman MapLibre error:", error)
 
         Component.onCompleted: {
-            map.center = QtPositioning.coordinate(root.latitude, root.longitude)
-            map.zoomLevel = root.zoom
+            // Never seed MapLibre with NaN — that aborts the process on device.
+            var lat = isFinite(root.latitude) ? root.latitude : 64.95
+            var lon = isFinite(root.longitude) ? root.longitude : 25.75
+            var z = isFinite(root.zoom) ? root.zoom : 5
+            map.center = QtPositioning.coordinate(lat, lon)
+            map.zoomLevel = Math.max(map.minimumZoomLevel,
+                                     Math.min(map.maximumZoomLevel, z))
         }
 
     }
