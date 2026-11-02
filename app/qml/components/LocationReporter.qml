@@ -16,8 +16,12 @@ Item {
     id: reporter
     property var hassClient
     // Home on internal owns the tracker — skip GeoClue seeks while pinned.
+    // Live location temporarily overrides that pin (sensors.liveLocationActive).
+    readonly property bool liveLocation: hassClient && hassClient.sensors
+            ? !!hassClient.sensors.liveLocationActive : false
     readonly property bool pinnedHome: hassClient && hassClient.sensors
             && hassClient.sensors.homeOnInternal && hassClient.usingInternalUrl
+            && !reporter.liveLocation
     property bool enabled: hassClient && hassClient.sensors
             ? hassClient.sensors.locationReporting
               && hassClient.sensors.active
@@ -26,12 +30,18 @@ Item {
     readonly property int staleMinutes: hassClient && hassClient.sensors
             ? hassClient.sensors.locationStaleMinutes : 15
     readonly property int startDelayMs: 4000
-    readonly property int locationPreset: hassClient && hassClient.sensors
-            ? hassClient.sensors.locationPreset : 1
+    readonly property int locationPreset: {
+        if (reporter.liveLocation)
+            return 2
+        return hassClient && hassClient.sensors ? hassClient.sensors.locationPreset : 1
+    }
     // Accurate may run a slightly longer confirmatory burst; saver/balanced stay short.
-    readonly property int seekTimeoutMs: locationPreset >= 2 ? 90000 : 60000
-    readonly property int seekUpdateMs: locationPreset >= 2 ? 3000 : 5000
-    readonly property int staleCheckMs: 60000
+    // Live keeps GPS on continuously with a short update interval.
+    readonly property int seekTimeoutMs: reporter.liveLocation ? 24 * 60 * 60 * 1000
+            : (locationPreset >= 2 ? 90000 : 60000)
+    readonly property int seekUpdateMs: reporter.liveLocation ? 2000
+            : (locationPreset >= 2 ? 3000 : 5000)
+    readonly property int staleCheckMs: reporter.liveLocation ? 10000 : 60000
     // After a seek that produced nothing usable, retry soon — waiting the full
     // stale interval left daycare pickups with a single failed burst.
     readonly property int failedSeekRetryMs: 75000
@@ -82,6 +92,8 @@ Item {
     function canSelfSeek() {
         if (!reporter.enabled || reporter.seeking)
             return false
+        if (reporter.liveLocation)
+            return true
         if (!reporter.locationIsStale())
             return false
         if (reporter.lastSeekAtMs <= 0)
@@ -248,8 +260,9 @@ Item {
         hassClient.sensors.updateLocation(latitude, longitude, acc, -1,
                                           speed, alt, course, vacc)
 
-        // Fresh GPS-quality fix: end the burst early.
-        if (reporter.seeking && hasTs && ageMs < 30000 && acc > 0 && acc <= 75)
+        // Fresh GPS-quality fix: end the burst early (keep running in live mode).
+        if (!reporter.liveLocation
+                && reporter.seeking && hasTs && ageMs < 30000 && acc > 0 && acc <= 75)
             reporter.stopSeek()
         return true
     }
@@ -304,6 +317,18 @@ Item {
             reporter.stopSeek()
             return
         }
+        if (reporter.liveLocation) {
+            if (!reporter.seeking)
+                reporter.refreshNow()
+            else {
+                positionSource.updateInterval = reporter.seekUpdateMs
+                seekTimeoutTimer.restart()
+            }
+            return
+        }
+        // Leaving live mode: drop the continuous GPS session first.
+        if (reporter.seeking)
+            reporter.stopSeek()
         if (reporter.canSelfSeek())
             startDelayTimer.start()
     }
@@ -435,6 +460,7 @@ Item {
         onLocationReportingChanged: reporter.applyMode()
         onActiveChanged: reporter.applyMode()
         onLocationStaleMinutesChanged: reporter.applyMode()
+        onLiveLocationActiveChanged: reporter.applyMode()
         onLocationRefreshRequested: reporter.refreshNow()
     }
 

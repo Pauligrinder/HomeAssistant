@@ -30,6 +30,16 @@ namespace {
 const char *kClientName = "Helmsman";
 const int kOptimisticTimeoutMs = 10000;
 const int kPendingTimerMs = 500;
+// MediaPlayerEntityFeature.BROWSE_MEDIA in Home Assistant core.
+const int kMediaPlayerBrowseMedia = 1 << 17;
+
+QString conditionEntityId(const QVariantMap &cond)
+{
+    QString entityId = cond.value(QStringLiteral("entity")).toString();
+    if (entityId.isEmpty())
+        entityId = cond.value(QStringLiteral("entity_id")).toString();
+    return entityId;
+}
 
 QString domainOfEntity(const QString &entityId)
 {
@@ -927,6 +937,13 @@ void LovelaceCoordinator::adoptStartupDashboard(const QString &path, bool explic
 void LovelaceCoordinator::selectSwitcherPath(const QString &path)
 {
     const QString next = normalizeDashboardPath(path);
+    if (next == QLatin1String("media-browser")) {
+        HelmsmanLog::info(QStringLiteral("ui"),
+                          QStringLiteral("switcher native media-browser"));
+        m_pendingNavigate = QStringLiteral("media-browser");
+        emit pendingNavigateChanged();
+        return;
+    }
     if (isKnownDashboardPath(next)) {
         HelmsmanLog::info(QStringLiteral("ui"),
                           QStringLiteral("switcher native dashboard %1").arg(next));
@@ -1165,6 +1182,7 @@ void LovelaceCoordinator::stop()
     m_mediaPending.clear();
     m_todoById.clear();
     m_todoRefreshById.clear();
+    m_mediaBrowseById.clear();
     clearOptimisticPending();
     if (m_cameraStream)
         m_cameraStream->stop();
@@ -1493,6 +1511,18 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         const QString entityId = m_todoRefreshById.take(id);
         if (success)
             fetchTodo(entityId);
+        return;
+    }
+    if (m_mediaBrowseById.contains(id)) {
+        const MediaBrowseRequest req = m_mediaBrowseById.take(id);
+        if (success) {
+            emit mediaBrowseReady(req.entityId, req.mediaContentId, result.toMap());
+        } else {
+            const QString message = error.value(QStringLiteral("message")).toString();
+            qWarning() << kClientName << "lovelace: browse_media failed"
+                       << req.entityId << message;
+            emit mediaBrowseFailed(req.entityId, req.mediaContentId, message);
+        }
         return;
     }
     if (m_mediaSourceById.contains(id)) {
@@ -1845,6 +1875,20 @@ void LovelaceCoordinator::rebuildSwitcherItems()
         seen.insert(dashboardUrlPath(dash));
     }
 
+    // Same sidebar entry Home Assistant shows for the Media panel.
+    if (!seen.contains(QStringLiteral("media-browser"))) {
+        QVariantMap media;
+        media.insert(QStringLiteral("url_path"), QStringLiteral("media-browser"));
+        media.insert(QStringLiteral("title"),
+                     HelmsmanI18n::instance()
+                     ? HelmsmanI18n::instance()->translation(QStringLiteral("media_browser"))
+                     : QStringLiteral("Media browser"));
+        media.insert(QStringLiteral("icon"), QStringLiteral("mdi:play-box-multiple"));
+        media.insert(QStringLiteral("kind"), QStringLiteral("media-browser"));
+        items.append(media);
+        seen.insert(QStringLiteral("media-browser"));
+    }
+
     QVariantList webItems;
     QVariantMap::const_iterator it = m_panels.constBegin();
     for (; it != m_panels.constEnd(); ++it) {
@@ -2080,7 +2124,7 @@ void LovelaceCoordinator::collectEntitiesFromConditions(const QVariant &conditio
         const QVariantMap cond = item.toMap();
         if (cond.isEmpty())
             continue;
-        const QString entityId = cond.value(QStringLiteral("entity")).toString();
+        const QString entityId = conditionEntityId(cond);
         if (!entityId.isEmpty())
             m_conditionEntities.insert(entityId);
         if (cond.contains(QStringLiteral("conditions")))
@@ -2110,6 +2154,8 @@ void LovelaceCoordinator::collectConditionEntities(const QVariant &value)
     if (map.contains(QStringLiteral("state_filter"))
             && type == QLatin1String("entity-filter"))
         m_needsBroadStateBump = true;
+    if (map.contains(QStringLiteral("badges")))
+        collectConditionEntities(map.value(QStringLiteral("badges")));
     if (map.contains(QStringLiteral("cards")))
         collectConditionEntities(map.value(QStringLiteral("cards")));
     if (map.contains(QStringLiteral("card")))
@@ -2972,7 +3018,7 @@ bool LovelaceCoordinator::evalCondition(const QVariantMap &condition) const
         return true;
 
     if (type == QLatin1String("numeric_state")) {
-        const QString entityId = condition.value(QStringLiteral("entity")).toString();
+        const QString entityId = conditionEntityId(condition);
         bool ok = false;
         const double value = entityState(entityId).toDouble(&ok);
         if (!ok)
@@ -2987,7 +3033,7 @@ bool LovelaceCoordinator::evalCondition(const QVariantMap &condition) const
     }
 
     if (type == QLatin1String("state") || type.isEmpty()) {
-        const QString entityId = condition.value(QStringLiteral("entity")).toString();
+        const QString entityId = conditionEntityId(condition);
         if (entityId.isEmpty())
             return true;
         const QString state = entityState(entityId);
@@ -3992,6 +4038,73 @@ QVariantList LovelaceCoordinator::calendarEvents(const QString &entityId) const
 QVariantList LovelaceCoordinator::todoItems(const QString &entityId) const
 {
     return m_todoItems.value(entityId);
+}
+
+bool LovelaceCoordinator::mediaPlayerCanBrowse(const QString &entityId) const
+{
+    if (domainOfEntity(entityId) != QLatin1String("media_player"))
+        return false;
+    if (!isAvailable(entityId) || isEntityDisabled(entityId))
+        return false;
+    const int features = attribute(entityId, QStringLiteral("supported_features")).toInt();
+    return (features & kMediaPlayerBrowseMedia) != 0;
+}
+
+QVariantList LovelaceCoordinator::browseableMediaPlayers() const
+{
+    QVariantList out;
+    QHash<QString, QVariantMap>::const_iterator it = m_entities.constBegin();
+    for (; it != m_entities.constEnd(); ++it) {
+        const QString entityId = it.key();
+        if (!mediaPlayerCanBrowse(entityId))
+            continue;
+        QVariantMap entry;
+        entry.insert(QStringLiteral("entity_id"), entityId);
+        entry.insert(QStringLiteral("name"), friendlyName(entityId));
+        entry.insert(QStringLiteral("icon"), entityIcon(entityId, QStringLiteral("mdi:cast")));
+        out.append(entry);
+    }
+    std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) {
+        return a.toMap().value(QStringLiteral("name")).toString().localeAwareCompare(
+                       b.toMap().value(QStringLiteral("name")).toString())
+                < 0;
+    });
+    return out;
+}
+
+void LovelaceCoordinator::browseMedia(const QString &entityId,
+                                      const QString &mediaContentId,
+                                      const QString &mediaContentType)
+{
+    if (!m_socket || entityId.isEmpty())
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("media_player/browse_media"));
+    msg.insert(QStringLiteral("entity_id"), entityId);
+    // Root browse omits both; Home Assistant requires them together when set.
+    if (!mediaContentId.isEmpty() || !mediaContentType.isEmpty()) {
+        msg.insert(QStringLiteral("media_content_id"), mediaContentId);
+        msg.insert(QStringLiteral("media_content_type"), mediaContentType);
+    }
+    const int id = m_socket->sendCommand(msg);
+    if (!id)
+        return;
+    MediaBrowseRequest req;
+    req.entityId = entityId;
+    req.mediaContentId = mediaContentId;
+    m_mediaBrowseById.insert(id, req);
+}
+
+void LovelaceCoordinator::playMedia(const QString &entityId,
+                                    const QString &mediaContentId,
+                                    const QString &mediaContentType)
+{
+    if (entityId.isEmpty() || mediaContentId.isEmpty())
+        return;
+    QVariantMap data;
+    data.insert(QStringLiteral("media_content_id"), mediaContentId);
+    data.insert(QStringLiteral("media_content_type"), mediaContentType);
+    callService(QStringLiteral("media_player"), QStringLiteral("play_media"), data, entityId);
 }
 
 void LovelaceCoordinator::setBusy(bool busy)

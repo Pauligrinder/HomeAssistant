@@ -528,6 +528,14 @@ Page {
                        })
     }
 
+    function openMediaBrowser(entityId) {
+        pageStack.push(Qt.resolvedUrl("MediaBrowserPage.qml"), {
+                           hassClient: hassClient,
+                           mdiIcons: page.mdiIcons,
+                           entityId: entityId ? String(entityId) : ""
+                       })
+    }
+
     function openActionConfirm(prompt, onOk, onCancel) {
         if (page.confirmDialogPage)
             return
@@ -562,6 +570,13 @@ Page {
         var parts = p.split("/")
         if (!parts.length || !parts[0].length)
             return
+        if (parts[0] === "media-browser") {
+            var mediaEntity = ""
+            if (parts.length > 1 && parts[1].indexOf("media_player.") === 0)
+                mediaEntity = parts[1]
+            page.openMediaBrowser(mediaEntity)
+            return
+        }
         if (parts[0] === "energy" || parts[0] === "map" || parts[0] === "logbook"
                 || parts[0] === "history" || parts[0] === "config"
                 || parts[0] === "developer-tools" || parts[0] === "assist") {
@@ -742,6 +757,14 @@ Page {
                 visible: !!(dashboard && dashboard.switcherItems
                             && dashboard.switcherItems.length > 1)
                 onClicked: page.openDashboardSwitcher()
+            }
+            MenuItem {
+                text: i18n.translation("toggle_native_web_dashboard")
+                visible: !!(hassClient && hassClient.dashboardModeToggleEnabled)
+                onClicked: {
+                    if (hassClient)
+                        hassClient.nativeDashboardEnabled = !hassClient.nativeDashboardEnabled
+                }
             }
             MenuItem {
                 text: i18n.translation("settings")

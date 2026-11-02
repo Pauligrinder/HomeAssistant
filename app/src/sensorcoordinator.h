@@ -39,6 +39,10 @@ class SensorCoordinator : public QObject
     Q_PROPERTY(int locationPreset READ locationPreset WRITE setLocationPreset NOTIFY locationPresetChanged)
     Q_PROPERTY(int locationStaleMinutes READ locationStaleMinutes WRITE setLocationStaleMinutes NOTIFY locationStaleMinutesChanged)
     Q_PROPERTY(bool homeOnInternal READ homeOnInternal WRITE setHomeOnInternal NOTIFY homeOnInternalChanged)
+    // Cover action that forces frequent accurate GPS until auto-off.
+    Q_PROPERTY(bool coverLiveLocationButton READ coverLiveLocationButton WRITE setCoverLiveLocationButton NOTIFY coverLiveLocationButtonChanged)
+    Q_PROPERTY(int liveLocationAutoOffMinutes READ liveLocationAutoOffMinutes WRITE setLiveLocationAutoOffMinutes NOTIFY liveLocationAutoOffMinutesChanged)
+    Q_PROPERTY(bool liveLocationActive READ liveLocationActive WRITE setLiveLocationActive NOTIFY liveLocationActiveChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY lastErrorChanged)
     Q_PROPERTY(QString lastLocationText READ lastLocationText NOTIFY lastLocationTextChanged)
     // HA device_tracker-style zone name: "home", "not_home", or a zone name.
@@ -55,6 +59,9 @@ public:
     int locationPreset() const;
     int locationStaleMinutes() const;
     bool homeOnInternal() const;
+    bool coverLiveLocationButton() const;
+    int liveLocationAutoOffMinutes() const;
+    bool liveLocationActive() const;
     QString lastError() const;
     QString lastLocationText() const;
     QString locationZone() const;
@@ -90,6 +97,10 @@ public slots:
     void setLocationPreset(int preset);
     void setLocationStaleMinutes(int minutes);
     void setHomeOnInternal(bool enabled);
+    void setCoverLiveLocationButton(bool enabled);
+    void setLiveLocationAutoOffMinutes(int minutes);
+    void setLiveLocationActive(bool active);
+    void toggleLiveLocation();
     void refreshLocation();
     void onAppForegrounded();
     void refreshConfig();
@@ -102,10 +113,15 @@ signals:
     void locationPresetChanged();
     void locationStaleMinutesChanged();
     void homeOnInternalChanged();
+    void coverLiveLocationButtonChanged();
+    void liveLocationAutoOffMinutesChanged();
+    void liveLocationActiveChanged();
     void lastErrorChanged();
     void lastLocationTextChanged();
     void locationZoneChanged();
     void locationRefreshRequested();
+    // Webhook returned HTTP 410 — the mobile_app device was removed in HA.
+    void mobileAppDeleted();
 
 private slots:
     void onWebhookFinished();
@@ -115,6 +131,8 @@ private slots:
     void onUpdateDebounceTimeout();
     void onStartupStepTimeout();
     void onHomeHeartbeatTimeout();
+    void onAlarmTriggersChanged();
+    void onLiveLocationAutoOffTimeout();
 
 private:
     enum WebhookKind {
@@ -166,6 +184,8 @@ private:
     void persistZones() const;
     void loadPersistedZones();
     void ensureOsVersionSensor();
+    void refreshNextAlarm();
+    void ensureTimedAlarmWatch();
     void setSensorState(const QString &id, const QVariant &state,
                         const QString &icon, const QVariantMap &attrs = QVariantMap());
 
@@ -194,7 +214,10 @@ private:
     QTimer m_updateDebounce;
     QTimer m_startupTimer;
     QTimer m_homeHeartbeatTimer;
+    QTimer m_liveLocationAutoOffTimer;
     int m_startupStep;
+    int activeLocationPreset() const;
+    void restartLiveLocationAutoOff();
 
     // Setting + internal URL: always report home; GPS must not override.
     bool atHomeOnInternal() const;
@@ -230,6 +253,9 @@ private:
     int m_locationPreset;
     int m_locationStaleMinutes;
     bool m_homeOnInternal;
+    bool m_coverLiveLocationButton;
+    int m_liveLocationAutoOffMinutes;
+    bool m_liveLocationActive;
     bool m_usingInternalUrl;
     bool m_started;
     bool m_registrationInFlight;
@@ -249,6 +275,7 @@ private:
     bool m_haveBattery;
     bool m_haveWifi;
     bool m_haveLocation;
+    bool m_timedAlarmWatchConnected;
     bool m_haveHomeCoordinates;
     bool m_zonesFetchPending;
     bool m_haveMotionExtras;

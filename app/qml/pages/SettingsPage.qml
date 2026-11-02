@@ -308,6 +308,14 @@ Page {
                             onClicked: hassClient.nativeDashboardEnabled = !checked
                         }
 
+                        TextSwitch {
+                            text: i18n.translation("dashboard_mode_toggle")
+                            automaticCheck: false
+                            checked: hassClient.dashboardModeToggleEnabled
+                            description: i18n.translation("dashboard_mode_toggle_help")
+                            onClicked: hassClient.dashboardModeToggleEnabled = !checked
+                        }
+
                         ComboBox {
                             id: engineBox
                             width: parent.width
@@ -388,6 +396,69 @@ Page {
                             checked: hassClient.coverNotificationsEnabled
                             description: i18n.translation("cover_notifications_help")
                             onClicked: hassClient.coverNotificationsEnabled = !checked
+                        }
+
+                        TextSwitch {
+                            text: i18n.translation("cover_live_location_button")
+                            automaticCheck: false
+                            checked: hassClient.sensors
+                                     ? hassClient.sensors.coverLiveLocationButton : false
+                            description: i18n.translation("cover_live_location_button_help")
+                            onClicked: {
+                                if (hassClient.sensors)
+                                    hassClient.sensors.coverLiveLocationButton = !checked
+                            }
+                        }
+
+                        ComboBox {
+                            id: liveLocationAutoOffBox
+                            width: parent.width
+                            label: i18n.translation("live_location_auto_off")
+                            enabled: hassClient.sensors
+                                     && hassClient.sensors.coverLiveLocationButton
+                            menu: ContextMenu {
+                                MenuItem { text: i18n.translation("duration_5_min") }
+                                MenuItem { text: i18n.translation("duration_15_min") }
+                                MenuItem { text: i18n.translation("duration_30_min") }
+                                MenuItem { text: i18n.translation("duration_1_h") }
+                            }
+                            property bool ready: false
+                            function minutesForIndex(index) {
+                                if (index === 0) return 5
+                                if (index === 1) return 15
+                                if (index === 2) return 30
+                                return 60
+                            }
+                            function indexForMinutes(minutes) {
+                                if (minutes <= 5) return 0
+                                if (minutes <= 15) return 1
+                                if (minutes <= 30) return 2
+                                return 3
+                            }
+                            Component.onCompleted: {
+                                if (hassClient.sensors)
+                                    currentIndex = indexForMinutes(
+                                                hassClient.sensors.liveLocationAutoOffMinutes)
+                                ready = true
+                            }
+                            onCurrentIndexChanged: {
+                                if (!ready || !hassClient.sensors)
+                                    return
+                                var mins = minutesForIndex(currentIndex)
+                                if (hassClient.sensors.liveLocationAutoOffMinutes !== mins)
+                                    hassClient.sensors.liveLocationAutoOffMinutes = mins
+                            }
+                            Connections {
+                                target: hassClient.sensors
+                                onLiveLocationAutoOffMinutesChanged: {
+                                    if (!liveLocationAutoOffBox.ready || !hassClient.sensors)
+                                        return
+                                    var idx = liveLocationAutoOffBox.indexForMinutes(
+                                                hassClient.sensors.liveLocationAutoOffMinutes)
+                                    if (liveLocationAutoOffBox.currentIndex !== idx)
+                                        liveLocationAutoOffBox.currentIndex = idx
+                                }
+                            }
                         }
 
                         Label {

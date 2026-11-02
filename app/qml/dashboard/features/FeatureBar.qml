@@ -7,7 +7,9 @@ Column {
     property string entityId: ""
     property var dashboard
     property var mdiIcons
-    width: parent ? parent.width : Screen.width
+    // When true (tile features_position: inline), shrink to content width.
+    property bool compact: false
+    width: bar.compact ? implicitWidth : (parent ? parent.width : Screen.width)
     spacing: Theme.paddingSmall
     property int entityTick: 0
     readonly property int rev: (dashboard ? dashboard.statesRevision : 0) + entityTick
@@ -23,7 +25,7 @@ Column {
     Repeater {
         model: bar.features
         Loader {
-            width: bar.width
+            width: bar.compact ? (item ? item.implicitWidth || item.width : 0) : bar.width
             visible: {
                 var _ = bar.rev
                 if (!modelData)
@@ -60,23 +62,35 @@ Column {
         if (t === "cover-open-close" || t === "lock-commands" || t === "valve-open-close"
                 || t === "update-actions" || t === "button")
             return buttonsComp
+        if (t === "media-player-playback" || t === "media-player-volume-buttons")
+            return mediaButtonsComp
         if (t === "cover-position" || t === "cover-tilt-position" || t === "fan-speed"
-                || t === "media-player-volume" || t === "valve-position" || t === "bar-gauge")
+                || t === "media-player-volume" || t === "media-player-volume-slider"
+                || t === "valve-position" || t === "bar-gauge")
             return sliderComp
         if (t === "light-favorite-colors" || t === "light-color")
             return colorsComp
         if (t === "light-color-temp")
             return colorTempComp
-        return genericComp
+        // Unknown features stay invisible — dumping "type: state" on the tile
+        // looked like broken overlapping text.
+        return emptyComp
+    }
+
+    function sliderLabel(feature) {
+        var t = feature && feature.type ? String(feature.type) : ""
+        // HA feature sliders are unlabeled; brightness is the exception we keep.
+        if (t === "light-brightness")
+            return i18n.translation("brightness")
+        return ""
     }
 
     Component {
         id: toggleComp
-        TextSwitch {
+        Switch {
             property var feature
             property string entityId
             property var dashboard
-            text: i18n.translation("on")
             automaticCheck: false
             checked: (dashboard && bar.rev >= 0) ? dashboard.isOn(entityId) : false
             onClicked: if (dashboard) dashboard.toggle(entityId)
@@ -276,7 +290,7 @@ Column {
                     key = "current_tilt_position"
                 if (t === "fan-speed")
                     key = "percentage"
-                if (t === "media-player-volume")
+                if (t === "media-player-volume" || t === "media-player-volume-slider")
                     key = "volume_level"
                 if (t === "valve-position")
                     key = "current_position"
@@ -285,11 +299,11 @@ Column {
                 if (t === "bar-gauge")
                     return Number(dashboard.entityState(entityId))
                 var v = Number(dashboard.attribute(entityId, key))
-                if (t === "media-player-volume")
+                if (t === "media-player-volume" || t === "media-player-volume-slider")
                     return v * 100
                 return v
             }
-            label: feature && feature.type ? String(feature.type).replace(/-/g, " ") : ""
+            label: bar.sliderLabel(feature)
             onReleased: {
                 var t = feature.type
                 var domain = dashboard.domainOf(entityId)
@@ -299,10 +313,115 @@ Column {
                     dashboard.callService("cover", "set_cover_tilt_position", { "tilt_position": Math.round(value) }, entityId)
                 else if (t === "fan-speed")
                     dashboard.callService("fan", "set_percentage", { "percentage": Math.round(value) }, entityId)
-                else if (t === "media-player-volume")
+                else if (t === "media-player-volume" || t === "media-player-volume-slider")
                     dashboard.callService("media_player", "volume_set", { "volume_level": value / 100.0 }, entityId)
                 else if (t === "valve-position")
                     dashboard.callService("valve", "set_valve_position", { "position": Math.round(value) }, entityId)
+            }
+        }
+    }
+
+    Component {
+        id: mediaButtonsComp
+        Row {
+            property var feature
+            property string entityId
+            property var dashboard
+            spacing: Theme.paddingSmall
+            readonly property string featureType: feature && feature.type ? String(feature.type) : ""
+            readonly property bool volumeButtons: featureType === "media-player-volume-buttons"
+            readonly property var controls: {
+                if (feature && feature.controls)
+                    return feature.controls
+                if (volumeButtons)
+                    return []
+                return ["media_previous_track", "media_play_pause", "media_next_track"]
+            }
+            readonly property bool showMute: {
+                if (volumeButtons)
+                    return feature && feature.show_mute_button !== false
+                var list = controls || []
+                for (var i = 0; i < list.length; ++i) {
+                    if (String(list[i]) === "volume_mute")
+                        return true
+                }
+                return false
+            }
+            readonly property real stepPct: {
+                var s = feature && feature.step !== undefined ? Number(feature.step) : 5
+                return (isFinite(s) && s > 0) ? s : 5
+            }
+            readonly property bool muted: (dashboard && bar.rev >= 0)
+                                         ? !!dashboard.attribute(entityId, "is_volume_muted") : false
+            readonly property bool playing: (dashboard && bar.rev >= 0)
+                                           ? dashboard.entityState(entityId) === "playing" : false
+
+            function hasControl(name) {
+                var list = controls || []
+                for (var i = 0; i < list.length; ++i) {
+                    if (String(list[i]) === name)
+                        return true
+                }
+                return false
+            }
+
+            function nudgeVolume(delta) {
+                if (!dashboard)
+                    return
+                var cur = Number(dashboard.attribute(entityId, "volume_level"))
+                if (!isFinite(cur))
+                    cur = 0
+                var next = Math.max(0, Math.min(1, cur + (delta / 100.0)))
+                dashboard.callService("media_player", "volume_set",
+                                      { "volume_level": next }, entityId)
+            }
+
+            Button {
+                visible: parent.showMute
+                preferredWidth: Theme.buttonWidthExtraSmall
+                height: Theme.itemSizeExtraSmall
+                text: parent.muted ? "Unmute" : "Mute"
+                onClicked: {
+                    if (!dashboard)
+                        return
+                    dashboard.callService("media_player", "volume_mute",
+                                          { "is_volume_muted": !parent.muted }, entityId)
+                }
+            }
+            Button {
+                visible: parent.volumeButtons
+                preferredWidth: Theme.buttonWidthExtraSmall
+                height: Theme.itemSizeExtraSmall
+                text: "−"
+                onClicked: parent.nudgeVolume(-parent.stepPct)
+            }
+            Button {
+                visible: parent.volumeButtons
+                preferredWidth: Theme.buttonWidthExtraSmall
+                height: Theme.itemSizeExtraSmall
+                text: "+"
+                onClicked: parent.nudgeVolume(parent.stepPct)
+            }
+            Button {
+                visible: !parent.volumeButtons && parent.hasControl("media_previous_track")
+                preferredWidth: Theme.buttonWidthExtraSmall
+                height: Theme.itemSizeExtraSmall
+                text: i18n.translation("prev")
+                onClicked: if (dashboard) dashboard.callService("media_player", "media_previous_track", {}, entityId)
+            }
+            Button {
+                visible: !parent.volumeButtons && parent.hasControl("media_play_pause")
+                preferredWidth: Theme.buttonWidthExtraSmall
+                height: Theme.itemSizeExtraSmall
+                text: parent.playing ? "Pause" : i18n.translation("play")
+                onClicked: if (dashboard) dashboard.callService("media_player", "media_play_pause", {}, entityId)
+            }
+            Button {
+                visible: !parent.volumeButtons && parent.hasControl("media_next_track")
+                preferredWidth: Theme.buttonWidthExtraSmall
+                height: Theme.itemSizeExtraSmall
+                text: i18n.translation("next")
+                onClicked: if (dashboard) dashboard.callService("media_player", "media_next_track", {}, entityId)
             }
         }
     }
@@ -434,17 +553,13 @@ Column {
     }
 
     Component {
-        id: genericComp
-        Label {
+        id: emptyComp
+        Item {
             property var feature
             property string entityId
             property var dashboard
-            width: parent ? parent.width : Screen.width
-            wrapMode: Text.Wrap
-            font.pixelSize: Theme.fontSizeExtraSmall
-            color: Theme.secondaryColor
-            text: (feature && feature.type ? String(feature.type) : "feature")
-                  + ": " + ((dashboard && bar.rev >= 0) ? dashboard.formatState(entityId) : "")
+            width: 1
+            height: 0
         }
     }
 }

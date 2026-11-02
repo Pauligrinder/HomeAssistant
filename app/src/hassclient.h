@@ -63,6 +63,8 @@ class HassClient : public QObject
     Q_PROPERTY(LovelaceCoordinator *lovelace READ lovelace CONSTANT)
     Q_PROPERTY(bool coverNotificationsEnabled READ coverNotificationsEnabled WRITE setCoverNotificationsEnabled NOTIFY coverNotificationsEnabledChanged)
     Q_PROPERTY(bool nativeDashboardEnabled READ nativeDashboardEnabled WRITE setNativeDashboardEnabled NOTIFY nativeDashboardEnabledChanged)
+    // When true, NativeHomePage shows a pulley item to flip native/web mode.
+    Q_PROPERTY(bool dashboardModeToggleEnabled READ dashboardModeToggleEnabled WRITE setDashboardModeToggleEnabled NOTIFY dashboardModeToggleEnabledChanged)
     Q_PROPERTY(QString webViewEngine READ webViewEngine WRITE setWebViewEngine NOTIFY webViewEngineChanged)
     Q_PROPERTY(QString webViewEngineActive READ webViewEngineActive CONSTANT)
     Q_PROPERTY(QVariantList availableWebViewEngines READ availableWebViewEngines NOTIFY availableWebViewEnginesChanged)
@@ -111,6 +113,7 @@ public:
     LovelaceCoordinator *lovelace() const;
     bool coverNotificationsEnabled() const;
     bool nativeDashboardEnabled() const;
+    bool dashboardModeToggleEnabled() const;
     QString webViewEngine() const;
     QString webViewEngineActive() const;
     QVariantList availableWebViewEngines() const;
@@ -134,6 +137,7 @@ public:
     void setHomeWifiSsid(const QString &ssid);
     void setCoverNotificationsEnabled(bool enabled);
     void setNativeDashboardEnabled(bool enabled);
+    void setDashboardModeToggleEnabled(bool enabled);
     void setWebViewEngine(const QString &engine);
     void setUiLanguage(const QString &language);
 
@@ -146,6 +150,9 @@ public slots:
     void login(const QString &username, const QString &password);
     void submitOtp(const QString &code);
     void logout();
+    // Wipe tokens and mobile_app credentials without calling /auth/revoke
+    // (for ConnectionPage "clear saved session" when HA already deleted us).
+    void clearSavedSession();
     void saveConnectionSettings(const QString &internalUrl,
                                 const QString &externalUrl,
                                 const QString &homeWifiSsid,
@@ -200,6 +207,7 @@ signals:
     void loginFailed(const QString &message);
     void coverNotificationsEnabledChanged();
     void nativeDashboardEnabledChanged();
+    void dashboardModeToggleEnabledChanged();
     void webViewEngineChanged();
     void availableWebViewEnginesChanged();
     void uiLanguageChanged();
@@ -225,6 +233,7 @@ private slots:
     void onSensorStartTimeout();
     void onWidgetStartTimeout();
     void onDiagHeartbeatTimeout();
+    void onMobileAppDeleted();
     void configureWidget();
     void configureRealtime();
     void configureSensors();
@@ -291,6 +300,8 @@ private:
     void requestHaProfileLanguage();
     void applyHaProfileLanguage(const QString &raw);
     void clearMobileRegistration();
+    void clearSessionCredentials(bool rotateDeviceId);
+    bool isDefinitiveAuthFailure(int status, const QByteArray &body) const;
     void scheduleSensorStart(int delayMs);
     void startSensors();
     void stopSensors();
@@ -335,6 +346,7 @@ private:
     bool m_pendingPushAfterRefresh;
     bool m_coverNotificationsEnabled;
     bool m_nativeDashboardEnabled;
+    bool m_dashboardModeToggleEnabled;
     QString m_webViewEngine;
     QString m_webViewEngineActive;
     QVariantList m_availableWebViewEngines;

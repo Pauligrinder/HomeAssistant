@@ -31,6 +31,8 @@ Page {
     function iconOf(entry) {
         if (entry && entry.icon && String(entry.icon).length)
             return String(entry.icon)
+        if (page.kindOf(entry) === "media-browser")
+            return "mdi:play-box-multiple"
         return page.kindOf(entry) === "lovelace" ? "mdi:view-dashboard" : "mdi:puzzle"
     }
 
@@ -38,6 +40,14 @@ Page {
         if (!page.dashboard)
             return
         var path = page.pathOf(entry)
+        if (path === "media-browser" || page.kindOf(entry) === "media-browser") {
+            pageStack.replace(Qt.resolvedUrl("MediaBrowserPage.qml"), {
+                                  hassClient: page.hassClient,
+                                  mdiIcons: page.mdiIcons,
+                                  entityId: ""
+                              })
+            return
+        }
         if (page.kindOf(entry) !== "lovelace") {
             page.dashboard.selectSwitcherPath(path)
             pageStack.pop()

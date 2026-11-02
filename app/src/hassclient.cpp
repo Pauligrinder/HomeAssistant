@@ -431,6 +431,7 @@ HassClient::HassClient(QObject *parent)
     , m_pendingPushAfterRefresh(false)
     , m_coverNotificationsEnabled(true)
     , m_nativeDashboardEnabled(true)
+    , m_dashboardModeToggleEnabled(false)
     , m_webViewEngine(QStringLiteral("stock"))
     , m_webViewEngineActive(g_webViewEngineActive)
     , m_uiLanguage(QString())
@@ -492,6 +493,8 @@ HassClient::HassClient(QObject *parent)
             this, SLOT(onWebsocketResult(int,bool,QVariant,QVariantMap)));
     connect(m_widget, SIGNAL(accessTokenStale()),
             this, SLOT(onAccessTokenStale()));
+    connect(m_sensors, SIGNAL(mobileAppDeleted()),
+            this, SLOT(onMobileAppDeleted()));
 
     connect(this, SIGNAL(accessTokenChanged()), this, SLOT(configureWidget()));
     connect(this, SIGNAL(accessExpiresAtChanged()), this, SLOT(configureWidget()));
@@ -516,6 +519,8 @@ HassClient::HassClient(QObject *parent)
         m_coverNotificationsEnabled = ui.value(QStringLiteral("coverNotificationsEnabled")).toBool();
     if (ui.contains(QStringLiteral("nativeDashboardEnabled")))
         m_nativeDashboardEnabled = ui.value(QStringLiteral("nativeDashboardEnabled")).toBool();
+    if (ui.contains(QStringLiteral("dashboardModeToggleEnabled")))
+        m_dashboardModeToggleEnabled = ui.value(QStringLiteral("dashboardModeToggleEnabled")).toBool();
     m_webViewEngine = preferredWebViewEngine(&ui);
     m_availableWebViewEngines = buildAvailableWebViewEngines();
     // Explicit Settings choice only — empty means System (HA profile, else phone).
@@ -569,6 +574,7 @@ WidgetCoordinator *HassClient::widget() const { return m_widget; }
 LovelaceCoordinator *HassClient::lovelace() const { return m_lovelace; }
 bool HassClient::coverNotificationsEnabled() const { return m_coverNotificationsEnabled; }
 bool HassClient::nativeDashboardEnabled() const { return m_nativeDashboardEnabled; }
+bool HassClient::dashboardModeToggleEnabled() const { return m_dashboardModeToggleEnabled; }
 QString HassClient::webViewEngine() const { return m_webViewEngine; }
 QString HassClient::webViewEngineActive() const { return m_webViewEngineActive; }
 QVariantList HassClient::availableWebViewEngines() const { return m_availableWebViewEngines; }
@@ -875,6 +881,16 @@ void HassClient::setNativeDashboardEnabled(bool enabled)
     ui.setValue(QStringLiteral("nativeDashboardEnabled"), enabled);
     emit nativeDashboardEnabledChanged();
     syncLovelaceRunning();
+}
+
+void HassClient::setDashboardModeToggleEnabled(bool enabled)
+{
+    if (m_dashboardModeToggleEnabled == enabled)
+        return;
+    m_dashboardModeToggleEnabled = enabled;
+    QSettings ui(AppSettings::filePath(), QSettings::IniFormat);
+    ui.setValue(QStringLiteral("dashboardModeToggleEnabled"), enabled);
+    emit dashboardModeToggleEnabledChanged();
 }
 
 void HassClient::setWebViewEngine(const QString &engine)
@@ -1482,8 +1498,6 @@ void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ig
     // https/http. parseEndpoint applies host/port/scheme together.
     m_useSsl = useSsl;
 
-    const QString previousHost = m_host;
-
     QString parseError;
     if (!parseEndpoint(endpoint, &parseError)) {
         setError(parseError);
@@ -1497,9 +1511,10 @@ void HassClient::connectToInstance(const QString &endpoint, bool useSsl, bool ig
     // New interactive login should bind tokens to this instance URL.
     m_authClientId = canonicalClientId(m_baseUrl);
 
-    // Switching instances invalidates the previous mobile_app registration.
-    if (!previousHost.isEmpty() && previousHost.compare(m_host, Qt::CaseInsensitive) != 0)
-        clearMobileRegistration();
+    // Always drop a leftover webhook on interactive login. A device deleted
+    // in Home Assistant leaves webhookId on disk (and across reinstalls), and
+    // ensureMobileAppRegistration would otherwise skip the POST forever.
+    clearMobileRegistration();
 
     if (m_internalUrl.isEmpty() && m_externalUrl.isEmpty())
         setInternalUrl(m_baseUrl);
@@ -1565,18 +1580,6 @@ void HassClient::logout()
         setBusy(false);
     }
 
-    if (!m_accessToken.isEmpty()) {
-        m_accessToken.clear();
-        emit accessTokenChanged();
-    }
-    if (!m_refreshToken.isEmpty()) {
-        m_refreshToken.clear();
-        emit refreshTokenChanged();
-    }
-    if (m_accessExpiresAt.isValid()) {
-        m_accessExpiresAt = QDateTime();
-        emit accessExpiresAtChanged();
-    }
     m_flowId.clear();
     m_authCode.clear();
     m_pendingPushAfterRefresh = false;
@@ -1588,12 +1591,35 @@ void HassClient::logout()
     if (m_lovelace)
         m_lovelace->clearForLogout();
     stopPushChannel();
-    clearPersistedTokens();
+    clearSessionCredentials(true);
     clearDashboardSnapshot();
     setLoggedIn(false);
     setNeedsOtp(false);
     setConnected(false);
     setStatus(QStringLiteral("Signed out"));
+}
+
+void HassClient::clearSavedSession()
+{
+    HelmsmanLog::info(QStringLiteral("auth"), QStringLiteral("clear saved session"));
+    m_flowId.clear();
+    m_authCode.clear();
+    m_pendingPushAfterRefresh = false;
+    m_pushAuthRetries = 0;
+    m_pushRefreshFailures = 0;
+    m_endpointDebounceTimer.stop();
+    stopSensors();
+    stopWidget();
+    if (m_lovelace)
+        m_lovelace->clearForLogout();
+    stopPushChannel();
+    clearSessionCredentials(true);
+    clearDashboardSnapshot();
+    setLoggedIn(false);
+    setNeedsOtp(false);
+    setConnected(false);
+    clearError();
+    setStatus(QStringLiteral("Saved session cleared"));
 }
 
 void HassClient::persistConnectionSettings()
@@ -1675,16 +1701,61 @@ void HassClient::persistSession()
 
 void HassClient::clearPersistedTokens()
 {
-    m_accessToken.clear();
-    m_refreshToken.clear();
-    m_accessExpiresAt = QDateTime();
+    clearSessionCredentials(false);
+}
+
+void HassClient::clearSessionCredentials(bool rotateDeviceId)
+{
+    if (!m_accessToken.isEmpty()) {
+        m_accessToken.clear();
+        emit accessTokenChanged();
+    }
+    if (!m_refreshToken.isEmpty()) {
+        m_refreshToken.clear();
+        emit refreshTokenChanged();
+    }
+    if (m_accessExpiresAt.isValid()) {
+        m_accessExpiresAt = QDateTime();
+        emit accessExpiresAtChanged();
+    }
+    clearMobileRegistration();
+    if (rotateDeviceId) {
+        m_deviceId.clear();
+        if (!m_deviceName.isEmpty()) {
+            m_deviceName.clear();
+            emit deviceNameChanged();
+        }
+    }
     persistSession();
 
     QSettings legacy(AppSettings::filePath(), QSettings::IniFormat);
     legacy.remove(QStringLiteral("refreshToken"));
     legacy.remove(QStringLiteral("accessToken"));
     legacy.remove(QStringLiteral("accessExpiresAt"));
+    legacy.remove(QStringLiteral("webhookId"));
+    legacy.remove(QStringLiteral("webhookSecret"));
+    legacy.remove(QStringLiteral("cloudhookUrl"));
+    legacy.remove(QStringLiteral("remoteUiUrl"));
+    if (rotateDeviceId) {
+        legacy.remove(QStringLiteral("deviceId"));
+        legacy.remove(QStringLiteral("deviceName"));
+    }
     legacy.sync();
+}
+
+bool HassClient::isDefinitiveAuthFailure(int status, const QByteArray &body) const
+{
+    if (status == 401)
+        return true;
+    if (status != 400)
+        return false;
+    const QJsonDocument doc = QJsonDocument::fromJson(body);
+    if (!doc.isObject())
+        return true;
+    const QString error = doc.object().value(QStringLiteral("error")).toString();
+    return error == QLatin1String("invalid_grant")
+            || error == QLatin1String("invalid_client")
+            || error == QLatin1String("unauthorized_client");
 }
 
 void HassClient::saveConnectionSettings(const QString &internalUrl,
@@ -2096,14 +2167,30 @@ void HassClient::onReplyFinished()
                     stopPushChannel();
                     stopWidget();
                 }
+                if (isDefinitiveAuthFailure(status, data)) {
+                    HelmsmanLog::info(QStringLiteral("auth"),
+                                      QStringLiteral("background refresh rejected permanently; clearing session"));
+                    clearSessionCredentials(true);
+                    setLoggedIn(false);
+                    setConnected(false);
+                }
                 return;
             }
             setError(message);
             if (kind == RequestRefresh) {
-                // Keep tokens so the user can retry. Wiping here forced a full
-                // password login whenever HA was briefly unreachable or the
-                // client_id did not match yet after an app update.
-                setStatus(QStringLiteral("Could not restore session — tap Retry restore"));
+                // Network blips keep tokens for Retry restore. A revoked refresh
+                // token / deleted device must wipe so Sign in again can register
+                // a new mobile_app integration.
+                if (isDefinitiveAuthFailure(status, data)) {
+                    HelmsmanLog::info(QStringLiteral("auth"),
+                                      QStringLiteral("restore refresh rejected permanently; clearing session"));
+                    clearSessionCredentials(true);
+                    setLoggedIn(false);
+                    setConnected(false);
+                    setStatus(QStringLiteral("Session expired — sign in again"));
+                } else {
+                    setStatus(QStringLiteral("Could not restore session — tap Retry restore"));
+                }
                 setRestoringSession(false);
                 emit restoreFinished(false);
             } else {
@@ -2511,6 +2598,20 @@ void HassClient::clearMobileRegistration()
         emit webhookIdChanged();
         emit mobileAppRegisteredChanged();
     }
+}
+
+void HassClient::onMobileAppDeleted()
+{
+    HelmsmanLog::info(QStringLiteral("auth"),
+                      QStringLiteral("mobile_app deleted in HA; re-registering"));
+    // Rotate device_id so Home Assistant treats this as a new companion.
+    clearMobileRegistration();
+    m_deviceId.clear();
+    if (!m_loggedIn || m_accessToken.isEmpty()) {
+        persistSession();
+        return;
+    }
+    registerMobileApp();
 }
 
 void HassClient::configureSensors()

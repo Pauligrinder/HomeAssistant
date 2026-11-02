@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.04
+Version:    0.6.05
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -89,6 +89,11 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Mon Nov 02 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.05-1
+- Native media browser; tile/badge layout fixes; collapsable fold shield.
+- Fix logout/relogin after HA mobile_app device delete (stale webhookId).
+- Optional pulley native/web toggle; next_alarm sensor; cover live location.
+
 * Fri Oct 30 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.04-1
 - Fix MapPage crash on open: never seed MapLibre with NaN center / zero size.
 - Let compact EntityMap cards fill their chrome (no side padding / row height).
