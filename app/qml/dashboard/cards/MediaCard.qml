@@ -84,4 +84,16 @@ CardChrome {
             onClicked: dashboard.callService("media_player", "media_next_track", {}, entityId)
         }
     }
+    Button {
+        visible: dashboard && root.rev >= 0 && root.entityId.length
+                 && dashboard.mediaPlayerCanBrowse(root.entityId)
+        text: i18n.translation("browse_media")
+        onClicked: {
+            pageStack.push(Qt.resolvedUrl("../../pages/MediaBrowserPage.qml"), {
+                               hassClient: root.hassClient,
+                               mdiIcons: root.mdiIcons,
+                               entityId: root.entityId
+                           })
+        }
+    }
 }

@@ -227,6 +227,20 @@ Page {
                 }
             }
 
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: dashboard && page.rev >= 0 && page.domain === "media_player"
+                         && dashboard.mediaPlayerCanBrowse(page.entityId)
+                text: i18n.translation("browse_media")
+                onClicked: {
+                    pageStack.push(Qt.resolvedUrl("MediaBrowserPage.qml"), {
+                                       hassClient: page.hassClient,
+                                       mdiIcons: page.mdiIcons,
+                                       entityId: page.entityId
+                                   })
+                }
+            }
+
             DetailItem {
                 label: i18n.translation("last_changed")
                 value: page.formatEntityTime("last_changed")

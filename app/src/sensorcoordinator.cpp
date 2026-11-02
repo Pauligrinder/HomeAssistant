@@ -13,6 +13,10 @@
 #include <QSysInfo>
 #include <QPair>
 #include <QtMath>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusArgument>
+#include <QDBusReply>
 #include <algorithm>
 
 #include "appsettings.h"
@@ -39,6 +43,21 @@ const int kLocationPresetAccurate = 2;
 const int kLocationStaleMinutesDefault = 15;
 const int kLocationStaleMinutesMin = 5;
 const int kLocationStaleMinutesMax = 60;
+const int kLiveLocationAutoOffDefaultMinutes = 15;
+const int kLiveLocationIntervalMs = 5 * 1000;
+const double kLiveLocationMoveMeters = 5.0;
+const int kLiveLocationDuplicateSuppressMs = 15 * 1000;
+
+int clampLiveLocationAutoOffMinutes(int minutes)
+{
+    if (minutes <= 5)
+        return 5;
+    if (minutes <= 15)
+        return 15;
+    if (minutes <= 30)
+        return 30;
+    return 60;
+}
 
 int clampLocationStaleMinutes(int minutes)
 {
@@ -252,6 +271,9 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_locationPreset(kLocationPresetBalanced)
     , m_locationStaleMinutes(kLocationStaleMinutesDefault)
     , m_homeOnInternal(true)
+    , m_coverLiveLocationButton(false)
+    , m_liveLocationAutoOffMinutes(kLiveLocationAutoOffDefaultMinutes)
+    , m_liveLocationActive(false)
     , m_usingInternalUrl(false)
     , m_started(false)
     , m_registrationInFlight(false)
@@ -260,6 +282,7 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_haveBattery(false)
     , m_haveWifi(false)
     , m_haveLocation(false)
+    , m_timedAlarmWatchConnected(false)
     , m_haveHomeCoordinates(false)
     , m_zonesFetchPending(false)
     , m_haveMotionExtras(false)
@@ -302,6 +325,10 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
 
     m_homeHeartbeatTimer.setInterval(kHomeHeartbeatMs);
     connect(&m_homeHeartbeatTimer, SIGNAL(timeout()), this, SLOT(onHomeHeartbeatTimeout()));
+
+    m_liveLocationAutoOffTimer.setSingleShot(true);
+    connect(&m_liveLocationAutoOffTimer, SIGNAL(timeout()),
+            this, SLOT(onLiveLocationAutoOffTimeout()));
 
     connect(m_nam, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             this, SLOT(onSslErrors(QNetworkReply*,QList<QSslError>)));
@@ -361,6 +388,17 @@ QList<SensorCoordinator::SensorDef> SensorCoordinator::builtInSensors()
     osVersion.defaultDisabled = false;
     list.append(osVersion);
 
+    // Sailfish timed (com.nokia.time on the system bus) — same role as
+    // Android AlarmManager.getNextAlarmClock() / companion next_alarm.
+    SensorDef nextAlarm;
+    nextAlarm.uniqueId = QStringLiteral("next_alarm");
+    nextAlarm.name = QStringLiteral("Next Alarm");
+    nextAlarm.type = QStringLiteral("sensor");
+    nextAlarm.deviceClass = QStringLiteral("timestamp");
+    nextAlarm.icon = QStringLiteral("mdi:alarm");
+    nextAlarm.defaultDisabled = true;
+    list.append(nextAlarm);
+
     return list;
 }
 
@@ -374,6 +412,9 @@ bool SensorCoordinator::locationEnabled() const { return m_locationEnabled; }
 int SensorCoordinator::locationPreset() const { return m_locationPreset; }
 int SensorCoordinator::locationStaleMinutes() const { return m_locationStaleMinutes; }
 bool SensorCoordinator::homeOnInternal() const { return m_homeOnInternal; }
+bool SensorCoordinator::coverLiveLocationButton() const { return m_coverLiveLocationButton; }
+int SensorCoordinator::liveLocationAutoOffMinutes() const { return m_liveLocationAutoOffMinutes; }
+bool SensorCoordinator::liveLocationActive() const { return m_liveLocationActive; }
 QString SensorCoordinator::lastError() const { return m_lastError; }
 QString SensorCoordinator::lastLocationText() const { return m_lastLocationText; }
 QString SensorCoordinator::locationZone() const { return m_locationZone; }
@@ -515,22 +556,31 @@ QString SensorCoordinator::computeLocationZone() const
                              m_lastAccuracy, m_zones);
 }
 
+int SensorCoordinator::activeLocationPreset() const
+{
+    return m_liveLocationActive ? kLocationPresetAccurate : m_locationPreset;
+}
+
 int SensorCoordinator::duplicateSuppressMs() const
 {
-    if (m_locationPreset == kLocationPresetBatterySaver)
+    if (m_liveLocationActive)
+        return kLiveLocationDuplicateSuppressMs;
+    const int preset = activeLocationPreset();
+    if (preset == kLocationPresetBatterySaver)
         return 30 * 60 * 1000;
-    if (m_locationPreset == kLocationPresetAccurate)
+    if (preset == kLocationPresetAccurate)
         return 5 * 60 * 1000;
     return 15 * 60 * 1000;
 }
 
 bool SensorCoordinator::shouldConfirmZoneTransition(double accuracyMeters) const
 {
-    if (m_locationPreset == kLocationPresetBatterySaver)
+    const int preset = activeLocationPreset();
+    if (preset == kLocationPresetBatterySaver)
         return false;
     if (accuracyMeters <= 0)
         return true;
-    if (m_locationPreset == kLocationPresetAccurate)
+    if (preset == kLocationPresetAccurate)
         return accuracyMeters > 50.0;
     return accuracyMeters > 100.0;
 }
@@ -540,7 +590,8 @@ void SensorCoordinator::maybeRequestTransitionSeek(double accuracyMeters)
     if (!shouldConfirmZoneTransition(accuracyMeters))
         return;
     const QDateTime now = QDateTime::currentDateTimeUtc();
-    const int cooldownMs = m_locationPreset == kLocationPresetAccurate
+    const int preset = activeLocationPreset();
+    const int cooldownMs = preset == kLocationPresetAccurate
             ? 2 * 60 * 1000
             : 10 * 60 * 1000;
     if (m_lastTransitionSeekAt.isValid()
@@ -548,7 +599,7 @@ void SensorCoordinator::maybeRequestTransitionSeek(double accuracyMeters)
         return;
     m_lastTransitionSeekAt = now;
     qWarning() << "Helmsman location: confirmatory seek after zone change"
-               << "acc=" << accuracyMeters << "preset=" << m_locationPreset;
+               << "acc=" << accuracyMeters << "preset=" << preset;
     emit locationRefreshRequested();
 }
 
@@ -587,6 +638,11 @@ void SensorCoordinator::loadPersistedState()
                 settings.value(QStringLiteral("locationStaleMinutes")).toInt());
     if (settings.contains(QStringLiteral("homeOnInternal")))
         m_homeOnInternal = settings.value(QStringLiteral("homeOnInternal")).toBool();
+    if (settings.contains(QStringLiteral("coverLiveLocationButton")))
+        m_coverLiveLocationButton = settings.value(QStringLiteral("coverLiveLocationButton")).toBool();
+    if (settings.contains(QStringLiteral("liveLocationAutoOffMinutes")))
+        m_liveLocationAutoOffMinutes = clampLiveLocationAutoOffMinutes(
+                settings.value(QStringLiteral("liveLocationAutoOffMinutes")).toInt());
     if (settings.contains(QStringLiteral("homeLatitude"))
             && settings.contains(QStringLiteral("homeLongitude"))) {
         const double lat = settings.value(QStringLiteral("homeLatitude")).toDouble();
@@ -620,6 +676,8 @@ void SensorCoordinator::persistState() const
     settings.setValue(QStringLiteral("locationPreset"), m_locationPreset);
     settings.setValue(QStringLiteral("locationStaleMinutes"), m_locationStaleMinutes);
     settings.setValue(QStringLiteral("homeOnInternal"), m_homeOnInternal);
+    settings.setValue(QStringLiteral("coverLiveLocationButton"), m_coverLiveLocationButton);
+    settings.setValue(QStringLiteral("liveLocationAutoOffMinutes"), m_liveLocationAutoOffMinutes);
     if (m_haveHomeCoordinates) {
         settings.setValue(QStringLiteral("homeLatitude"), m_homeLat);
         settings.setValue(QStringLiteral("homeLongitude"), m_homeLon);
@@ -703,6 +761,68 @@ void SensorCoordinator::setLocationStaleMinutes(int minutes)
     emit locationStaleMinutesChanged();
 }
 
+void SensorCoordinator::setCoverLiveLocationButton(bool enabled)
+{
+    if (m_coverLiveLocationButton == enabled)
+        return;
+    m_coverLiveLocationButton = enabled;
+    persistState();
+    emit coverLiveLocationButtonChanged();
+    if (!enabled && m_liveLocationActive)
+        setLiveLocationActive(false);
+}
+
+void SensorCoordinator::setLiveLocationAutoOffMinutes(int minutes)
+{
+    minutes = clampLiveLocationAutoOffMinutes(minutes);
+    if (m_liveLocationAutoOffMinutes == minutes)
+        return;
+    m_liveLocationAutoOffMinutes = minutes;
+    persistState();
+    emit liveLocationAutoOffMinutesChanged();
+    if (m_liveLocationActive)
+        restartLiveLocationAutoOff();
+}
+
+void SensorCoordinator::restartLiveLocationAutoOff()
+{
+    m_liveLocationAutoOffTimer.stop();
+    if (!m_liveLocationActive)
+        return;
+    m_liveLocationAutoOffTimer.start(m_liveLocationAutoOffMinutes * 60 * 1000);
+}
+
+void SensorCoordinator::onLiveLocationAutoOffTimeout()
+{
+    if (m_liveLocationActive)
+        setLiveLocationActive(false);
+}
+
+void SensorCoordinator::setLiveLocationActive(bool active)
+{
+    if (m_liveLocationActive == active)
+        return;
+    m_liveLocationActive = active;
+    if (active)
+        restartLiveLocationAutoOff();
+    else
+        m_liveLocationAutoOffTimer.stop();
+    emit liveLocationActiveChanged();
+    // Live mode temporarily overrides home-on-internal pinning and wants a
+    // fresh accurate fix immediately.
+    updateHomeHeartbeat();
+    refreshLocationZone();
+    if (active && m_started && locationReporting()) {
+        m_lastLocationSent = QDateTime();
+        emit locationRefreshRequested();
+    }
+}
+
+void SensorCoordinator::toggleLiveLocation()
+{
+    setLiveLocationActive(!m_liveLocationActive);
+}
+
 void SensorCoordinator::configure(const QString &webhookId,
                                   const QString &cloudhookUrl,
                                   const QString &remoteUiUrl,
@@ -757,6 +877,8 @@ void SensorCoordinator::start()
     m_configTimer.start();
     updateHomeHeartbeat();
     ensureOsVersionSensor();
+    ensureTimedAlarmWatch();
+    refreshNextAlarm();
     m_startupStep = 0;
     m_startupTimer.start();
     fetchZones();
@@ -797,6 +919,8 @@ void SensorCoordinator::stop()
     m_homeHeartbeatTimer.stop();
     m_registerQueue.clear();
     m_registrationInFlight = false;
+    if (m_liveLocationActive)
+        setLiveLocationActive(false);
     setActive(false);
 }
 
@@ -904,6 +1028,7 @@ void SensorCoordinator::onWebhookFinished()
     if (status == 410) {
         setLastError(QStringLiteral("Mobile app integration deleted in Home Assistant"));
         stop();
+        emit mobileAppDeleted();
         return;
     }
 
@@ -1013,6 +1138,8 @@ void SensorCoordinator::registerNextPending()
             rt.state = false;
         else if (def.unit == QLatin1String("%"))
             rt.state = 0;
+        else if (uniqueId == QLatin1String("next_alarm"))
+            rt.state = QStringLiteral("unavailable");
         else
             rt.state = QStringLiteral("unknown");
     }
@@ -1255,16 +1382,21 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
 
     const QDateTime now = QDateTime::currentDateTimeUtc();
     const bool firstFix = !m_lastGpsAt.isValid();
+    const int preset = activeLocationPreset();
+    const int intervalMs = m_liveLocationActive
+            ? kLiveLocationIntervalMs
+            : minimumLocationIntervalMs(preset);
+    const double moveThreshold = m_liveLocationActive
+            ? kLiveLocationMoveMeters
+            : minimumLocationMoveMeters(preset);
     const bool dueByTime = firstFix
             || !m_lastLocationPostOk
             || !m_lastLocationSent.isValid()
-            || m_lastLocationSent.msecsTo(now)
-            >= minimumLocationIntervalMs(m_locationPreset);
+            || m_lastLocationSent.msecsTo(now) >= intervalMs;
     const double moveMeters = firstFix
             ? 0.0
             : haversineMeters(m_lastLat, m_lastLon, latitude, longitude);
-    const bool dueByMove = !firstFix
-            && moveMeters >= minimumLocationMoveMeters(m_locationPreset);
+    const bool dueByMove = !firstFix && moveMeters >= moveThreshold;
     const bool betterAccuracy = accuracyMeters > 0
             && (m_lastAccuracy <= 0
                 || accuracyMeters + kAccuracyImproveMeters < m_lastAccuracy);
@@ -1399,7 +1531,7 @@ void SensorCoordinator::postLocationUpdate(bool force)
         if (m_lastAccuracy > 0)
             data.insert(QStringLiteral("gps_accuracy"), qRound(m_lastAccuracy));
         // Richer motion attributes on accurate only — free once we have a fix.
-        if (m_locationPreset == kLocationPresetAccurate && m_haveMotionExtras) {
+        if (activeLocationPreset() == kLocationPresetAccurate && m_haveMotionExtras) {
             if (m_lastSpeedMps >= 0)
                 data.insert(QStringLiteral("speed"), m_lastSpeedMps);
             if (m_lastAltitudeM != -1)
@@ -1498,6 +1630,9 @@ void SensorCoordinator::onHomeHeartbeatTimeout()
 
 bool SensorCoordinator::atHomeOnInternal() const
 {
+    // Live tracking must be allowed to leave the pinned-home state.
+    if (m_liveLocationActive)
+        return false;
     return m_homeOnInternal && m_usingInternalUrl;
 }
 
@@ -1571,6 +1706,116 @@ void SensorCoordinator::ensureOsVersionSensor()
                    version.isEmpty() ? QStringLiteral("unknown") : version,
                    QStringLiteral("mdi:sail-boat"),
                    attrs);
+}
+
+void SensorCoordinator::ensureTimedAlarmWatch()
+{
+    if (m_timedAlarmWatchConnected)
+        return;
+    // Base.permission already allows system-bus talk to com.nokia.time.
+    m_timedAlarmWatchConnected = QDBusConnection::systemBus().connect(
+                QStringLiteral("com.nokia.time"),
+                QStringLiteral("/com/nokia/time"),
+                QStringLiteral("com.nokia.time"),
+                QStringLiteral("alarm_triggers_changed"),
+                this, SLOT(onAlarmTriggersChanged()));
+    if (!m_timedAlarmWatchConnected)
+        qWarning() << "Helmsman sensors: timed alarm_triggers_changed subscribe failed";
+}
+
+void SensorCoordinator::onAlarmTriggersChanged()
+{
+    refreshNextAlarm();
+    if (m_started)
+        scheduleSensorUpdate();
+}
+
+void SensorCoordinator::refreshNextAlarm()
+{
+    if (!m_runtime.contains(QStringLiteral("next_alarm")))
+        return;
+
+    QDBusMessage call = QDBusMessage::createMethodCall(
+                QStringLiteral("com.nokia.time"),
+                QStringLiteral("/com/nokia/time"),
+                QStringLiteral("com.nokia.time"),
+                QStringLiteral("get_alarm_triggers"));
+    const QDBusMessage reply = QDBusConnection::systemBus().call(call);
+    if (reply.type() != QDBusMessage::ReplyMessage || reply.arguments().isEmpty()) {
+        qWarning() << "Helmsman sensors: get_alarm_triggers failed"
+                    << reply.errorName() << reply.errorMessage();
+        setSensorState(QStringLiteral("next_alarm"),
+                       QStringLiteral("unavailable"),
+                       QStringLiteral("mdi:alarm"));
+        return;
+    }
+
+    QMap<uint, uint> triggers;
+    const QVariant first = reply.arguments().at(0);
+    if (first.canConvert<QDBusArgument>()) {
+        const QDBusArgument arg = first.value<QDBusArgument>();
+        arg >> triggers;
+    } else if (first.type() == QVariant::Map) {
+        const QVariantMap map = first.toMap();
+        for (auto it = map.constBegin(); it != map.constEnd(); ++it)
+            triggers.insert(it.key().toUInt(), it.value().toUInt());
+    }
+
+    uint nextCookie = 0;
+    uint nextTs = 0;
+    for (auto it = triggers.constBegin(); it != triggers.constEnd(); ++it) {
+        if (it.value() == 0)
+            continue;
+        if (nextTs == 0 || it.value() < nextTs) {
+            nextTs = it.value();
+            nextCookie = it.key();
+        }
+    }
+
+    if (nextTs == 0) {
+        setSensorState(QStringLiteral("next_alarm"),
+                       QStringLiteral("unavailable"),
+                       QStringLiteral("mdi:alarm"));
+        return;
+    }
+
+    const QDateTime utc = QDateTime::fromTime_t(nextTs).toUTC();
+    const QDateTime local = utc.toLocalTime();
+    const QString utcState = utc.toString(QStringLiteral("yyyy-MM-dd'T'HH:mm:ss.zzz'Z'"));
+
+    QString package = QStringLiteral("unknown");
+    QDBusMessage attrCall = QDBusMessage::createMethodCall(
+                QStringLiteral("com.nokia.time"),
+                QStringLiteral("/com/nokia/time"),
+                QStringLiteral("com.nokia.time"),
+                QStringLiteral("get_attributes_by_cookie"));
+    attrCall << nextCookie;
+    const QDBusMessage attrReply = QDBusConnection::systemBus().call(attrCall);
+    if (attrReply.type() == QDBusMessage::ReplyMessage && !attrReply.arguments().isEmpty()) {
+        QMap<QString, QString> attrs;
+        const QVariant attrVar = attrReply.arguments().at(0);
+        if (attrVar.canConvert<QDBusArgument>()) {
+            const QDBusArgument arg = attrVar.value<QDBusArgument>();
+            arg >> attrs;
+        } else if (attrVar.type() == QVariant::Map) {
+            const QVariantMap map = attrVar.toMap();
+            for (auto it = map.constBegin(); it != map.constEnd(); ++it)
+                attrs.insert(it.key(), it.value().toString());
+        }
+        const QString application = attrs.value(QStringLiteral("APPLICATION"));
+        if (!application.isEmpty())
+            package = application;
+    }
+
+    QVariantMap attrs;
+    // Match Android companion attribute names for automations/templates.
+    attrs.insert(QStringLiteral("Local Time"), local.toString(Qt::DefaultLocaleLongDate));
+    attrs.insert(QStringLiteral("Time in Milliseconds"),
+                 static_cast<qint64>(nextTs) * 1000);
+    attrs.insert(QStringLiteral("Package"), package);
+
+    setSensorState(QStringLiteral("next_alarm"), utcState,
+                   QStringLiteral("mdi:alarm"), attrs);
 }
 
 void SensorCoordinator::setSensorState(const QString &id, const QVariant &state,
@@ -1774,6 +2019,7 @@ void SensorCoordinator::onPeriodicTimeout()
     if (!m_started)
         return;
     ensureOsVersionSensor();
+    refreshNextAlarm();
     for (auto it = m_runtime.begin(); it != m_runtime.end(); ++it) {
         if (it.value().registered && !it.value().disabled
                 && it.value().locallyEnabled && it.value().state.isValid())

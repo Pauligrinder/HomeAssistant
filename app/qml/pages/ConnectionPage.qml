@@ -157,6 +157,14 @@ Page {
                 onClicked: page.connectClicked()
             }
 
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: i18n.translation("clear_saved_session")
+                visible: page.hasSavedSession
+                enabled: !hassClient.busy && !hassClient.restoringSession
+                onClicked: hassClient.clearSavedSession()
+            }
+
             Label {
                 anchors.horizontalCenter: parent.horizontalCenter
                 color: Theme.secondaryColor

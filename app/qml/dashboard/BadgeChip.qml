@@ -26,6 +26,8 @@ Rectangle {
             return pill.badge
         if (pill.badge && pill.badge.entity)
             return String(pill.badge.entity)
+        if (pill.badge && pill.badge.entity_id)
+            return String(pill.badge.entity_id)
         return ""
     }
     readonly property bool showIcon: !(pill.badge && typeof pill.badge === "object"
@@ -40,18 +42,28 @@ Rectangle {
         return dashboard.entityIcon(pill.entityId, custom)
     }
     readonly property string labelText: {
+        var configuredName = (pill.badge && typeof pill.badge === "object" && pill.badge.name)
+                             ? String(pill.badge.name) : ""
         var showState = !(pill.badge && typeof pill.badge === "object"
                           && pill.badge.show_state === false)
+        var showName = !!(pill.badge && typeof pill.badge === "object"
+                          && (pill.badge.show_name === true
+                              || (configuredName.length > 0 && !showState)))
         if (pill.rev < 0 || !dashboard || pill.entityId.length === 0)
-            return (pill.badge && typeof pill.badge === "object" && pill.badge.name)
-                   ? String(pill.badge.name) : ""
+            return configuredName
+        // Prefer an explicit badge name — HA shows the name for named
+        // automation/script badges, not a generic Run/On label.
+        if (showName)
+            return configuredName.length ? configuredName
+                                         : dashboard.friendlyName(pill.entityId)
+        if (configuredName.length > 0 && pill.entityId.indexOf("script.") === 0)
+            return configuredName
         if (pill.entityId.indexOf("script.") === 0)
             return i18n.translation("run")
         if (showState)
             return dashboard.formatState(pill.entityId)
-        if (pill.badge && typeof pill.badge === "object" && pill.badge.name)
-            return String(pill.badge.name)
-        return dashboard.friendlyName(pill.entityId)
+        return configuredName.length ? configuredName
+                                     : dashboard.friendlyName(pill.entityId)
     }
 
     height: Theme.itemSizeExtraSmall

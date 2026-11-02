@@ -198,6 +198,15 @@ public slots:
                       const QString &previousUid = QString());
     QVariantList calendarEvents(const QString &entityId) const;
     QVariantList todoItems(const QString &entityId) const;
+    // Media players with MediaPlayerEntityFeature.BROWSE_MEDIA (bit 17).
+    Q_INVOKABLE bool mediaPlayerCanBrowse(const QString &entityId) const;
+    Q_INVOKABLE QVariantList browseableMediaPlayers() const;
+    void browseMedia(const QString &entityId,
+                     const QString &mediaContentId = QString(),
+                     const QString &mediaContentType = QString());
+    void playMedia(const QString &entityId,
+                   const QString &mediaContentId,
+                   const QString &mediaContentType);
 
 signals:
     void readyChanged();
@@ -232,6 +241,12 @@ signals:
     void templateReady(const QString &key, const QString &value);
     void calendarReady(const QString &entityId);
     void todoReady(const QString &entityId);
+    void mediaBrowseReady(const QString &entityId,
+                          const QString &mediaContentId,
+                          const QVariantMap &item);
+    void mediaBrowseFailed(const QString &entityId,
+                           const QString &mediaContentId,
+                           const QString &message);
 
 private slots:
     void onConnectionReady();
@@ -419,6 +434,11 @@ private:
     QHash<QString, QVariantList> m_todoItems;
     QHash<int, QString> m_todoById;
     QHash<int, QString> m_todoRefreshById;
+    struct MediaBrowseRequest {
+        QString entityId;
+        QString mediaContentId;
+    };
+    QHash<int, MediaBrowseRequest> m_mediaBrowseById;
     struct OptimisticPending {
         QVariantMap snapshot;
         QVariantMap optimistic;

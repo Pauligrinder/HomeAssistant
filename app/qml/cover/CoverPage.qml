@@ -59,7 +59,13 @@ CoverBackground {
             return "#FF6B6B"
         return "#FFD54F"
     }
-    readonly property string locationZoneLabel: cover.prettyZoneName(cover.locationZone)
+    readonly property string locationZoneLabel: {
+        var _ = cover.locationTick
+        var name = cover.prettyZoneName(cover.locationZone)
+        if (cover.liveLocationActive)
+            return "Live · " + name
+        return name
+    }
     readonly property string endpointIcon: {
         if (!cover.dualEndpoint || !hassClient)
             return ""
@@ -75,9 +81,15 @@ CoverBackground {
     readonly property bool showingFavorites: !showingNotification
             && hassClient && hassClient.loggedIn
             && favorites.length > 0
+    readonly property bool liveLocationButton: !!(cover.sensors
+            && cover.sensors.coverLiveLocationButton)
+    readonly property bool liveLocationActive: !!(cover.sensors
+            && cover.sensors.liveLocationActive)
     // Lipstick only delivers taps to CoverAction (max two). More than two
     // favorites are shown one at a time so the left action can stay "toggle".
-    readonly property int itemsPerPage: favorites.length > 2 ? 1 : 2
+    // Live-location cover button also needs a slot, so keep one favorite/page.
+    readonly property int itemsPerPage: (favorites.length > 2
+                                         || cover.liveLocationButton) ? 1 : 2
     readonly property int pageCount: Math.max(1, Math.ceil(favorites.length / itemsPerPage))
     readonly property var pageEntities: {
         var all = favorites
@@ -317,10 +329,29 @@ CoverBackground {
         coverPage = (coverPage + 1) % pageCount
     }
 
+    function toggleLiveLocation() {
+        if (!cover.sensors || !cover.liveLocationButton)
+            return
+        cover.sensors.toggleLiveLocation()
+        cover.coverActionOdd = !cover.coverActionOdd
+    }
+
     onPageCountChanged: syncCoverPage()
     onStatusChanged: {
         if (status === Cover.Active && hassClient && hassClient.widget && hassClient.loggedIn)
             hassClient.widget.refresh()
+    }
+
+    // With the live-location button taking the right action, page favorites
+    // automatically when more than one is configured.
+    Timer {
+        interval: 5000
+        repeat: true
+        running: cover.status === Cover.Active
+                 && cover.showingFavorites
+                 && cover.liveLocationButton
+                 && cover.pageCount > 1
+        onTriggered: cover.nextCoverPage()
     }
 
     Connections {
@@ -333,6 +364,8 @@ CoverBackground {
         onLocationZoneChanged: cover.locationTick++
         onLastLocationTextChanged: cover.locationTick++
         onHomeOnInternalChanged: cover.locationTick++
+        onLiveLocationActiveChanged: cover.locationTick++
+        onCoverLiveLocationButtonChanged: cover.locationTick++
     }
 
     Connections {
@@ -777,8 +810,40 @@ CoverBackground {
         }
     }
 
+    // One favorite + live-location button: left toggles entity, right toggles live GPS.
     CoverActionList {
-        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1 && !cover.coverActionOdd
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1
+                 && cover.liveLocationButton && !cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
+        }
+        CoverAction {
+            iconSource: cover.liveLocationActive
+                        ? "image://theme/icon-cover-sync"
+                        : "image://theme/icon-cover-location"
+            onTriggered: cover.toggleLiveLocation()
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1
+                 && cover.liveLocationButton && cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.leftToggleIcon
+            onTriggered: cover.toggleFavorite(cover.leftEntity)
+        }
+        CoverAction {
+            iconSource: cover.liveLocationActive
+                        ? "image://theme/icon-cover-sync"
+                        : "image://theme/icon-cover-location"
+            onTriggered: cover.toggleLiveLocation()
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1
+                 && !cover.liveLocationButton && !cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
             onTriggered: cover.toggleFavorite(cover.leftEntity)
@@ -790,7 +855,8 @@ CoverBackground {
     }
 
     CoverActionList {
-        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1 && cover.coverActionOdd
+        enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount > 1
+                 && !cover.liveLocationButton && cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
             onTriggered: cover.toggleFavorite(cover.leftEntity)
@@ -803,6 +869,7 @@ CoverBackground {
 
     CoverActionList {
         enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1
+                 && !cover.liveLocationButton
                  && cover.leftActionEnabled && !cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
@@ -812,10 +879,32 @@ CoverBackground {
 
     CoverActionList {
         enabled: cover.showingFavorites && cover.pageEntities.length === 1 && cover.pageCount === 1
+                 && !cover.liveLocationButton
                  && cover.leftActionEnabled && cover.coverActionOdd
         CoverAction {
             iconSource: cover.leftToggleIcon
             onTriggered: cover.toggleFavorite(cover.leftEntity)
+        }
+    }
+
+    // No favorites (or notifications covering them): live location alone.
+    CoverActionList {
+        enabled: cover.liveLocationButton && !cover.showingFavorites && !cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.liveLocationActive
+                        ? "image://theme/icon-cover-sync"
+                        : "image://theme/icon-cover-location"
+            onTriggered: cover.toggleLiveLocation()
+        }
+    }
+
+    CoverActionList {
+        enabled: cover.liveLocationButton && !cover.showingFavorites && cover.coverActionOdd
+        CoverAction {
+            iconSource: cover.liveLocationActive
+                        ? "image://theme/icon-cover-sync"
+                        : "image://theme/icon-cover-location"
+            onTriggered: cover.toggleLiveLocation()
         }
     }
 }
