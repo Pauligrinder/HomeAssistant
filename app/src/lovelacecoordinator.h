@@ -198,15 +198,21 @@ public slots:
                       const QString &previousUid = QString());
     QVariantList calendarEvents(const QString &entityId) const;
     QVariantList todoItems(const QString &entityId) const;
+    // Synthetic picker id for in-app media_source browsing (HA "browser" mode).
+    static QString localMediaBrowserId();
     // Media players with MediaPlayerEntityFeature.BROWSE_MEDIA (bit 17).
     Q_INVOKABLE bool mediaPlayerCanBrowse(const QString &entityId) const;
     Q_INVOKABLE QVariantList browseableMediaPlayers() const;
-    void browseMedia(const QString &entityId,
-                     const QString &mediaContentId = QString(),
-                     const QString &mediaContentType = QString());
-    void playMedia(const QString &entityId,
-                   const QString &mediaContentId,
-                   const QString &mediaContentType);
+    Q_INVOKABLE void browseMedia(const QString &entityId,
+                                 const QString &mediaContentId = QString(),
+                                 const QString &mediaContentType = QString());
+    // Browse Home Assistant media sources (Local / My media, Radio Browser, …).
+    Q_INVOKABLE void browseMediaSource(const QString &mediaContentId = QString());
+    Q_INVOKABLE void playMedia(const QString &entityId,
+                               const QString &mediaContentId,
+                               const QString &mediaContentType);
+    // Resolve a media-source item and open it in-app (images) or via the system.
+    Q_INVOKABLE void openBrowsableMedia(const QString &mediaContentId);
 
 signals:
     void readyChanged();
@@ -247,6 +253,10 @@ signals:
     void mediaBrowseFailed(const QString &entityId,
                            const QString &mediaContentId,
                            const QString &message);
+    // fileUrl is a local file:// for images after download; http(s) otherwise.
+    void mediaOpenReady(const QString &mediaContentId,
+                        const QString &fileUrl,
+                        const QString &mimeType);
 
 private slots:
     void onConnectionReady();
@@ -428,6 +438,10 @@ private:
     QHash<QString, QString> m_mediaCache;
     QSet<QString> m_mediaPending;
     QHash<int, QString> m_mediaSourceById;
+    // media_source/resolve_media requests meant for opening (not thumbnail cache).
+    QHash<int, QString> m_mediaOpenById;
+    // After an open resolve downloads via getMedia, emit mediaOpenReady for these.
+    QSet<QString> m_mediaOpenPending;
     QHash<QString, QString> m_templates;
     QHash<int, QString> m_templateKeys;
     QHash<QString, QVariantList> m_calendarEvents;

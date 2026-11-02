@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.05
+Version:    0.6.06
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -89,6 +89,9 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Tue Nov 03 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.06-1
+- Media browser Local entry: browse HA media sources and open files in-app.
+
 * Mon Nov 02 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.05-1
 - Native media browser; tile/badge layout fixes; collapsable fold shield.
 - Fix logout/relogin after HA mobile_app device delete (stale webhookId).

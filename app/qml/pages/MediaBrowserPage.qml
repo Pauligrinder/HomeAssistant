@@ -16,6 +16,12 @@ Page {
     property bool loading: false
     property string errorText: ""
     property int playersTick: 0
+    property string pendingOpenId: ""
+    property string pendingOpenTitle: ""
+    // Must match LovelaceCoordinator::localMediaBrowserId().
+    readonly property string resolvedLocalId: "__local__"
+    readonly property bool isLocal: page.entityId.length > 0
+            && page.entityId === page.resolvedLocalId
     readonly property bool pickingPlayer: !page.entityId.length
     readonly property var players: {
         page.playersTick
@@ -26,6 +32,8 @@ Page {
             return page.pageTitle
         if (page.pickingPlayer)
             return i18n.translation("media_browser")
+        if (page.isLocal)
+            return i18n.translation("media_browser_local")
         if (dashboard && page.entityId.length)
             return dashboard.friendlyName(page.entityId)
         return i18n.translation("media_browser")
@@ -42,7 +50,10 @@ Page {
             return
         page.loading = true
         page.errorText = ""
-        dashboard.browseMedia(page.entityId, page.mediaContentId, page.mediaContentType)
+        if (page.isLocal)
+            dashboard.browseMediaSource(page.mediaContentId)
+        else
+            dashboard.browseMedia(page.entityId, page.mediaContentId, page.mediaContentType)
     }
 
     function openPlayer(entityId) {
@@ -69,13 +80,31 @@ Page {
     }
 
     function playItem(item) {
-        if (!dashboard || !item || !page.entityId.length)
+        if (!dashboard || !item)
             return
         var contentId = item.media_content_id ? String(item.media_content_id) : ""
         if (!contentId.length)
             return
+        if (page.isLocal) {
+            page.openLocalItem(item)
+            return
+        }
+        if (!page.entityId.length)
+            return
         dashboard.playMedia(page.entityId, contentId,
                             item.media_content_type ? String(item.media_content_type) : "")
+    }
+
+    function openLocalItem(item) {
+        if (!dashboard || !item)
+            return
+        var contentId = item.media_content_id ? String(item.media_content_id) : ""
+        if (!contentId.length)
+            return
+        page.pendingOpenId = contentId
+        page.pendingOpenTitle = item.title ? String(item.title) : ""
+        page.loading = true
+        dashboard.openBrowsableMedia(contentId)
     }
 
     function activateChild(item) {
@@ -118,6 +147,29 @@ Page {
             page.errorText = message && String(message).length
                     ? String(message)
                     : i18n.translation("media_browse_failed")
+        }
+        onMediaOpenReady: {
+            if (!page.isLocal)
+                return
+            if (String(mediaContentId || "") !== String(page.pendingOpenId || ""))
+                return
+            var title = page.pendingOpenTitle
+            page.loading = false
+            page.pendingOpenId = ""
+            page.pendingOpenTitle = ""
+            var url = fileUrl ? String(fileUrl) : ""
+            if (!url.length) {
+                page.errorText = i18n.translation("media_open_failed")
+                return
+            }
+            var mime = mimeType ? String(mimeType).toLowerCase() : ""
+            // file:// means we downloaded an image into the media cache.
+            if (mime.indexOf("image/") === 0 || url.indexOf("file://") === 0) {
+                pageStack.push(Qt.resolvedUrl("MediaImagePage.qml"), {
+                                   titleText: title,
+                                   sourceUrl: url
+                               })
+            }
         }
         onStatesRevisionChanged: {
             if (page.pickingPlayer)
@@ -172,12 +224,16 @@ Page {
             height: Theme.itemSizeLarge
             readonly property var item: modelData || {}
             readonly property bool isPlayer: page.pickingPlayer
+            readonly property bool isLocalPlayer: row.isPlayer
+                    && String(item.entity_id || "") === page.resolvedLocalId
             readonly property string titleText: {
                 if (row.isPlayer)
                     return item.name ? String(item.name) : String(item.entity_id || "")
                 return item.title ? String(item.title) : ""
             }
             readonly property string subtitleText: {
+                if (row.isLocalPlayer)
+                    return i18n.translation("media_browser_local_help")
                 if (row.isPlayer)
                     return item.entity_id ? String(item.entity_id) : ""
                 var bits = []
@@ -250,6 +306,8 @@ Page {
                 visible: !art.visible
                 mdiIcons: page.mdiIcons
                 name: {
+                    if (row.isLocalPlayer)
+                        return "mdi:folder-home"
                     if (row.isPlayer)
                         return item.icon ? String(item.icon) : "mdi:cast"
                     var cls = item.media_class ? String(item.media_class) : ""

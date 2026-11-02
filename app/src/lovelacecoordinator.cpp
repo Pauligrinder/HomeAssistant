@@ -23,6 +23,7 @@
 #include <QDebug>
 #include <QSslError>
 #include <QTimer>
+#include <QDesktopServices>
 #include <algorithm>
 
 namespace {
@@ -32,6 +33,20 @@ const int kOptimisticTimeoutMs = 10000;
 const int kPendingTimerMs = 500;
 // MediaPlayerEntityFeature.BROWSE_MEDIA in Home Assistant core.
 const int kMediaPlayerBrowseMedia = 1 << 17;
+const char kLocalMediaBrowserId[] = "__local__";
+
+bool looksLikeImageMedia(const QString &path, const QString &mimeLower)
+{
+    if (mimeLower.startsWith(QLatin1String("image/")))
+        return true;
+    const QString lower = path.toLower();
+    return lower.endsWith(QLatin1String(".jpg"))
+            || lower.endsWith(QLatin1String(".jpeg"))
+            || lower.endsWith(QLatin1String(".png"))
+            || lower.endsWith(QLatin1String(".gif"))
+            || lower.endsWith(QLatin1String(".webp"))
+            || lower.endsWith(QLatin1String(".bmp"));
+}
 
 QString conditionEntityId(const QVariantMap &cond)
 {
@@ -1179,6 +1194,8 @@ void LovelaceCoordinator::stop()
     // Command ids do not survive a reconnect, so in-flight media resolves have
     // to be forgotten or their pictures would never be requested again.
     m_mediaSourceById.clear();
+    m_mediaOpenById.clear();
+    m_mediaOpenPending.clear();
     m_mediaPending.clear();
     m_todoById.clear();
     m_todoRefreshById.clear();
@@ -1525,6 +1542,43 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
         }
         return;
     }
+    if (m_mediaOpenById.contains(id)) {
+        const QString path = m_mediaOpenById.take(id);
+        if (!success) {
+            qWarning() << "Helmsman lovelace: cannot open media source" << path
+                       << error.value(QStringLiteral("message")).toString();
+            emit mediaOpenReady(path, QString(), QString());
+            return;
+        }
+        const QVariantMap map = result.toMap();
+        const QString url = map.value(QStringLiteral("url")).toString();
+        const QString mime = map.value(QStringLiteral("mime_type")).toString();
+        if (url.isEmpty()) {
+            qWarning() << "Helmsman lovelace: open media source returned empty URL" << path;
+            return;
+        }
+        const QString absolute = resolveMedia(url);
+        const QString mimeLower = mime.toLower();
+        if (looksLikeImageMedia(path, mimeLower)) {
+            // Download with auth into the media cache, then hand QML a file://.
+            m_mediaOpenPending.insert(path);
+            if (m_mediaCache.contains(path)) {
+                m_mediaOpenPending.remove(path);
+                emit mediaOpenReady(path, m_mediaCache.value(path), mime);
+                return;
+            }
+            if (m_mediaPending.contains(path))
+                return;
+            m_mediaPending.insert(path);
+            getMedia(QUrl(absolute), path);
+            return;
+        }
+        if (!QDesktopServices::openUrl(QUrl(absolute)))
+            qWarning() << "Helmsman lovelace: system open failed for" << absolute;
+        // Let the browser page clear its busy state even when the system handler owns playback.
+        emit mediaOpenReady(path, absolute, mime);
+        return;
+    }
     if (m_mediaSourceById.contains(id)) {
         const QString path = m_mediaSourceById.take(id);
         // The resolved URL is signed and short-lived, so the cache stays keyed
@@ -1536,6 +1590,7 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
             qWarning() << "Helmsman lovelace: cannot resolve media source" << path
                        << error.value(QStringLiteral("message")).toString();
             m_mediaPending.remove(path);
+            m_mediaOpenPending.remove(path);
             return;
         }
         getMedia(QUrl(resolveMedia(url)), path);
@@ -4050,9 +4105,26 @@ bool LovelaceCoordinator::mediaPlayerCanBrowse(const QString &entityId) const
     return (features & kMediaPlayerBrowseMedia) != 0;
 }
 
+QString LovelaceCoordinator::localMediaBrowserId()
+{
+    return QString::fromLatin1(kLocalMediaBrowserId);
+}
+
 QVariantList LovelaceCoordinator::browseableMediaPlayers() const
 {
     QVariantList out;
+    // Same role as HA's "Web browser" target: browse media sources and open
+    // files in the client instead of casting them to a speaker/TV.
+    QVariantMap local;
+    local.insert(QStringLiteral("entity_id"), localMediaBrowserId());
+    local.insert(QStringLiteral("name"),
+                 HelmsmanI18n::instance()
+                 ? HelmsmanI18n::instance()->translation(QStringLiteral("media_browser_local"))
+                 : QStringLiteral("Local"));
+    local.insert(QStringLiteral("icon"), QStringLiteral("mdi:folder-home"));
+    out.append(local);
+
+    QVariantList players;
     QHash<QString, QVariantMap>::const_iterator it = m_entities.constBegin();
     for (; it != m_entities.constEnd(); ++it) {
         const QString entityId = it.key();
@@ -4062,13 +4134,14 @@ QVariantList LovelaceCoordinator::browseableMediaPlayers() const
         entry.insert(QStringLiteral("entity_id"), entityId);
         entry.insert(QStringLiteral("name"), friendlyName(entityId));
         entry.insert(QStringLiteral("icon"), entityIcon(entityId, QStringLiteral("mdi:cast")));
-        out.append(entry);
+        players.append(entry);
     }
-    std::sort(out.begin(), out.end(), [](const QVariant &a, const QVariant &b) {
+    std::sort(players.begin(), players.end(), [](const QVariant &a, const QVariant &b) {
         return a.toMap().value(QStringLiteral("name")).toString().localeAwareCompare(
                        b.toMap().value(QStringLiteral("name")).toString())
                 < 0;
     });
+    out += players;
     return out;
 }
 
@@ -4078,6 +4151,10 @@ void LovelaceCoordinator::browseMedia(const QString &entityId,
 {
     if (!m_socket || entityId.isEmpty())
         return;
+    if (entityId == localMediaBrowserId()) {
+        browseMediaSource(mediaContentId);
+        return;
+    }
     QJsonObject msg;
     msg.insert(QStringLiteral("type"), QStringLiteral("media_player/browse_media"));
     msg.insert(QStringLiteral("entity_id"), entityId);
@@ -4093,6 +4170,53 @@ void LovelaceCoordinator::browseMedia(const QString &entityId,
     req.entityId = entityId;
     req.mediaContentId = mediaContentId;
     m_mediaBrowseById.insert(id, req);
+}
+
+void LovelaceCoordinator::browseMediaSource(const QString &mediaContentId)
+{
+    if (!m_socket)
+        return;
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("media_source/browse_media"));
+    if (!mediaContentId.isEmpty())
+        msg.insert(QStringLiteral("media_content_id"), mediaContentId);
+    const int id = m_socket->sendCommand(msg);
+    if (!id)
+        return;
+    MediaBrowseRequest req;
+    req.entityId = localMediaBrowserId();
+    req.mediaContentId = mediaContentId;
+    m_mediaBrowseById.insert(id, req);
+}
+
+void LovelaceCoordinator::openBrowsableMedia(const QString &mediaContentId)
+{
+    if (!m_socket || mediaContentId.isEmpty())
+        return;
+    if (!mediaContentId.startsWith(QLatin1String("media-source://"))) {
+        // Already a path/URL the client can fetch or hand to the system.
+        const QString absolute = resolveMedia(mediaContentId);
+        if (looksLikeImageMedia(mediaContentId, QString())) {
+            m_mediaOpenPending.insert(mediaContentId);
+            prefetchMedia(mediaContentId);
+            if (m_mediaCache.contains(mediaContentId)) {
+                m_mediaOpenPending.remove(mediaContentId);
+                emit mediaOpenReady(mediaContentId, m_mediaCache.value(mediaContentId),
+                                    QStringLiteral("image/*"));
+            }
+            return;
+        }
+        if (!QDesktopServices::openUrl(QUrl(absolute)))
+            qWarning() << "Helmsman lovelace: system open failed for" << absolute;
+        emit mediaOpenReady(mediaContentId, absolute, QString());
+        return;
+    }
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("media_source/resolve_media"));
+    msg.insert(QStringLiteral("media_content_id"), mediaContentId);
+    const int id = m_socket->sendCommand(msg);
+    if (id)
+        m_mediaOpenById.insert(id, mediaContentId);
 }
 
 void LovelaceCoordinator::playMedia(const QString &entityId,
@@ -4283,6 +4407,7 @@ void LovelaceCoordinator::onReplyFinished()
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status != 0 && (status < 200 || status >= 300)) {
             qWarning() << "Helmsman lovelace: media HTTP" << status << "for" << tag;
+            m_mediaOpenPending.remove(tag);
             return;
         }
 
@@ -4333,6 +4458,8 @@ void LovelaceCoordinator::onReplyFinished()
                         const QString url = QStringLiteral("file://") + filePath;
                         m_mediaCache.insert(tag, url);
                         emit mediaCached(tag, url);
+                        if (m_mediaOpenPending.remove(tag))
+                            emit mediaOpenReady(tag, url, QStringLiteral("image/jpeg"));
                         return;
                     }
                 }
@@ -4351,6 +4478,8 @@ void LovelaceCoordinator::onReplyFinished()
                 const QString url = QStringLiteral("file://") + filePath;
                 m_mediaCache.insert(tag, url);
                 emit mediaCached(tag, url);
+                if (m_mediaOpenPending.remove(tag))
+                    emit mediaOpenReady(tag, url, QString::fromUtf8(contentType));
                 return;
             }
             qWarning() << "Helmsman lovelace: failed to cache raw image for" << tag;
@@ -4367,17 +4496,21 @@ void LovelaceCoordinator::onReplyFinished()
             qWarning() << "Helmsman lovelace: invalid image response for" << tag
                        << "content-type=" << reply->header(QNetworkRequest::ContentTypeHeader).toString()
                        << "bytes=" << data.size();
+            m_mediaOpenPending.remove(tag);
             return;
         }
 
         const QString filePath = mediaCachePath(tag);
         if (!image.save(filePath, "PNG")) {
             qWarning() << "Helmsman lovelace: failed to cache image for" << tag;
+            m_mediaOpenPending.remove(tag);
             return;
         }
         const QString url = QStringLiteral("file://") + filePath;
         m_mediaCache.insert(tag, url);
         emit mediaCached(tag, url);
+        if (m_mediaOpenPending.remove(tag))
+            emit mediaOpenReady(tag, url, QStringLiteral("image/png"));
         return;
     }
     if (kind == QLatin1String("history")) {
