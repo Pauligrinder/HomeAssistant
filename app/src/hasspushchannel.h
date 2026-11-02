@@ -34,6 +34,7 @@ signals:
     void connectedChanged();
     void accessTokenStale();
     void authenticationFailed(const QString &message);
+    void webhookNotFound();
     void notificationReceived(const QString &title,
                               const QString &message,
                               const QVariantMap &data);
@@ -51,6 +52,7 @@ private:
     HassWebsocket *m_socket;
     QString m_webhookId;
     bool m_wantRunning;
+    bool m_subscribePending;
     bool m_subscribed;
     int m_pushSubscriptionId;
 };

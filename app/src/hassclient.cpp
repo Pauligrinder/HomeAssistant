@@ -482,6 +482,8 @@ HassClient::HassClient(QObject *parent)
             this, SLOT(onAccessTokenStale()));
     connect(m_pushChannel, SIGNAL(authenticationFailed(QString)),
             this, SLOT(onPushAuthenticationFailed(QString)));
+    connect(m_pushChannel, SIGNAL(webhookNotFound()),
+            this, SLOT(onPushWebhookNotFound()));
     connect(m_pushChannel, SIGNAL(notificationReceived(QString,QString,QVariantMap)),
             this, SLOT(onPushNotificationReceived(QString,QString,QVariantMap)));
     connect(m_websocket, SIGNAL(accessTokenStale()),
@@ -2843,6 +2845,19 @@ void HassClient::onPushAuthenticationFailed(const QString &message)
     ++m_pushAuthRetries;
     qWarning() << "Helmsman: refreshing access token after push auth_invalid";
     startQuietTokenRefresh();
+}
+
+void HassClient::onPushWebhookNotFound()
+{
+    if (!m_loggedIn || m_webhookId.isEmpty())
+        return;
+
+    qWarning() << "Helmsman: registered mobile_app webhook no longer exists; registering again";
+    clearMobileRegistration();
+    persistSession();
+    m_pushChannel->configure(m_baseUrl, m_accessToken, m_accessExpiresAt,
+                             m_webhookId, m_ignoreSslErrors);
+    registerMobileApp();
 }
 
 void HassClient::onPushNotificationReceived(const QString &title,
