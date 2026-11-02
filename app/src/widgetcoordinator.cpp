@@ -2,6 +2,7 @@
 
 #include "appsettings.h"
 #include "mdiiconrenderer.h"
+#include "hasswebsocket.h"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -1074,6 +1075,7 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     , m_nam(new QNetworkAccessManager(this))
     , m_watcher(new QFileSystemWatcher(this))
     , m_iconRenderer(nullptr)
+    , m_websocket(nullptr)
     , m_ignoreSslErrors(false)
     , m_busy(false)
     , m_active(false)
@@ -1187,6 +1189,11 @@ void WidgetCoordinator::setIconRenderer(MdiIconRenderer *renderer)
     m_iconRenderer = renderer;
     emit iconRendererChanged();
     rebuildWidgetEntities();
+}
+
+void WidgetCoordinator::setWebsocket(HassWebsocket *websocket)
+{
+    m_websocket = websocket;
 }
 
 void WidgetCoordinator::configure(const QString &baseUrl,
@@ -1726,7 +1733,8 @@ void WidgetCoordinator::pushNotification(const QString &title,
                                          const QString &body,
                                          const QString &color,
                                          const QString &iconPath,
-                                         const QString &tag)
+                                         const QString &tag,
+                                         const QVariantList &actions)
 {
     const QString id = notificationEntityId(tag);
     QVariantMap map;
@@ -1741,6 +1749,7 @@ void WidgetCoordinator::pushNotification(const QString &title,
                                              QStringLiteral("#FFFFFF"), 256);
     map.insert(QStringLiteral("iconPath"), path);
     map.insert(QStringLiteral("tag"), tag);
+    map.insert(QStringLiteral("actions"), actions);
     map.insert(QStringLiteral("on"), true);
     map.insert(QStringLiteral("available"), true);
     map.insert(QStringLiteral("dimmable"), false);
@@ -1757,6 +1766,36 @@ void WidgetCoordinator::pushNotification(const QString &title,
     }
     m_notifications = next;
     emitWidgetPayloadChanged();
+}
+
+bool WidgetCoordinator::FireNotificationAction(const QString &action, const QString &tag)
+{
+    const QString actionId = action.trimmed();
+    if (actionId.isEmpty()) {
+        qWarning() << "Helmsman: ignoring empty notification action";
+        return false;
+    }
+    if (!m_websocket || !m_websocket->authenticated()) {
+        qWarning() << "Helmsman: cannot send notification action while disconnected";
+        return false;
+    }
+
+    QJsonObject eventData;
+    eventData.insert(QStringLiteral("action"), actionId);
+    if (!tag.isEmpty())
+        eventData.insert(QStringLiteral("tag"), tag);
+
+    QJsonObject command;
+    command.insert(QStringLiteral("type"), QStringLiteral("fire_event"));
+    command.insert(QStringLiteral("event_type"),
+                   QStringLiteral("mobile_app_notification_action"));
+    command.insert(QStringLiteral("event_data"), eventData);
+    if (m_websocket->sendCommand(command) == 0) {
+        qWarning() << "Helmsman: failed to queue notification action" << actionId;
+        return false;
+    }
+    qWarning() << "Helmsman: sent notification action" << actionId;
+    return true;
 }
 
 void WidgetCoordinator::dismissNotification(const QString &idOrTag)

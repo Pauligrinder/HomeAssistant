@@ -474,6 +474,7 @@ HassClient::HassClient(QObject *parent)
 
     m_pushChannel->setWebsocket(m_websocket);
     m_lovelace->setWebsocket(m_websocket);
+    m_widget->setWebsocket(m_websocket);
 
     connect(m_pushChannel, SIGNAL(connectedChanged()),
             this, SLOT(onPushConnectedChanged()));

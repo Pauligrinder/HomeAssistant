@@ -405,6 +405,21 @@ ApplicationWindow
             iconUrl = dataString(data, "image")
         var notificationIcon = dataString(data, "notification_icon")
         var color = dataString(data, "color")
+        var actions = []
+        if (data.actions instanceof Array) {
+            for (var actionIndex = 0; actionIndex < data.actions.length; ++actionIndex) {
+                var action = data.actions[actionIndex]
+                if (!action || typeof action !== "object")
+                    continue
+                var actionId = dataString(action, "action")
+                if (!actionId.length)
+                    continue
+                actions.push({
+                    "action": actionId,
+                    "title": dataString(action, "title") || actionId
+                })
+            }
+        }
 
         var replacing = tag.length > 0 && !!appWindow.notificationTags[tag]
         var summary = title && title.length > 0 ? title: i18n.translation("home_assistant")
@@ -426,7 +441,7 @@ ApplicationWindow
         if (widgetEnabled) {
             hassClientInstance.widget.pushNotification(
                         summary, body, appWindow.normalizeCoverColor(color),
-                        coverIconPath, tag)
+                        coverIconPath, tag, actions)
             appWindow.applyCoverNotification(summary, body, color, coverIconPath, replacing)
             appWindow.publishBannerNotification(
                         summary, body, subtitle,

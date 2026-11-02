@@ -265,6 +265,20 @@ Item {
         widgetIface.call("OpenApp", [])
     }
 
+    function activateNotificationAction(entity, action) {
+        if (!entity || !action || !action.action)
+            return
+        widgetIface.call("FireNotificationAction",
+                         [String(action.action), String(entity.tag || "")],
+                         function(sent) {
+                             if (sent)
+                                 widgetIface.call("DismissNotification", [entity.entityId])
+                         },
+                         function(error) {
+                             console.log("Helmsman: notification action failed", error)
+                         })
+    }
+
     function activateCard(entity) {
         if (!entity || entity.available === false)
             return
@@ -889,6 +903,30 @@ Item {
                             width: (parent.width - parent.spacing) / 2
                             text: translation("cancel")
                             onClicked: root.cancelScript(modelData)
+                        }
+                    }
+
+                    Flow {
+                        id: notificationActions
+                        width: parent.width
+                        height: childrenRect.height
+                        spacing: Theme.paddingSmall
+                        property int actionCount: card.isNotification
+                                                 && modelData.actions
+                                                 ? modelData.actions.length : 0
+                        property int columns: Math.min(2, Math.max(1, actionCount))
+
+                        Repeater {
+                            model: card.isNotification ? (modelData.actions || []) : []
+
+                            delegate: Button {
+                                width: (notificationActions.width
+                                        - (notificationActions.columns - 1)
+                                          * notificationActions.spacing)
+                                       / notificationActions.columns
+                                text: modelData.title || modelData.action
+                                onClicked: root.activateNotificationAction(card.entity, modelData)
+                            }
                         }
                     }
 
