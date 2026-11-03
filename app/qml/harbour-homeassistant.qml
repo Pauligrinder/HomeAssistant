@@ -412,11 +412,13 @@ ApplicationWindow
                 if (!action || typeof action !== "object")
                     continue
                 var actionId = dataString(action, "action")
-                if (!actionId.length)
+                var uri = dataString(action, "uri")
+                if (!actionId.length && !uri.length)
                     continue
                 actions.push({
                     "action": actionId,
-                    "title": dataString(action, "title") || actionId
+                    "title": dataString(action, "title") || actionId || uri,
+                    "uri": uri
                 })
             }
         }

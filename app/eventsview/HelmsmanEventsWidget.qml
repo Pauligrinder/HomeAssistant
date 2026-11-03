@@ -266,10 +266,24 @@ Item {
     }
 
     function activateNotificationAction(entity, action) {
-        if (!entity || !action || !action.action)
+        if (!entity || !action)
+            return
+        var actionId = String(action.action || "")
+        var uri = String(action.uri || "")
+        if (uri.length || actionId.toUpperCase() === "URI") {
+            if (!uri.length) {
+                console.log("Helmsman: URI notification action has no URI")
+            } else if (Qt.openUrlExternally(uri)) {
+                widgetIface.call("DismissNotification", [entity.entityId])
+            } else {
+                console.log("Helmsman: failed to open notification action URI", uri)
+            }
+            return
+        }
+        if (!actionId.length)
             return
         widgetIface.call("FireNotificationAction",
-                         [String(action.action), String(entity.tag || "")],
+                         [actionId, String(entity.tag || "")],
                          function(sent) {
                              if (sent)
                                  widgetIface.call("DismissNotification", [entity.entityId])
