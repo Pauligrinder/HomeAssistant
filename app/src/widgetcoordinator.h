@@ -161,7 +161,7 @@ public slots:
                           const QString &color,
                           const QString &iconPath,
                           const QString &tag,
-                          const QVariantList &actions);
+                          const QVariantList &actions = QVariantList());
     void dismissNotification(const QString &idOrTag);
     void clearNotifications();
     Q_SCRIPTABLE bool FireNotificationAction(const QString &action, const QString &tag);
