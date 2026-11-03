@@ -2610,8 +2610,11 @@ void HassClient::onMobileAppDeleted()
     // Rotate device_id so Home Assistant treats this as a new companion.
     clearMobileRegistration();
     m_deviceId.clear();
+    if (m_pushChannel)
+        m_pushChannel->configure(m_baseUrl, m_accessToken, m_accessExpiresAt,
+                                 m_webhookId, m_ignoreSslErrors);
+    persistSession();
     if (!m_loggedIn || m_accessToken.isEmpty()) {
-        persistSession();
         return;
     }
     registerMobileApp();
@@ -2853,11 +2856,7 @@ void HassClient::onPushWebhookNotFound()
         return;
 
     qWarning() << "Helmsman: registered mobile_app webhook no longer exists; registering again";
-    clearMobileRegistration();
-    persistSession();
-    m_pushChannel->configure(m_baseUrl, m_accessToken, m_accessExpiresAt,
-                             m_webhookId, m_ignoreSslErrors);
-    registerMobileApp();
+    onMobileAppDeleted();
 }
 
 void HassClient::onPushNotificationReceived(const QString &title,
