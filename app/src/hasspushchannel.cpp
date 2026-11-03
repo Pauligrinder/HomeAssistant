@@ -8,6 +8,7 @@ HassPushChannel::HassPushChannel(QObject *parent)
     : QObject(parent)
     , m_socket(0)
     , m_wantRunning(false)
+    , m_subscribePending(false)
     , m_subscribed(false)
     , m_pushSubscriptionId(0)
 {
@@ -60,6 +61,7 @@ void HassPushChannel::configure(const QString &baseUrl,
     const bool webhookChanged = m_webhookId != webhookId;
     m_webhookId = webhookId;
     if (webhookChanged) {
+        m_subscribePending = false;
         m_subscribed = false;
         m_pushSubscriptionId = 0;
     }
@@ -79,6 +81,7 @@ void HassPushChannel::start()
 void HassPushChannel::stop()
 {
     m_wantRunning = false;
+    m_subscribePending = false;
     m_subscribed = false;
     m_pushSubscriptionId = 0;
     emit connectedChanged();
@@ -93,6 +96,7 @@ void HassPushChannel::onConnectionReady()
 void HassPushChannel::onAuthenticatedChanged()
 {
     if (!m_socket || !m_socket->authenticated()) {
+        m_subscribePending = false;
         m_subscribed = false;
         m_pushSubscriptionId = 0;
         emit connectedChanged();
@@ -105,12 +109,15 @@ void HassPushChannel::subscribePushChannel()
         return;
     if (!m_socket->authenticated())
         return;
+    if (m_subscribePending || m_subscribed)
+        return;
 
     QJsonObject msg;
     msg.insert(QStringLiteral("type"), QStringLiteral("mobile_app/push_notification_channel"));
     msg.insert(QStringLiteral("webhook_id"), m_webhookId);
     msg.insert(QStringLiteral("support_confirm"), true);
     m_pushSubscriptionId = m_socket->sendCommand(msg);
+    m_subscribePending = m_pushSubscriptionId != 0;
     qWarning() << "Helmsman push: subscribed channel id=" << m_pushSubscriptionId;
 }
 
@@ -131,6 +138,7 @@ void HassPushChannel::onResultReceived(int id, bool success, const QVariant &res
     Q_UNUSED(result);
     if (id == 0 || id != m_pushSubscriptionId)
         return;
+    m_subscribePending = false;
     if (success) {
         m_subscribed = true;
         qWarning() << "Helmsman push: subscribe ok id=" << id;
@@ -138,7 +146,10 @@ void HassPushChannel::onResultReceived(int id, bool success, const QVariant &res
     } else {
         m_subscribed = false;
         qWarning() << "Helmsman push: subscribe failed" << error;
+        m_pushSubscriptionId = 0;
         emit connectedChanged();
+        if (error.value(QStringLiteral("code")).toString() == QLatin1String("not_found"))
+            emit webhookNotFound();
     }
 }
 

@@ -225,6 +225,7 @@ private slots:
     void onWebsocketResult(int id, bool success, const QVariant &result, const QVariantMap &error);
     void onAccessTokenStale();
     void onPushAuthenticationFailed(const QString &message);
+    void onPushWebhookNotFound();
     void onTokenRefreshTimeout();
     void onPushNotificationReceived(const QString &title,
                                     const QString &message,

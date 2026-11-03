@@ -474,6 +474,7 @@ HassClient::HassClient(QObject *parent)
 
     m_pushChannel->setWebsocket(m_websocket);
     m_lovelace->setWebsocket(m_websocket);
+    m_widget->setWebsocket(m_websocket);
 
     connect(m_pushChannel, SIGNAL(connectedChanged()),
             this, SLOT(onPushConnectedChanged()));
@@ -481,6 +482,8 @@ HassClient::HassClient(QObject *parent)
             this, SLOT(onAccessTokenStale()));
     connect(m_pushChannel, SIGNAL(authenticationFailed(QString)),
             this, SLOT(onPushAuthenticationFailed(QString)));
+    connect(m_pushChannel, SIGNAL(webhookNotFound()),
+            this, SLOT(onPushWebhookNotFound()));
     connect(m_pushChannel, SIGNAL(notificationReceived(QString,QString,QVariantMap)),
             this, SLOT(onPushNotificationReceived(QString,QString,QVariantMap)));
     connect(m_websocket, SIGNAL(accessTokenStale()),
@@ -2607,8 +2610,11 @@ void HassClient::onMobileAppDeleted()
     // Rotate device_id so Home Assistant treats this as a new companion.
     clearMobileRegistration();
     m_deviceId.clear();
+    if (m_pushChannel)
+        m_pushChannel->configure(m_baseUrl, m_accessToken, m_accessExpiresAt,
+                                 m_webhookId, m_ignoreSslErrors);
+    persistSession();
     if (!m_loggedIn || m_accessToken.isEmpty()) {
-        persistSession();
         return;
     }
     registerMobileApp();
@@ -2842,6 +2848,15 @@ void HassClient::onPushAuthenticationFailed(const QString &message)
     ++m_pushAuthRetries;
     qWarning() << "Helmsman: refreshing access token after push auth_invalid";
     startQuietTokenRefresh();
+}
+
+void HassClient::onPushWebhookNotFound()
+{
+    if (!m_loggedIn || m_webhookId.isEmpty())
+        return;
+
+    qWarning() << "Helmsman: registered mobile_app webhook no longer exists; registering again";
+    onMobileAppDeleted();
 }
 
 void HassClient::onPushNotificationReceived(const QString &title,

@@ -18,6 +18,7 @@ class QNetworkAccessManager;
 class QNetworkReply;
 class QFileSystemWatcher;
 class MdiIconRenderer;
+class HassWebsocket;
 
 // Lights, switches, scripts, climate, sensors, and graphable sensors for the
 // cover and Events View widget. Uses the Home Assistant REST API with the same
@@ -81,6 +82,11 @@ class WidgetCoordinator : public QObject
 "    <method name=\"DismissNotification\">\n"
 "      <arg direction=\"in\" type=\"s\" name=\"idOrTag\"/>\n"
 "    </method>\n"
+"    <method name=\"FireNotificationAction\">\n"
+"      <arg direction=\"in\" type=\"s\" name=\"action\"/>\n"
+"      <arg direction=\"in\" type=\"s\" name=\"tag\"/>\n"
+"      <arg direction=\"out\" type=\"b\"/>\n"
+"    </method>\n"
 "    <method name=\"OpenApp\"/>\n"
 "    <method name=\"ReorderEventsViewEntity\">\n"
 "      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
@@ -122,6 +128,7 @@ public:
     bool eventsViewWidgetEnabled() const;
     MdiIconRenderer *iconRenderer() const;
     void setIconRenderer(MdiIconRenderer *renderer);
+    void setWebsocket(HassWebsocket *websocket);
 
     void configure(const QString &baseUrl,
                    const QString &accessToken,
@@ -153,9 +160,11 @@ public slots:
                           const QString &body,
                           const QString &color,
                           const QString &iconPath,
-                          const QString &tag);
+                          const QString &tag,
+                          const QVariantList &actions = QVariantList());
     void dismissNotification(const QString &idOrTag);
     void clearNotifications();
+    Q_SCRIPTABLE bool FireNotificationAction(const QString &action, const QString &tag);
     Q_SCRIPTABLE QString GetEntitiesJson() const;
     Q_SCRIPTABLE void Refresh();
     Q_SCRIPTABLE void ToggleLight(const QString &entityId);
@@ -250,6 +259,7 @@ private:
     QNetworkAccessManager *m_nam;
     QFileSystemWatcher *m_watcher;
     MdiIconRenderer *m_iconRenderer;
+    HassWebsocket *m_websocket;
     QTimer m_pollTimer;
     QTimer m_startupTimer;
     QTimer m_presenceConfirmTimer;
