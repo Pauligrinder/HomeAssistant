@@ -4,6 +4,7 @@ import "../components"
 
 Page {
     id: page
+    objectName: "HelmsmanSettingsPage"
     property var hassClient
     property string pendingTestUrl: ""
     property string internalTestResult: ""

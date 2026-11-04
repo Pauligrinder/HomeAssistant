@@ -1,0 +1,13 @@
+{
+    "entries": [
+        {
+            "path": "applications/harbour-helmsman.desktop",
+            "title": "Helmsman",
+            "type": "application",
+            "icon": "harbour-helmsman",
+            "params": {
+                "source": "/usr/share/harbour-helmsman/settings/HelmsmanAppSettings.qml"
+            }
+        }
+    ]
+}

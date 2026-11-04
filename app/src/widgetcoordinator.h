@@ -71,6 +71,7 @@ class WidgetCoordinator : public QObject
 "      <arg direction=\"in\" type=\"d\" name=\"temp\"/>\n"
 "    </method>\n"
 "    <method name=\"OpenFavorites\"/>\n"
+"    <method name=\"OpenSettings\"/>\n"
 "    <method name=\"RunScript\">\n"
 "      <arg direction=\"in\" type=\"s\" name=\"entityId\"/>\n"
 "    </method>\n"
@@ -111,6 +112,8 @@ class WidgetCoordinator : public QObject
     Q_PROPERTY(MdiIconRenderer *iconRenderer READ iconRenderer WRITE setIconRenderer NOTIFY iconRendererChanged)
     // True while the Lipstick Events View widget is loaded (it heartbeats over D-Bus).
     Q_PROPERTY(bool eventsViewWidgetEnabled READ eventsViewWidgetEnabled NOTIFY eventsViewWidgetEnabledChanged)
+    // Set by D-Bus OpenSettings until QML has opened the settings page.
+    Q_PROPERTY(bool openSettingsPending READ openSettingsPending NOTIFY openSettingsPendingChanged)
 
 public:
     explicit WidgetCoordinator(QObject *parent = nullptr);
@@ -177,6 +180,11 @@ public slots:
     Q_SCRIPTABLE void SetVaneHorizontal(const QString &entityId, int level);
     Q_SCRIPTABLE void SetTargetTemp(const QString &entityId, double temp);
     Q_SCRIPTABLE void OpenFavorites();
+    Q_SCRIPTABLE void OpenSettings();
+    bool openSettingsPending() const;
+    // True once after OpenSettings if QML had not connected yet (D-Bus activation).
+    Q_INVOKABLE bool takeOpenSettingsPending();
+    Q_INVOKABLE void clearOpenSettingsPending();
     Q_SCRIPTABLE void RunScript(const QString &entityId);
     Q_SCRIPTABLE void CancelScript(const QString &entityId);
     Q_SCRIPTABLE void WidgetPresent();
@@ -198,6 +206,8 @@ signals:
     void iconRendererChanged();
     void accessTokenStale();
     void openFavoritesRequested();
+    void openSettingsRequested();
+    void openSettingsPendingChanged();
     void activateAppRequested();
     void eventsViewWidgetEnabledChanged();
     Q_SCRIPTABLE void EntitiesChanged();
@@ -271,6 +281,7 @@ private:
     bool m_active;
     bool m_appActive;
     bool m_dbusRegistered;
+    bool m_openSettingsPending;
     bool m_loadingSelected;
     bool m_tokenRejected;
     int m_selectedOutstanding;
