@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.helmsman.harbour-helmsman.ui
+Exec=/usr/bin/invoker --type=silica-qt5 --id=harbour-helmsman --single-instance /usr/bin/harbour-helmsman

@@ -164,14 +164,19 @@ ApplicationWindow
     function goHomeIfLoggedIn() {
         if (!hassClientInstance.loggedIn)
             return
-                if (pageStack.currentPage
-                        && (pageStack.currentPage.objectName === "HomePage"
-                            || pageStack.currentPage.objectName === "SplashPage"))
+        // Do not wipe Settings (or a pending cold-start open) with replaceAbove.
+        if (appWindow.pendingHelmsmanSettings)
+            return
+        if (pageStack.currentPage
+                && (pageStack.currentPage.objectName === "HomePage"
+                    || pageStack.currentPage.objectName === "SplashPage"
+                    || pageStack.currentPage.objectName === "HelmsmanSettingsPage"))
             return
         appWindow.replaceHomePage()
     }
 
     property bool pendingEventsFavorites: false
+    property bool pendingHelmsmanSettings: false
 
     function openEventsViewFavorites() {
         appWindow.activate()
@@ -211,6 +216,75 @@ ApplicationWindow
             return
         appWindow.pendingEventsFavorites = false
         appWindow.showEventsViewFavorites()
+    }
+
+    // From Settings → Apps → Helmsman (D-Bus OpenSettings), or --settings.
+    // Queue until past SplashPage; SplashPage.finish also pushes when the
+    // C++ openSettingsPending flag is still set (avoids replaceAbove wipe).
+    function openHelmsmanSettings() {
+        console.log("Helmsman: openHelmsmanSettings pending")
+        appWindow.activate()
+        appWindow.pendingHelmsmanSettings = true
+        settingsPushTimer.restart()
+        appWindow.flushPendingHelmsmanSettings()
+    }
+
+    function showHelmsmanSettings() {
+        if (pageStack.busy)
+            return false
+        var existing = appWindow.findHelmsmanSettingsPage()
+        if (existing) {
+            if (pageStack.currentPage !== existing) {
+                if (pageStack.busy)
+                    return false
+                pageStack.pop(existing)
+            }
+            return true
+        }
+        pageStack.push(Qt.resolvedUrl("pages/SettingsPage.qml"),
+                       { hassClient: hassClientInstance })
+        return !!appWindow.findHelmsmanSettingsPage()
+    }
+
+    function findHelmsmanSettingsPage() {
+        if (!pageStack || typeof pageStack.find !== "function")
+            return null
+        return pageStack.find(function(page) {
+            return page && page.objectName === "HelmsmanSettingsPage"
+        })
+    }
+
+    function flushPendingHelmsmanSettings() {
+        var wanted = appWindow.pendingHelmsmanSettings
+                || (hassClientInstance.widget
+                    && hassClientInstance.widget.openSettingsPending)
+        if (!wanted)
+            return
+        if (!pageStack.currentPage
+                || pageStack.currentPage.objectName === "SplashPage")
+            return
+        if (pageStack.busy)
+            return
+        if (!appWindow.showHelmsmanSettings())
+            return
+        appWindow.pendingHelmsmanSettings = false
+        if (hassClientInstance.widget)
+            hassClientInstance.widget.clearOpenSettingsPending()
+    }
+
+    function consumeOpenSettingsRequest() {
+        if (hassClientInstance.widget
+                && hassClientInstance.widget.takeOpenSettingsPending()) {
+            appWindow.openHelmsmanSettings()
+            return
+        }
+        var args = Qt.application.arguments || []
+        for (var i = 0; i < args.length; ++i) {
+            if (args[i] === "--settings" || args[i] === "--open-settings") {
+                appWindow.openHelmsmanSettings()
+                return
+            }
+        }
     }
 
     function dataString(data, key) {
@@ -598,12 +672,14 @@ ApplicationWindow
                     && pageStack.currentPage.objectName !== "SplashPage")
                 appWindow.goHomeIfLoggedIn()
             appWindow.flushPendingEventsFavorites()
+            appWindow.flushPendingHelmsmanSettings()
         }
         onLoginSucceeded: {
             if (pageStack.currentPage
                     && pageStack.currentPage.objectName !== "SplashPage")
                 appWindow.goHomeIfLoggedIn()
             appWindow.flushPendingEventsFavorites()
+            appWindow.flushPendingHelmsmanSettings()
         }
         onNotificationReceived: {
             console.log("Helmsman: HA push received")
@@ -618,6 +694,12 @@ ApplicationWindow
     Connections {
         target: hassClientInstance.widget
         onOpenFavoritesRequested: appWindow.openEventsViewFavorites()
+        onOpenSettingsRequested: appWindow.openHelmsmanSettings()
+        onOpenSettingsPendingChanged: {
+            if (hassClientInstance.widget
+                    && hassClientInstance.widget.openSettingsPending)
+                appWindow.openHelmsmanSettings()
+        }
         onActivateAppRequested: appWindow.activate()
     }
 
@@ -644,7 +726,38 @@ ApplicationWindow
 
     Connections {
         target: pageStack
-        onCurrentPageChanged: appWindow.flushPendingEventsFavorites()
+        onCurrentPageChanged: {
+            appWindow.flushPendingEventsFavorites()
+            appWindow.flushPendingHelmsmanSettings()
+        }
+        onBusyChanged: appWindow.flushPendingHelmsmanSettings()
+    }
+
+    Component.onCompleted: appWindow.consumeOpenSettingsRequest()
+
+    // D-Bus activation can deliver OpenSettings slightly after onCompleted.
+    Timer {
+        interval: 800
+        running: true
+        repeat: false
+        onTriggered: appWindow.consumeOpenSettingsRequest()
+    }
+
+    Timer {
+        id: settingsPushTimer
+        interval: 150
+        repeat: false
+        onTriggered: appWindow.flushPendingHelmsmanSettings()
+    }
+
+    // Keep trying until SplashPage has been replaced (cold-start OpenSettings).
+    Timer {
+        interval: 400
+        repeat: true
+        running: appWindow.pendingHelmsmanSettings
+                 || (hassClientInstance.widget
+                     && hassClientInstance.widget.openSettingsPending)
+        onTriggered: appWindow.flushPendingHelmsmanSettings()
     }
 
     Timer {

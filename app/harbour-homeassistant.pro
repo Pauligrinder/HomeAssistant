@@ -4,7 +4,7 @@ CONFIG += sailfishapp
 QT += network gui positioning dbus qml quick
 LIBS += -ldl
 
-VERSION = 0.6.07
+VERSION = 0.6.08
 DEFINES += APP_VERSION=\\\"$$VERSION\\\"
 
 # Private MapLibre libs shipped under /usr/share/harbour-helmsman/lib
@@ -55,6 +55,9 @@ DISTFILES += \
     eventsview/*.ts \
     data/mdi/LICENSE.txt \
     sailjail/harbour-helmsman.profile \
+    settings/harbour-helmsman.json \
+    settings/HelmsmanAppSettings.qml \
+    settings/org.helmsman.harbour-helmsman.ui.service \
     translations/*.json \
     translations/README.md \
     eventsview/i18n.js
@@ -97,4 +100,13 @@ eventsWidgetQm.CONFIG += no_check_exist
 sailjailProfile.files = sailjail/harbour-helmsman.profile
 sailjailProfile.path = /etc/sailjail/permissions
 
-INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson eventsWidgetQm sailjailProfile transjson
+# Settings → Apps → Helmsman (jolla-settings). Recovery when in-app
+# Companion app settings are unreachable.
+settingsJson.files = settings/harbour-helmsman.json
+settingsJson.path = /usr/share/jolla-settings/entries
+settingsQml.files = settings/HelmsmanAppSettings.qml
+settingsQml.path = /usr/share/harbour-helmsman/settings
+settingsDbusService.files = settings/org.helmsman.harbour-helmsman.ui.service
+settingsDbusService.path = /usr/share/dbus-1/services
+
+INSTALLS += icon86 icon108 icon128 icon172 eventsWidgetQml eventsWidgetJson eventsWidgetQm sailjailProfile settingsJson settingsQml settingsDbusService transjson

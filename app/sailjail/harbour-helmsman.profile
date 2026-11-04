@@ -5,6 +5,12 @@
 # LD_LIBRARY_PATH must be set here: ld.so reads it at exec, so qputenv in
 # the app is too late for libqtwpe.so's DT_NEEDED.
 
+# Session bus names for the Events View widget and Settings → Apps button.
+# Without these, sailjail's dbus proxy drops ownership and OpenSettings never
+# reaches the running (or just-activated) process.
+dbus-user.own org.helmsman.harbour-helmsman
+dbus-user.own org.helmsman.harbour-helmsman.ui
+
 noblacklist /opt/wpe-sfos
 noblacklist /usr/libexec/wpe-webkit-2.0
 noblacklist /usr/lib64/wpe-compat

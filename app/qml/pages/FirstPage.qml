@@ -30,6 +30,9 @@ Page {
             pageStack.replaceAbove(null, Qt.resolvedUrl("ConnectionPage.qml"),
                                    { hassClient: hassClient })
         }
+        // Do not push settings here. replaceAbove is still in progress and
+        // Silica rejects the push ("Cannot push while operation is in progress").
+        // ApplicationWindow retries once pageStack.busy is false.
     }
 
     function startRestore() {

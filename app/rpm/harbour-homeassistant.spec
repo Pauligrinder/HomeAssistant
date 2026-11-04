@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.07
+Version:    0.6.08
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -86,9 +86,16 @@ done
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
 %{_datadir}/lipstick/eventswidgets/%{name}.json
 %{_datadir}/translations/%{name}_eng_en.qm
+%{_datadir}/jolla-settings/entries/%{name}.json
+%{_datadir}/dbus-1/services/org.helmsman.%{name}.ui.service
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Wed Nov 04 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.08-1
+- Settings → Apps → Helmsman: Open Helmsman settings (Browser-style D-Bus).
+- Allow sailjail ownership of widget/settings D-Bus names so Events View works.
+- Open settings after splash when the page stack is idle (cold start).
+
 * Tue Nov 03 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.07-1
 - Events View notification action buttons (incl. URI actions).
 - Re-register mobile_app when push subscribe returns webhook not_found.

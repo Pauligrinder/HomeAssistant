@@ -42,6 +42,9 @@ namespace {
 
 const char *kClientName = "Helmsman";
 const char *kDbusService = "org.helmsman.harbour-helmsman";
+// Separate bus name for Settings → Apps activation. A .service file for
+// kDbusService would make Events View heartbeats auto-launch the app.
+const char *kDbusUiService = "org.helmsman.harbour-helmsman.ui";
 const char *kDbusPath = "/widget";
 const int kPollIntervalMs = 8000;
 const int kBackgroundPollIntervalMs = 60 * 1000;
@@ -1081,6 +1084,7 @@ WidgetCoordinator::WidgetCoordinator(QObject *parent)
     , m_active(false)
     , m_appActive(true)
     , m_dbusRegistered(false)
+    , m_openSettingsPending(false)
     , m_loadingSelected(false)
     , m_tokenRejected(false)
     , m_selectedOutstanding(0)
@@ -1123,6 +1127,7 @@ WidgetCoordinator::~WidgetCoordinator()
     if (m_dbusRegistered) {
         QDBusConnection bus = QDBusConnection::sessionBus();
         bus.unregisterObject(QString::fromLatin1(kDbusPath));
+        bus.unregisterService(QString::fromLatin1(kDbusUiService));
         bus.unregisterService(QString::fromLatin1(kDbusService));
     }
 }
@@ -1701,6 +1706,38 @@ void WidgetCoordinator::OpenFavorites()
     emit openFavoritesRequested();
 }
 
+void WidgetCoordinator::OpenSettings()
+{
+    qWarning() << "Helmsman: OpenSettings D-Bus received";
+    if (!m_openSettingsPending) {
+        m_openSettingsPending = true;
+        emit openSettingsPendingChanged();
+    }
+    emit openSettingsRequested();
+}
+
+bool WidgetCoordinator::openSettingsPending() const
+{
+    return m_openSettingsPending;
+}
+
+bool WidgetCoordinator::takeOpenSettingsPending()
+{
+    if (!m_openSettingsPending)
+        return false;
+    // Leave the flag set until clearOpenSettingsPending() so SplashPage.finish
+    // and the QML retry timer can still see it.
+    return true;
+}
+
+void WidgetCoordinator::clearOpenSettingsPending()
+{
+    if (!m_openSettingsPending)
+        return;
+    m_openSettingsPending = false;
+    emit openSettingsPendingChanged();
+}
+
 void WidgetCoordinator::runScript(const QString &entityId)
 {
     if (entityKind(entityId) != QLatin1String("script"))
@@ -2042,15 +2079,22 @@ bool WidgetCoordinator::registerDBus()
         qWarning() << "Helmsman widget: DBus name already taken";
         return false;
     }
+    if (!bus.registerService(QString::fromLatin1(kDbusUiService))) {
+        qWarning() << "Helmsman widget: UI DBus name already taken";
+        bus.unregisterService(QString::fromLatin1(kDbusService));
+        return false;
+    }
     if (!bus.registerObject(QString::fromLatin1(kDbusPath), this,
                             QDBusConnection::ExportScriptableSlots
                             | QDBusConnection::ExportScriptableSignals)) {
         qWarning() << "Helmsman widget: could not export DBus object";
+        bus.unregisterService(QString::fromLatin1(kDbusUiService));
         bus.unregisterService(QString::fromLatin1(kDbusService));
         return false;
     }
     m_dbusRegistered = true;
-    qWarning() << "Helmsman widget: DBus registered as" << kDbusService;
+    qWarning() << "Helmsman widget: DBus registered as" << kDbusService
+               << "and" << kDbusUiService;
     return true;
 }
 

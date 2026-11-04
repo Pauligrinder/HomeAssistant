@@ -46,7 +46,11 @@ app/
    to webview-based dashboards. The native
    dashboard pulley opens Home Assistant settings in the web view (`/config`).
    Helmsman connection and engine options are under Settings → Companion app
-   in that web view. The Silica
+   in that web view. If that path is unreachable (for example a default web
+   dashboard with no sidebar), Sailfish **Settings → Apps → Helmsman** has
+   **Open Helmsman settings** (D-Bus `OpenSettings`, with service activation
+   so it also works when Helmsman is not running — same idea as the Browser
+   settings button). The Silica
    page-back swipe pops to the native dashboard when the web view has no
    in-page history; otherwise HA keeps that edge. Settings root also offers
    **Back to dashboard** under Companion app when the native renderer is on.
@@ -127,9 +131,9 @@ chmod +x build.sh
 Install on the phone:
 
 ```sh
-scp app/RPMS/harbour-helmsman-0.6.07-1.aarch64.rpm defaultuser@<phone-ip>:~/
+scp app/RPMS/harbour-helmsman-0.6.08-1.aarch64.rpm defaultuser@<phone-ip>:~/
 ssh defaultuser@<phone-ip>
-devel-su pkcon install-local ~/harbour-helmsman-0.6.07-1.aarch64.rpm
+devel-su pkcon install-local ~/harbour-helmsman-0.6.08-1.aarch64.rpm
 ```
 
 Sailjail permissions used: `Internet`, `Notifications`, `Location`,
