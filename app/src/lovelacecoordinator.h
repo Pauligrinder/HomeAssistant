@@ -213,6 +213,10 @@ public slots:
                                const QString &mediaContentType);
     // Resolve a media-source item and open it in-app (images) or via the system.
     Q_INVOKABLE void openBrowsableMedia(const QString &mediaContentId);
+    Q_INVOKABLE void signFrigateStreamPath(const QString &clientId,
+                                           const QString &cameraName,
+                                           bool legacyPath,
+                                           const QString &key);
 
 signals:
     void readyChanged();
@@ -257,6 +261,8 @@ signals:
     void mediaOpenReady(const QString &mediaContentId,
                         const QString &fileUrl,
                         const QString &mimeType);
+    void frigateStreamPathReady(const QString &key, const QString &path);
+    void frigateStreamPathFailed(const QString &key, const QString &message);
 
 private slots:
     void onConnectionReady();
@@ -437,6 +443,7 @@ private:
     QVariantMap m_entityIcons;
     QHash<QString, QString> m_mediaCache;
     QSet<QString> m_mediaPending;
+    QHash<int, QString> m_frigateStreamPathRequests;
     QHash<int, QString> m_mediaSourceById;
     // media_source/resolve_media requests meant for opening (not thumbnail cache).
     QHash<int, QString> m_mediaOpenById;

@@ -68,7 +68,12 @@ app/
    locations with coordinates
    render natively (raster OpenStreetMap tiles on the dashboard; tap opens a
    fullscreen MapLibre / OpenFreeMap map with the same markers). Camera
-   details play a live MJPEG stream. Lovelace `confirmation` on native
+   details play a live MJPEG stream. The Frigate Modern card has a native
+   go2rtc stream player; it discovers the Frigate instance and camera from the
+   camera entity and falls back to Home Assistant's MJPEG stream if needed.
+   Tapping the live view opens it fullscreen in landscape. The event and
+   recording views are not rendered natively.
+   Lovelace `confirmation` on native
    scripts and taps shows a full-screen swipe Allow/Deny prompt.
 6. **Sensors** — After mobile_app registration, Helmsman reports battery level/
    state, charger type, Wi‑Fi SSID, OS version, and (while foregrounded) GPS
