@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.08
+Version:    0.6.09
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -91,6 +91,11 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Tue Nov 10 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.09-1
+- Native Frigate Modern card with go2rtc/MSE playback and MJPEG fallback.
+- Weather forecast card shows MDI icons for current and forecast conditions.
+- Thanks to Lowxorx for these contributions (#87).
+
 * Wed Nov 04 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.08-1
 - Settings → Apps → Helmsman: Open Helmsman settings (Browser-style D-Bus).
 - Allow sailjail ownership of widget/settings D-Bus names so Events View works.
