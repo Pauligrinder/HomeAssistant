@@ -19,6 +19,7 @@
 #include <QBuffer>
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QUrl>
 #include <QUrlQuery>
 #include <QDebug>
 #include <QSslError>
@@ -1195,6 +1196,7 @@ void LovelaceCoordinator::stop()
     // to be forgotten or their pictures would never be requested again.
     m_mediaSourceById.clear();
     m_mediaOpenById.clear();
+    m_frigateStreamPathRequests.clear();
     m_mediaOpenPending.clear();
     m_mediaPending.clear();
     m_todoById.clear();
@@ -1229,6 +1231,7 @@ void LovelaceCoordinator::clearForLogout()
     m_dashboards.clear();
     m_panels.clear();
     m_switcherItems.clear();
+    m_frigateStreamPathRequests.clear();
     if (m_explicitDashboard) {
         m_explicitDashboard = false;
         emit explicitDashboardChanged();
@@ -1504,6 +1507,22 @@ void LovelaceCoordinator::onResultReceived(int id, bool success, const QVariant 
 {
     if (id == 0)
         return;
+
+    if (m_frigateStreamPathRequests.contains(id)) {
+        const QString key = m_frigateStreamPathRequests.take(id);
+        const QString path = result.toMap().value(QStringLiteral("path")).toString();
+        if (!success || path.isEmpty()) {
+            const QString message = error.value(QStringLiteral("message")).toString();
+            qWarning() << kClientName << "lovelace: could not sign Frigate stream path"
+                       << key << message;
+            emit frigateStreamPathFailed(key, message.isEmpty()
+                                         ? QStringLiteral("Home Assistant returned no signed path.")
+                                         : message);
+        } else {
+            emit frigateStreamPathReady(key, path);
+        }
+        return;
+    }
 
     if (m_templateKeys.contains(id)) {
         const QString key = m_templateKeys.take(id);
@@ -4093,6 +4112,39 @@ QVariantList LovelaceCoordinator::calendarEvents(const QString &entityId) const
 QVariantList LovelaceCoordinator::todoItems(const QString &entityId) const
 {
     return m_todoItems.value(entityId);
+}
+
+void LovelaceCoordinator::signFrigateStreamPath(const QString &clientId,
+                                                const QString &cameraName,
+                                                bool legacyPath,
+                                                const QString &key)
+{
+    if (key.isEmpty() || clientId.isEmpty() || cameraName.isEmpty()) {
+        emit frigateStreamPathFailed(key, QStringLiteral("Frigate camera information is incomplete."));
+        return;
+    }
+    if (!m_socket || !m_socket->authenticated()) {
+        emit frigateStreamPathFailed(key, QStringLiteral("Home Assistant is disconnected."));
+        return;
+    }
+
+    const QByteArray encodedClient = QUrl::toPercentEncoding(clientId);
+    const QByteArray encodedCamera = QUrl::toPercentEncoding(cameraName);
+    const QString path = legacyPath
+            ? QStringLiteral("/api/frigate/%1/mse/api/ws?src=%2")
+              .arg(QString::fromLatin1(encodedClient), QString::fromLatin1(encodedCamera))
+            : QStringLiteral("/api/frigate/%1/go2rtc/ws/api/ws?src=%2")
+              .arg(QString::fromLatin1(encodedClient), QString::fromLatin1(encodedCamera));
+
+    QJsonObject msg;
+    msg.insert(QStringLiteral("type"), QStringLiteral("auth/sign_path"));
+    msg.insert(QStringLiteral("path"), path);
+    const int id = m_socket->sendCommand(msg);
+    if (id == 0) {
+        emit frigateStreamPathFailed(key, QStringLiteral("Home Assistant is disconnected."));
+        return;
+    }
+    m_frigateStreamPathRequests.insert(id, key);
 }
 
 bool LovelaceCoordinator::mediaPlayerCanBrowse(const QString &entityId) const

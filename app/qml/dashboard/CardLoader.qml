@@ -138,6 +138,8 @@ Loader {
             return Qt.resolvedUrl("cards/ApexChartsCard.qml")
         if (t === "custom:horizon-card")
             return Qt.resolvedUrl("cards/HorizonCard.qml")
+        if (t === "custom:frigate-modern-hass-card")
+            return Qt.resolvedUrl("cards/FrigateModernCard.qml")
         if (t === "custom:auto-entities")
             return Qt.resolvedUrl("cards/AutoEntitiesCard.qml")
         if (t === "custom:mushroom-title-card")
