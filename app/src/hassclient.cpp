@@ -439,6 +439,7 @@ HassClient::HassClient(QObject *parent)
     , m_haLanguageReqId(0)
     , m_networkState(NetworkUnknown)
     , m_pendingNetworkState(NetworkUnknown)
+    , m_networkResolved(false)
     , m_pushAuthRetries(0)
     , m_pushRefreshFailures(0)
     , m_port(kDefaultHttpPort)
@@ -1145,6 +1146,8 @@ void HassClient::loadSession()
             obj.insert(QStringLiteral("useSsl"), legacy.value(QStringLiteral("useSsl"), false).toBool());
             obj.insert(QStringLiteral("ignoreSslErrors"),
                        legacy.value(QStringLiteral("ignoreSslErrors"), false).toBool());
+            obj.insert(QStringLiteral("usingInternalUrl"),
+                       legacy.value(QStringLiteral("usingInternalUrl"), true).toBool());
             obj.insert(QStringLiteral("username"), legacy.value(QStringLiteral("username")).toString());
             obj.insert(QStringLiteral("refreshToken"),
                        legacy.value(QStringLiteral("refreshToken")).toString());
@@ -1194,6 +1197,17 @@ void HassClient::loadSession()
 
     m_internalUrl = normalizeInstanceUrl(m_internalUrl, false);
     m_externalUrl = normalizeInstanceUrl(m_externalUrl, true);
+
+    // The NetworkUnknown endpoint fallback must reflect the endpoint the last
+    // run actually used, not the constructor default. Stored sessions without
+    // the key predate it: infer the endpoint from the saved address instead of
+    // guessing internal, which is unreachable for https/external sessions.
+    if (obj.contains(QStringLiteral("usingInternalUrl")))
+        m_usingInternalUrl = obj.value(QStringLiteral("usingInternalUrl")).toBool();
+    else if (!m_internalUrl.isEmpty())
+        m_usingInternalUrl = normalizeInstanceUrl(m_host, m_useSsl) == m_internalUrl;
+    else
+        m_usingInternalUrl = m_externalUrl.isEmpty();
 
     rebuildBaseUrl();
 
@@ -1448,6 +1462,10 @@ void HassClient::restoreSession()
     }
 
     setStatus(QStringLiteral("Restoring session..."));
+    HelmsmanLog::info(QStringLiteral("auth"),
+                      QStringLiteral("restore: POST /auth/token base=%1 accessLeft=%2ms")
+                      .arg(m_baseUrl)
+                      .arg(msLeft));
     QUrlQuery form;
     form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("refresh_token"));
     form.addQueryItem(QStringLiteral("refresh_token"), m_refreshToken);
@@ -1640,6 +1658,7 @@ void HassClient::persistSession()
     obj.insert(QStringLiteral("port"), m_port);
     obj.insert(QStringLiteral("useSsl"), m_useSsl);
     obj.insert(QStringLiteral("ignoreSslErrors"), m_ignoreSslErrors);
+    obj.insert(QStringLiteral("usingInternalUrl"), m_usingInternalUrl);
     obj.insert(QStringLiteral("internalUrl"), m_internalUrl);
     obj.insert(QStringLiteral("externalUrl"), m_externalUrl);
     obj.insert(QStringLiteral("homeWifiSsid"), m_homeWifiSsid);
@@ -1678,6 +1697,7 @@ void HassClient::persistSession()
     legacy.setValue(QStringLiteral("port"), m_port);
     legacy.setValue(QStringLiteral("useSsl"), m_useSsl);
     legacy.setValue(QStringLiteral("ignoreSslErrors"), m_ignoreSslErrors);
+    legacy.setValue(QStringLiteral("usingInternalUrl"), m_usingInternalUrl);
     legacy.setValue(QStringLiteral("internalUrl"), m_internalUrl);
     legacy.setValue(QStringLiteral("externalUrl"), m_externalUrl);
     legacy.setValue(QStringLiteral("homeWifiSsid"), m_homeWifiSsid);
@@ -1781,11 +1801,18 @@ void HassClient::updateNetworkState(bool wifiReady, bool wifiConnected, const QS
             : (wifiConnected ? NetworkWifi : NetworkNoWifi);
     const QString nextSsid = state == NetworkWifi ? ssid.trimmed() : QString();
 
-    if (state == m_pendingNetworkState && nextSsid == m_pendingWifiSsid)
+    // Both states start at NetworkUnknown, so a comparison against the pending
+    // state alone cannot tell "ConnMan has not answered yet" from a committed
+    // state. Without m_networkResolved the first real report would look like a
+    // no-op and never be committed: startup would restore against whatever
+    // endpoint the last run left, and an away-from-home start would hit the
+    // dead LAN address.
+    if (m_networkResolved && state == m_pendingNetworkState && nextSsid == m_pendingWifiSsid)
         return;
 
     m_pendingNetworkState = state;
     m_pendingWifiSsid = nextSsid;
+    m_networkResolved = true;
     // Debounce endpoint switches. Joining home Wi-Fi needs DHCP before the
     // LAN address works; leaving it should fail over to the external URL
     // sooner so we are not stuck on a dead 192.168 address.
@@ -2090,6 +2117,7 @@ void HassClient::onReplyFinished()
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QNetworkReply::NetworkError netError = reply->error();
     const QString netErrorString = reply->errorString();
+    const QUrl replyUrl = reply->url();
     reply->deleteLater();
 
     if (kind == RequestRevoke) {
@@ -2099,8 +2127,19 @@ void HassClient::onReplyFinished()
 
     if (netError != QNetworkReply::NoError && status == 0) {
         setBusy(false);
+        static const char *const kKindNames[] = {
+            "none", "providers", "startFlow", "submitFlow", "token",
+            "refresh", "config", "revoke", "mobileRegister"
+        };
+        QString detail = QStringLiteral("kind=%1 err=%2[%3] target=%4 baseUrl=%5")
+                .arg(QString::fromLatin1(kKindNames[static_cast<int>(kind)]))
+                .arg(netErrorString)
+                .arg(static_cast<int>(netError))
+                .arg(replyUrl.toString(), m_baseUrl);
+        HelmsmanLog::info(QStringLiteral("auth"),
+                          QStringLiteral("request unreachable: %1").arg(detail));
         const QString message = QStringLiteral("Could not reach %1 (%2)")
-                .arg(m_baseUrl, netErrorString);
+                .arg(!replyUrl.isEmpty() ? replyUrl.toString() : m_baseUrl, netErrorString);
         if (kind == RequestRefresh && m_pendingPushAfterRefresh) {
             // Transient network failure, not a rejected token — let the push
             // channel's own backoff ask again instead of counting a failure.
