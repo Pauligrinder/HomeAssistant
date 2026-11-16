@@ -568,6 +568,19 @@ QString HassClient::internalUrl() const { return m_internalUrl; }
 QString HassClient::externalUrl() const { return m_externalUrl; }
 QString HassClient::homeWifiSsid() const { return m_homeWifiSsid; }
 QString HassClient::currentWifiSsid() const { return m_currentWifiSsid; }
+
+int HassClient::homeWifiPresence() const
+{
+    if (m_homeWifiSsid.isEmpty() || m_networkState == NetworkUnknown)
+        return -1;
+    // Off Wi-Fi entirely (empty SSID) is still a confirmed "not home":
+    // the empty-SSID case must not short-circuit to unknown.
+    if (m_networkState != NetworkWifi)
+        return 0;
+    if (m_currentWifiSsid.isEmpty())
+        return -1; // connected but ConnMan did not name the network
+    return m_currentWifiSsid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0 ? 1 : 0;
+}
 bool HassClient::usingInternalUrl() const { return m_usingInternalUrl; }
 QString HassClient::webhookId() const { return m_webhookId; }
 QString HassClient::deviceName() const { return m_deviceName; }
@@ -1843,11 +1856,15 @@ void HassClient::commitNetworkState()
         m_currentWifiSsid = m_pendingWifiSsid;
         emit currentWifiSsidChanged();
     }
+    // Switch the endpoint before the presence decision: applyWifiPresence()
+    // consults usingInternalUrl through atHomeNow() (homeOnInternal pinning),
+    // and must not see a stale internal endpoint after we left Wi-Fi.
+    selectEndpointForNetwork();
     if (m_sensors) {
         m_sensors->updateWifi(m_currentWifiSsid,
-                              m_networkState == NetworkWifi && !m_currentWifiSsid.isEmpty());
+                              m_networkState == NetworkWifi && !m_currentWifiSsid.isEmpty(),
+                              homeWifiPresence());
     }
-    selectEndpointForNetwork();
 }
 
 void HassClient::onEndpointDebounceTimeout()
@@ -1969,9 +1986,7 @@ bool HassClient::selectEndpointForNetwork()
         chosen = m_externalUrl;
         defaultSsl = true;
     } else {
-        const bool onHomeWifi = m_networkState == NetworkWifi
-                && !m_homeWifiSsid.isEmpty()
-                && m_currentWifiSsid.compare(m_homeWifiSsid, Qt::CaseInsensitive) == 0;
+        const bool onHomeWifi = homeWifiPresence() == 1;
 
         if (m_networkState == NetworkUnknown) {
             // ConnMan has not reported yet (startup / lag). Stay where we are
@@ -2704,7 +2719,8 @@ void HassClient::startSensors()
     m_sensors->start();
     // Push current Wi-Fi immediately after start.
     m_sensors->updateWifi(m_currentWifiSsid,
-                          m_networkState == NetworkWifi && !m_currentWifiSsid.isEmpty());
+                          m_networkState == NetworkWifi && !m_currentWifiSsid.isEmpty(),
+                          homeWifiPresence());
 }
 
 void HassClient::stopSensors()

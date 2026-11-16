@@ -81,7 +81,7 @@
   "hold_to_adjust": " · hold to adjust",
   "home_assistant": "Home Assistant",
   "home_assistant_settings": "Home Assistant settings",
-  "home_on_internal_help": "Always reports the location as 'home' when connected to the internal host",
+  "home_on_internal_help": "Always reports 'home' when connected to the internal host. With a Home Wi-Fi SSID set, also reports 'home' on that network and 'away' once off it - this works even with phone location turned off",
   "humidifiers": "Humidifiers",
   "home_wi_fi_ssid": "Home Wi‑Fi SSID",
   "horizontal_vanes": "Horizontal vanes",

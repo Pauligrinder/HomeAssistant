@@ -83,7 +83,9 @@ public:
 
 public slots:
     void updateBattery(int levelPercent, bool charging, const QString &state, const QString &chargerType);
-    void updateWifi(const QString &ssid, bool connected);
+    // homeWifiState: 1 = on the configured home Wi-Fi, 0 = confirmed off it
+    // (other SSID / Wi-Fi off), -1 = unknown (ConnMan lag, no SSID set).
+    void updateWifi(const QString &ssid, bool connected, int homeWifiState);
     // Extra motion fields are optional (-1 = omit). Preset gates how they are used.
     void updateLocation(double latitude, double longitude, double accuracyMeters,
                         int batteryPercent = -1,
@@ -131,6 +133,9 @@ private slots:
     void onUpdateDebounceTimeout();
     void onStartupStepTimeout();
     void onHomeHeartbeatTimeout();
+    void onPresenceRetryTimeout();
+    void onSensorFlushRetryTimeout();
+    void postPresenceLocationNow();
     void onAlarmTriggersChanged();
     void onLiveLocationAutoOffTimeout();
 
@@ -219,8 +224,13 @@ private:
     int activeLocationPreset() const;
     void restartLiveLocationAutoOff();
 
-    // Setting + internal URL: always report home; GPS must not override.
-    bool atHomeOnInternal() const;
+    // Home Wi-Fi match, or setting + internal URL: always report home;
+    // GPS must not override.
+    bool atHomeNow() const;
+    void applyWifiPresence(int state);
+    void schedulePresenceRetry();
+    void scheduleSensorFlushRetry();
+    void reMarkSensorsDirty(const QByteArray &payload);
     void claimHomeOnInternal();
     QString computeLocationZone() const;
     QString computeLocationZoneAt(double latitude, double longitude,
@@ -257,6 +267,11 @@ private:
     int m_liveLocationAutoOffMinutes;
     bool m_liveLocationActive;
     bool m_usingInternalUrl;
+    int m_wifiHomeState;
+    int m_presencePostRetries;
+    int m_sensorFlushRetries;
+    QNetworkReply *m_locationReply; // newest in-flight update_location (not owned)
+    QNetworkReply *m_sensorsReply; // newest in-flight update_sensor_states (not owned)
     bool m_started;
     bool m_registrationInFlight;
     QString m_lastError;
