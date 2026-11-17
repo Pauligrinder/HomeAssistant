@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.09
+Version:    0.6.10
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -91,6 +91,12 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Tue Nov 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.10-1
+- Suspend Lovelace websocket after 60s backgrounded to cut idle CPU (#90).
+- Persist/restore internal vs external endpoint across restarts (#90).
+- Improve tile light controls: hue picker, slider layout, Kelvin/mireds (#89).
+- Thanks to vivia and Lowxorx for these contributions.
+
 * Tue Nov 10 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.09-1
 - Native Frigate Modern card with go2rtc/MSE playback and MJPEG fallback.
 - Weather forecast card shows MDI icons for current and forecast conditions.
