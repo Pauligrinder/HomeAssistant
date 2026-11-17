@@ -102,6 +102,9 @@ public:
     QString externalUrl() const;
     QString homeWifiSsid() const;
     QString currentWifiSsid() const;
+    // Tri-state presence on the configured home Wi-Fi: 1 = on it,
+    // 0 = confirmed off it, -1 = unknown.
+    int homeWifiPresence() const;
     bool usingInternalUrl() const;
     QString webhookId() const;
     QString deviceName() const;

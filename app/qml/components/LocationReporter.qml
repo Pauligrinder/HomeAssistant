@@ -20,8 +20,12 @@ Item {
     readonly property bool liveLocation: hassClient && hassClient.sensors
             ? !!hassClient.sensors.liveLocationActive : false
     readonly property bool pinnedHome: hassClient && hassClient.sensors
-            && hassClient.sensors.homeOnInternal && hassClient.usingInternalUrl
             && !reporter.liveLocation
+            && ((hassClient.sensors.homeOnInternal && hassClient.usingInternalUrl)
+                || (hassClient.homeWifiSsid.length > 0
+                    && hassClient.currentWifiSsid.length > 0
+                    && hassClient.currentWifiSsid.toLowerCase()
+                       === hassClient.homeWifiSsid.toLowerCase()))
     property bool enabled: hassClient && hassClient.sensors
             ? hassClient.sensors.locationReporting
               && hassClient.sensors.active

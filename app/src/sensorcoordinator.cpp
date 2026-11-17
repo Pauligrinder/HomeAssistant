@@ -26,10 +26,19 @@ namespace {
 const char kClientName[] = "Helmsman";
 const int kPeriodicMs = 15 * 60 * 1000;
 const int kConfigRefreshMs = 20 * 60 * 1000;
-const int kUpdateDebounceMs = 750;
+const int kUpdateDebounceMs = 1500;
 // HA device_tracker consider_home defaults to 180s. Keep the internal-home
 // webhook fresher than that so overnight Wi‑Fi stays "home".
 const int kHomeHeartbeatMs = 120 * 1000;
+// Presence posts wait out the session reconfiguration that follows an
+// endpoint switch; sensor pushes get the same head start via their debounce.
+const int kPresencePostDeferMs = 1200;
+// Qt on Sailfish predates QNetworkRequest::setTransferTimeout: no route to a
+// dead webhook address blackholes the POST forever, so time it out manually.
+const int kLocationPostTimeoutMs = 15000;
+// Sensor pushes may legitimately take a slow WAN TLS handshake, so give them
+// more room before declaring the target dead.
+const int kSensorPostTimeoutMs = 30000;
 const double kHomeAccuracyFallbackMeters = 100.0;
 // Gap between the first webhook calls after start. Issuing config, sensor
 // registration, and the first state update together stalled the UI thread on
@@ -275,6 +284,11 @@ SensorCoordinator::SensorCoordinator(QObject *parent)
     , m_liveLocationAutoOffMinutes(kLiveLocationAutoOffDefaultMinutes)
     , m_liveLocationActive(false)
     , m_usingInternalUrl(false)
+    , m_wifiHomeState(-1)
+    , m_presencePostRetries(0)
+    , m_sensorFlushRetries(0)
+    , m_locationReply(nullptr)
+    , m_sensorsReply(nullptr)
     , m_started(false)
     , m_registrationInFlight(false)
     , m_startupStep(0)
@@ -496,7 +510,7 @@ const HassZoneFence *SensorCoordinator::bestActiveZoneAt(double latitude,
 QString SensorCoordinator::computeLocationZoneAt(double latitude, double longitude,
                                                  double accuracyMeters) const
 {
-    if (atHomeOnInternal())
+    if (atHomeNow())
         return QStringLiteral("home");
     if (!qIsFinite(latitude) || !qIsFinite(longitude))
         return QString();
@@ -509,7 +523,7 @@ QString SensorCoordinator::computeLocationZoneAt(double latitude, double longitu
 QString SensorCoordinator::webhookLocationNameAt(double latitude, double longitude,
                                                  double accuracyMeters) const
 {
-    if (atHomeOnInternal())
+    if (atHomeNow())
         return QStringLiteral("home");
     if (!qIsFinite(latitude) || !qIsFinite(longitude))
         return QString();
@@ -550,7 +564,7 @@ QStringList SensorCoordinator::computeInZonesAt(double latitude, double longitud
 QString SensorCoordinator::computeLocationZone() const
 {
     if (!m_haveLocation)
-        return atHomeOnInternal() ? QStringLiteral("home") : QString();
+        return atHomeNow() ? QStringLiteral("home") : QString();
     const QString raw = computeLocationZoneAt(m_lastLat, m_lastLon, m_lastAccuracy);
     return stabilizeZoneName(raw, m_locationZone, m_lastLat, m_lastLon,
                              m_lastAccuracy, m_zones);
@@ -872,9 +886,11 @@ void SensorCoordinator::start()
     }
     m_started = true;
     setActive(true);
-    setLastError(QString());
-    m_periodicTimer.start();
-    m_configTimer.start();
+    // Force presence re-evaluation on (re)start: HA's mobile_app tracker
+    // restores its previous state, so an app start while off the home
+    // Wi-Fi must post not_home again rather than keep a stale "home".
+    m_wifiHomeState = -1;
+    m_sensorFlushRetries = 0;
     updateHomeHeartbeat();
     ensureOsVersionSensor();
     ensureTimedAlarmWatch();
@@ -965,6 +981,20 @@ void SensorCoordinator::postWebhook(WebhookKind kind, const QJsonObject &body, i
         return;
     }
 
+    // For state-carrying posts HA keeps whatever arrives last, so an older
+    // decision still in flight over a slow path would land after the newer
+    // one and flip sensors/presence the wrong way: supersede it.
+    QNetworkReply **inFlight = nullptr;
+    if (kind == WebhookUpdateLocation)
+        inFlight = &m_locationReply;
+    else if (kind == WebhookUpdateSensors)
+        inFlight = &m_sensorsReply;
+    if (inFlight && *inFlight) {
+        (*inFlight)->setProperty("superseded", true);
+        (*inFlight)->abort();
+        *inFlight = nullptr;
+    }
+
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Accept", "application/json");
@@ -978,6 +1008,18 @@ void SensorCoordinator::postWebhook(WebhookKind kind, const QJsonObject &body, i
     if (kind == WebhookRegisterSensor)
         reply->setProperty("uniqueId", body.value(QStringLiteral("data")).toObject()
                           .value(QStringLiteral("unique_id")).toString());
+    if (inFlight) {
+        *inFlight = reply;
+        // No QNetworkRequest::setTransferTimeout on this Qt, so arm a manual
+        // watchdog. It is parented to the reply so it dies with it and can
+        // only abort the post it was armed for (a global timer would kill a
+        // later post that superseded this one before its own deadline).
+        QTimer *watchdog = new QTimer(reply);
+        watchdog->setSingleShot(true);
+        connect(watchdog, SIGNAL(timeout()), reply, SLOT(abort()));
+        watchdog->start(kind == WebhookUpdateSensors ? kSensorPostTimeoutMs
+                                                     : kLocationPostTimeoutMs);
+    }
     connect(reply, SIGNAL(finished()), this, SLOT(onWebhookFinished()));
 }
 
@@ -994,6 +1036,21 @@ void SensorCoordinator::onWebhookFinished()
     const QByteArray data = reply->readAll();
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QNetworkReply::NetworkError netError = reply->error();
+    if (m_locationReply == reply)
+        m_locationReply = nullptr;
+    if (m_sensorsReply == reply)
+        m_sensorsReply = nullptr;
+    if (reply->property("superseded").toBool()) {
+        // Aborted by a newer post of the same kind: not a failure, no retry.
+        // The values this push carried were cleared dirty when it was built,
+        // so re-mark them; the newer push may not have covered them all.
+        if (kind == WebhookUpdateSensors) {
+            reMarkSensorsDirty(payload);
+            scheduleSensorUpdate();
+        }
+        reply->deleteLater();
+        return;
+    }
     reply->deleteLater();
 
     if (kind == WebhookGetZones) {
@@ -1016,8 +1073,18 @@ void SensorCoordinator::onWebhookFinished()
             }
         }
         setLastError(QStringLiteral("Webhook unreachable"));
-        if (kind == WebhookUpdateLocation)
+        if (kind == WebhookUpdateSensors) {
+            if (netError == QNetworkReply::OperationCanceledError)
+                qWarning() << "Helmsman sensors: push timed out, aborted in-flight update_sensor_states";
+            reMarkSensorsDirty(payload);
+            scheduleSensorFlushRetry();
+        }
+        if (kind == WebhookUpdateLocation) {
+            if (netError == QNetworkReply::OperationCanceledError)
+                qWarning() << "Helmsman location: post timed out, aborted in-flight update_location";
             m_lastLocationPostOk = false;
+            schedulePresenceRetry();
+        }
         if (kind == WebhookRegisterSensor) {
             m_registrationInFlight = false;
             registerNextPending();
@@ -1046,10 +1113,14 @@ void SensorCoordinator::onWebhookFinished()
     }
 
     if (kind == WebhookUpdateSensors) {
-        if (status == 200)
+        if (status == 200) {
+            m_sensorFlushRetries = 0;
             handleUpdateSensors(data);
-        else
+        } else {
             setLastError(QStringLiteral("update_sensor_states failed (HTTP %1)").arg(status));
+            reMarkSensorsDirty(payload);
+            scheduleSensorFlushRetry();
+        }
         return;
     }
 
@@ -1345,7 +1416,7 @@ void SensorCoordinator::updateBattery(int levelPercent, bool charging, const QSt
         rebuildStatusList();
 }
 
-void SensorCoordinator::updateWifi(const QString &ssid, bool connected)
+void SensorCoordinator::updateWifi(const QString &ssid, bool connected, int homeWifiState)
 {
     m_haveWifi = true;
     const bool on = connected && !ssid.isEmpty();
@@ -1361,9 +1432,92 @@ void SensorCoordinator::updateWifi(const QString &ssid, bool connected)
         rt.dirty = true;
         if (m_started)
             scheduleSensorUpdate();
-        else
-            rebuildStatusList();
     }
+
+    applyWifiPresence(homeWifiState);
+}
+
+void SensorCoordinator::applyWifiPresence(int state)
+{
+    if (m_wifiHomeState == state)
+        return;
+    m_wifiHomeState = state;
+    m_presencePostRetries = 0;
+    if (!m_started || !locationReporting())
+        return;
+    updateHomeHeartbeat();
+    refreshLocationZone();
+    if (state == 1) {
+        qWarning() << "Helmsman location: on home Wi-Fi, claiming home";
+        QTimer::singleShot(kPresencePostDeferMs, this, SLOT(postPresenceLocationNow()));
+    } else if (state == 0) {
+        qWarning() << "Helmsman location: off home Wi-Fi";
+        QTimer::singleShot(kPresencePostDeferMs, this, SLOT(postPresenceLocationNow()));
+    }
+}
+
+void SensorCoordinator::schedulePresenceRetry()
+{
+    // A failed update_location is otherwise only re-attempted when the next
+    // GPS fix or the 15-minute poll comes around. Wi-Fi presence edges have
+    // no such follow-up, so retry with backoff; the dedupe key is only set
+    // on success, so re-posts cannot duplicate an accepted state.
+    if (!m_started || !locationReporting() || m_presencePostRetries >= 3)
+        return;
+    ++m_presencePostRetries;
+    QTimer::singleShot(5000 * m_presencePostRetries * m_presencePostRetries,
+                       this, SLOT(onPresenceRetryTimeout()));
+}
+
+void SensorCoordinator::onPresenceRetryTimeout()
+{
+    if (!m_started || !locationReporting() || m_lastLocationPostOk)
+        return;
+    qWarning() << "Helmsman location: retrying failed post, attempt"
+               << m_presencePostRetries;
+    postLocationUpdate(true);
+}
+
+void SensorCoordinator::scheduleSensorFlushRetry()
+{
+    // flushSensorUpdates() clears rt.dirty before the POST, so a push lost
+    // to a dead webhook URL (typical right after an endpoint switch) would
+    // otherwise not be re-sent until the next state change. The failed push
+    // re-marks those sensors dirty; retry with backoff like presence posts.
+    if (!m_started || m_sensorFlushRetries >= 3)
+        return;
+    ++m_sensorFlushRetries;
+    QTimer::singleShot(5000 * m_sensorFlushRetries * m_sensorFlushRetries,
+                       this, SLOT(onSensorFlushRetryTimeout()));
+}
+
+void SensorCoordinator::onSensorFlushRetryTimeout()
+{
+    if (!m_started)
+        return;
+    qWarning() << "Helmsman sensors: retrying failed state push, attempt"
+               << m_sensorFlushRetries;
+    scheduleSensorUpdate();
+}
+
+void SensorCoordinator::reMarkSensorsDirty(const QByteArray &payload)
+{
+    const QJsonDocument doc = QJsonDocument::fromJson(payload);
+    if (!doc.isObject())
+        return;
+    const QJsonArray updates = doc.object().value(QStringLiteral("data")).toArray();
+    for (const QJsonValue &value : updates) {
+        const QString id = value.toObject().value(QStringLiteral("unique_id")).toString();
+        if (!id.isEmpty())
+            m_runtime[id].dirty = true;
+    }
+}
+
+void SensorCoordinator::postPresenceLocationNow()
+{
+    if (!m_started || !locationReporting())
+        return;
+    postLocationUpdate(true);
 }
 
 void SensorCoordinator::updateLocation(double latitude, double longitude, double accuracyMeters,
@@ -1374,8 +1528,9 @@ void SensorCoordinator::updateLocation(double latitude, double longitude, double
 
     if (!m_started || !locationReporting())
         return;
-    // Internal URL + setting: home is authoritative; never let GPS move us.
-    if (atHomeOnInternal())
+    // Pinned home (Wi-Fi or internal URL): home is authoritative; never let
+    // GPS move us.
+    if (atHomeNow())
         return;
     if (!qIsFinite(latitude) || !qIsFinite(longitude))
         return;
@@ -1495,8 +1650,8 @@ void SensorCoordinator::postLocationUpdate(bool force)
     if (!m_started || !locationReporting() || m_webhookId.isEmpty())
         return;
 
-    const bool atHome = atHomeOnInternal();
-    // Home on internal: use the Home zone coordinates rather than a leftover
+    const bool atHome = atHomeNow();
+    // Pinned home: use the Home zone coordinates rather than a leftover
     // GPS fix from an earlier trip.
     if (atHome && !m_haveHomeCoordinates)
         fetchZones();
@@ -1504,10 +1659,28 @@ void SensorCoordinator::postLocationUpdate(bool force)
             && qIsFinite(m_homeLat) && qIsFinite(m_homeLon);
     const bool haveGps = !atHome && m_haveLocation
             && qIsFinite(m_lastLat) && qIsFinite(m_lastLon);
-    if (!atHome && !haveGps)
-        return;
 
     const QDateTime now = QDateTime::currentDateTimeUtc();
+    // Wi-Fi says we are off the home network. Without a fresh fix the
+    // cached position may be from an earlier trip, and HA's mobile_app
+    // device tracker never expires a stale state on its own, so report
+    // not_home explicitly instead of staying silent on "home".
+    // TODO: consider gating this Away post on homeOnInternal as well —
+    // today Home Wi-Fi SSID alone is enough (location-off is implicit via
+    // no fresh GPS); requiring the setting would avoid Away for users who
+    // only set the SSID for endpoint switching.
+    bool wifiNotHome = false;
+    if (!atHome && m_wifiHomeState == 0) {
+        const bool fixFresh = haveGps && m_lastGpsAt.isValid()
+                && m_lastGpsAt.secsTo(now) <= m_locationStaleMinutes * 60;
+        wifiNotHome = !haveGps || !fixFresh;
+    }
+    if (!atHome && !haveGps && !wifiNotHome)
+        return;
+    if (wifiNotHome && m_lastLocationPostOk
+            && m_lastSentLocationKey == QLatin1String("not_home"))
+        return;
+
     if (!force && m_lastLocationAttemptAt.isValid()
             && m_lastLocationAttemptAt.msecsTo(now) < 2000
             && !atHome)
@@ -1523,7 +1696,7 @@ void SensorCoordinator::postLocationUpdate(bool force)
         data.insert(QStringLiteral("gps"), gps);
         const double accuracy = m_homeRadius > 0 ? m_homeRadius : kHomeAccuracyFallbackMeters;
         data.insert(QStringLiteral("gps_accuracy"), qRound(accuracy));
-    } else if (haveGps) {
+    } else if (haveGps && !wifiNotHome) {
         QJsonArray gps;
         gps.append(m_lastLat);
         gps.append(m_lastLon);
@@ -1551,6 +1724,8 @@ void SensorCoordinator::postLocationUpdate(bool force)
     if (atHome) {
         locationName = QStringLiteral("home");
         inZones.append(QStringLiteral("zone.home"));
+    } else if (wifiNotHome) {
+        locationName = QStringLiteral("not_home");
     } else if (haveGps) {
         const QString resolvedZone = stabilizeZoneName(
                     computeLocationZoneAt(m_lastLat, m_lastLon, m_lastAccuracy),
@@ -1573,7 +1748,8 @@ void SensorCoordinator::postLocationUpdate(bool force)
     if (!locationName.isEmpty())
         data.insert(QStringLiteral("location_name"), locationName);
     // in_zones only on Core >= 2026.6 — older cores reject the key silently.
-    if (supportsInZones() && (atHome || haveGps)) {
+    // An empty list would also mask location_name on newer cores.
+    if (supportsInZones() && (atHome || (haveGps && !wifiNotHome))) {
         QJsonArray arr;
         for (int i = 0; i < inZones.size(); ++i)
             arr.append(inZones.at(i));
@@ -1596,8 +1772,11 @@ void SensorCoordinator::postLocationUpdate(bool force)
                 .arg(m_homeRadius > 0 ? m_homeRadius : kHomeAccuracyFallbackMeters, 0, 'f', 0);
         m_pendingLocationKey = QStringLiteral("home");
     } else if (atHome) {
-        m_pendingLocationText = QStringLiteral("home (internal connection)");
+        m_pendingLocationText = QStringLiteral("home (Wi-Fi or internal)");
         m_pendingLocationKey = QStringLiteral("home");
+    } else if (wifiNotHome) {
+        m_pendingLocationText = QStringLiteral("not home (Wi-Fi)");
+        m_pendingLocationKey = QStringLiteral("not_home");
     } else {
         m_pendingLocationText = QStringLiteral("%1, %2 (±%3 m)")
                 .arg(m_lastLat, 0, 'f', 5)
@@ -1612,7 +1791,7 @@ void SensorCoordinator::postLocationUpdate(bool force)
 
 void SensorCoordinator::updateHomeHeartbeat()
 {
-    const bool need = m_started && locationReporting() && atHomeOnInternal();
+    const bool need = m_started && locationReporting() && atHomeNow();
     if (need) {
         if (!m_homeHeartbeatTimer.isActive())
             m_homeHeartbeatTimer.start();
@@ -1628,11 +1807,13 @@ void SensorCoordinator::onHomeHeartbeatTimeout()
     postLocationUpdate(true);
 }
 
-bool SensorCoordinator::atHomeOnInternal() const
+bool SensorCoordinator::atHomeNow() const
 {
     // Live tracking must be allowed to leave the pinned-home state.
     if (m_liveLocationActive)
         return false;
+    if (m_wifiHomeState == 1)
+        return true;
     return m_homeOnInternal && m_usingInternalUrl;
 }
 
@@ -1640,9 +1821,9 @@ void SensorCoordinator::claimHomeOnInternal()
 {
     updateHomeHeartbeat();
     refreshLocationZone();
-    if (!m_started || !locationReporting() || !atHomeOnInternal())
+    if (!m_started || !locationReporting() || !atHomeNow())
         return;
-    qWarning() << "Helmsman location: home on internal connection";
+    qWarning() << "Helmsman location: home claimed (Wi-Fi or internal)";
     postLocationUpdate(true);
 }
 
@@ -1650,7 +1831,7 @@ void SensorCoordinator::refreshLocation()
 {
     if (!m_started || !locationReporting())
         return;
-    if (atHomeOnInternal()) {
+    if (atHomeNow()) {
         postLocationUpdate(true);
         return;
     }
@@ -1847,7 +2028,7 @@ void SensorCoordinator::setHomeCoordinates(double latitude, double longitude, do
     m_haveHomeCoordinates = true;
     if (changed)
         persistState();
-    if (changed && m_started && locationReporting() && atHomeOnInternal())
+    if (changed && m_started && locationReporting() && atHomeNow())
         postLocationUpdate(true);
 }
 
@@ -1990,11 +2171,13 @@ void SensorCoordinator::handleUpdateLocation(const QByteArray &data, int status)
     if (status != 200 && status != 201) {
         m_lastLocationPostOk = false;
         setLastError(QStringLiteral("update_location failed (HTTP %1)").arg(status));
+        schedulePresenceRetry();
         return;
     }
     // Only advance the send clock / duplicate key after HA accepted the
-    // webhook — failed posts can retry on the next eligible fix.
+    // webhook - failed posts can retry on the next eligible fix.
     m_lastLocationPostOk = true;
+    m_presencePostRetries = 0;
     m_lastLocationSent = QDateTime::currentDateTimeUtc();
     m_lastSentLocationKey = m_pendingLocationKey;
     if (m_lastLocationText != m_pendingLocationText) {
@@ -2010,7 +2193,7 @@ void SensorCoordinator::onAppForegrounded()
         return;
     refreshConfig();
     scheduleSensorUpdate();
-    if (locationReporting() && atHomeOnInternal())
+    if (locationReporting() && atHomeNow())
         postLocationUpdate(true);
 }
 
