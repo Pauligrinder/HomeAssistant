@@ -1665,6 +1665,10 @@ void SensorCoordinator::postLocationUpdate(bool force)
     // cached position may be from an earlier trip, and HA's mobile_app
     // device tracker never expires a stale state on its own, so report
     // not_home explicitly instead of staying silent on "home".
+    // TODO: consider gating this Away post on homeOnInternal as well —
+    // today Home Wi-Fi SSID alone is enough (location-off is implicit via
+    // no fresh GPS); requiring the setting would avoid Away for users who
+    // only set the SSID for endpoint switching.
     bool wifiNotHome = false;
     if (!atHome && m_wifiHomeState == 0) {
         const bool fixFresh = haveGps && m_lastGpsAt.isValid()
