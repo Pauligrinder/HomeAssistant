@@ -25,6 +25,7 @@ Column {
     Repeater {
         model: bar.features
         Loader {
+            id: featureLoader
             width: bar.compact ? (item ? item.implicitWidth || item.width : 0) : bar.width
             visible: {
                 var _ = bar.rev
@@ -34,12 +35,15 @@ Column {
                     return !!bar.dashboard.isVisible(modelData.visibility)
                 return true
             }
-            height: visible && status === Loader.Ready && item ? item.height : 0
+            height: visible && status === Loader.Ready && item
+                    ? Math.max(item.height, item.implicitHeight) : 0
             active: visible
             sourceComponent: bar.componentFor(modelData)
             onLoaded: {
                 if (!item)
                     return
+                if (!bar.compact)
+                    item.width = Qt.binding(function() { return featureLoader.width })
                 item.feature = modelData
                 item.entityId = Qt.binding(function() { return bar.entityId })
                 item.dashboard = Qt.binding(function() { return bar.dashboard })
@@ -68,7 +72,9 @@ Column {
                 || t === "media-player-volume" || t === "media-player-volume-slider"
                 || t === "valve-position" || t === "bar-gauge")
             return sliderComp
-        if (t === "light-favorite-colors" || t === "light-color")
+        if (t === "light-color")
+            return lightColorComp
+        if (t === "light-favorite-colors")
             return colorsComp
         if (t === "light-color-temp")
             return colorTempComp
@@ -83,6 +89,112 @@ Column {
         if (t === "light-brightness")
             return i18n.translation("brightness")
         return ""
+    }
+
+    function hsToRgb(h, s) {
+        var sat = Math.max(0, Math.min(100, Number(s))) / 100
+        var hue = ((Number(h) % 360) + 360) % 360
+        var c = sat
+        var x = c * (1 - Math.abs((hue / 60) % 2 - 1))
+        var r = 0, g = 0, b = 0
+        if (hue < 60) { r = c; g = x }
+        else if (hue < 120) { r = x; g = c }
+        else if (hue < 180) { g = c; b = x }
+        else if (hue < 240) { g = x; b = c }
+        else if (hue < 300) { r = x; b = c }
+        else { r = c; b = x }
+        return {
+            r: Math.round(r * 255),
+            g: Math.round(g * 255),
+            b: Math.round(b * 255)
+        }
+    }
+
+    function kelvinRgb(k) {
+        var t = Math.max(2000, Math.min(6500, Number(k)))
+        var p = (t - 2000) / 4500
+        return {
+            r: 255,
+            g: Math.round(147 + p * 108),
+            b: Math.round(41 + p * 214)
+        }
+    }
+
+    function rgbToHs(rgb) {
+        var r = Math.max(0, Math.min(255, Number(rgb[0]) || 0)) / 255
+        var g = Math.max(0, Math.min(255, Number(rgb[1]) || 0)) / 255
+        var b = Math.max(0, Math.min(255, Number(rgb[2]) || 0)) / 255
+        var maximum = Math.max(r, g, b)
+        var minimum = Math.min(r, g, b)
+        var delta = maximum - minimum
+        var hue = 0
+        if (delta > 0) {
+            if (maximum === r)
+                hue = 60 * (((g - b) / delta) % 6)
+            else if (maximum === g)
+                hue = 60 * ((b - r) / delta + 2)
+            else
+                hue = 60 * ((r - g) / delta + 4)
+        }
+        return {
+            hue: (hue + 360) % 360,
+            saturation: maximum > 0 ? delta * 100 / maximum : 0
+        }
+    }
+
+    function lightColorTempRange() {
+        var minK = (dashboard && rev >= 0)
+                   ? Number(dashboard.attribute(entityId, "min_color_temp_kelvin")) : 0
+        var maxK = (dashboard && rev >= 0)
+                   ? Number(dashboard.attribute(entityId, "max_color_temp_kelvin")) : 0
+        if (!isFinite(minK) || minK <= 0) {
+            var maxMireds = (dashboard && rev >= 0)
+                            ? Number(dashboard.attribute(entityId, "max_mireds")) : 0
+            if (isFinite(maxMireds) && maxMireds > 0)
+                minK = Math.round(1000000 / maxMireds)
+        }
+        if (!isFinite(maxK) || maxK <= 0) {
+            var minMireds = (dashboard && rev >= 0)
+                            ? Number(dashboard.attribute(entityId, "min_mireds")) : 0
+            if (isFinite(minMireds) && minMireds > 0)
+                maxK = Math.round(1000000 / minMireds)
+        }
+        if (!isFinite(minK) || minK <= 0)
+            minK = 2000
+        if (!isFinite(maxK) || maxK <= 0)
+            maxK = 6500
+        if (minK > maxK) {
+            var tmp = minK
+            minK = maxK
+            maxK = tmp
+        }
+        return { min: Math.round(minK), max: Math.round(maxK) }
+    }
+
+    function lightColorTempValue() {
+        if (!dashboard || rev < 0)
+            return 0
+        var kelvin = Number(dashboard.attribute(entityId, "color_temp_kelvin"))
+        if (isFinite(kelvin) && kelvin > 0)
+            return Math.round(kelvin)
+        var mireds = Number(dashboard.attribute(entityId, "color_temp"))
+        return isFinite(mireds) && mireds > 0
+                ? Math.round(1000000 / mireds) : 0
+    }
+
+    function setLightColorTemp(kelvin) {
+        if (!dashboard)
+            return
+        var hasKelvin = Number(dashboard.attribute(entityId, "min_color_temp_kelvin")) > 0
+                        || Number(dashboard.attribute(entityId, "max_color_temp_kelvin")) > 0
+                        || Number(dashboard.attribute(entityId, "color_temp_kelvin")) > 0
+        if (hasKelvin) {
+            dashboard.callService("light", "turn_on",
+                                  { "color_temp_kelvin": Math.round(kelvin) }, entityId)
+        } else {
+            dashboard.callService("light", "turn_on",
+                                  { "color_temp": Math.round(1000000 / kelvin) }, entityId)
+        }
     }
 
     Component {
@@ -103,7 +215,10 @@ Column {
             property var feature
             property string entityId
             property var dashboard
-            width: parent.width
+            width: bar.width
+            leftMargin: Theme.paddingMedium
+            rightMargin: Theme.paddingMedium
+            preventStealing: true
             minimumValue: 0
             maximumValue: 100
             value: {
@@ -169,6 +284,7 @@ Column {
             property string entityId
             property var dashboard
             width: parent ? parent.width : Screen.width
+            height: childrenRect.height
             spacing: Theme.paddingSmall
             property var modes: {
                 if (feature && feature.modes)
@@ -280,7 +396,10 @@ Column {
             property var feature
             property string entityId
             property var dashboard
-            width: parent.width
+            width: bar.width
+            leftMargin: Theme.paddingMedium
+            rightMargin: Theme.paddingMedium
+            preventStealing: true
             minimumValue: 0
             maximumValue: 100
             value: {
@@ -434,48 +553,22 @@ Column {
             property string entityId
             property var dashboard
             width: parent ? parent.width : Screen.width
+            height: childrenRect.height
             spacing: Theme.paddingSmall
-
-            function hsToRgb(h, s) {
-                var sat = Math.max(0, Math.min(100, Number(s))) / 100
-                var hue = ((Number(h) % 360) + 360) % 360
-                var c = sat
-                var x = c * (1 - Math.abs((hue / 60) % 2 - 1))
-                var r = 0, g = 0, b = 0
-                if (hue < 60) { r = c; g = x }
-                else if (hue < 120) { r = x; g = c }
-                else if (hue < 180) { g = c; b = x }
-                else if (hue < 240) { g = x; b = c }
-                else if (hue < 300) { r = x; b = c }
-                else { r = c; b = x }
-                return {
-                    r: Math.round(r * 255),
-                    g: Math.round(g * 255),
-                    b: Math.round(b * 255)
-                }
-            }
-
-            function kelvinRgb(k) {
-                var t = Math.max(2000, Math.min(6500, Number(k)))
-                var p = (t - 2000) / 4500
-                return {
-                    r: 255,
-                    g: Math.round(147 + p * 108),
-                    b: Math.round(41 + p * 214)
-                }
-            }
 
             function colorRgb(entry) {
                 if (!entry)
                     return { r: 200, g: 200, b: 200 }
+                if (entry.r !== undefined && entry.g !== undefined && entry.b !== undefined)
+                    return { r: Number(entry.r), g: Number(entry.g), b: Number(entry.b) }
                 if (entry.rgb_color && entry.rgb_color.length >= 3)
                     return { r: Number(entry.rgb_color[0]), g: Number(entry.rgb_color[1]), b: Number(entry.rgb_color[2]) }
                 if (entry.hs_color && entry.hs_color.length >= 2)
-                    return swatches.hsToRgb(entry.hs_color[0], entry.hs_color[1])
+                    return bar.hsToRgb(entry.hs_color[0], entry.hs_color[1])
                 if (entry.color_temp_kelvin)
-                    return swatches.kelvinRgb(entry.color_temp_kelvin)
+                    return bar.kelvinRgb(entry.color_temp_kelvin)
                 if (entry.color_temp)
-                    return swatches.kelvinRgb(1000000 / Math.max(1, Number(entry.color_temp)))
+                    return bar.kelvinRgb(1000000 / Math.max(1, Number(entry.color_temp)))
                 return { r: 200, g: 200, b: 200 }
             }
 
@@ -485,6 +578,8 @@ Column {
                 var data = {}
                 if (entry.rgb_color)
                     data.rgb_color = entry.rgb_color
+                else if (entry.r !== undefined && entry.g !== undefined && entry.b !== undefined)
+                    data.rgb_color = [entry.r, entry.g, entry.b]
                 else if (entry.hs_color)
                     data.hs_color = entry.hs_color
                 else if (entry.color_temp_kelvin)
@@ -498,9 +593,9 @@ Column {
 
             readonly property var colors: {
                 var list = []
-                if (feature && feature.colors)
+                if (feature && feature.colors && feature.colors.length)
                     list = feature.colors
-                else if (feature && feature.favorite_colors)
+                else if (feature && feature.favorite_colors && feature.favorite_colors.length)
                     list = feature.favorite_colors
                 else if (dashboard && bar.rev >= 0)
                     list = dashboard.attribute(entityId, "favorite_colors") || []
@@ -528,26 +623,136 @@ Column {
     }
 
     Component {
+        id: lightColorComp
+        Column {
+            id: colorFeature
+            property var feature
+            property string entityId: ""
+            property var dashboard
+            property real hue: colorFromEntity().hue
+            property real saturation: colorFromEntity().saturation
+            width: bar.width
+            spacing: Theme.paddingSmall
+
+            function colorFromEntity() {
+                if (!dashboard || bar.rev < 0)
+                    return { hue: 0, saturation: 100 }
+                var hs = dashboard.attribute(entityId, "hs_color")
+                if (hs && hs.length >= 2)
+                    return {
+                        hue: Math.max(0, Math.min(359, Number(hs[0]) || 0)),
+                        saturation: Math.max(0, Math.min(100, Number(hs[1]) || 0))
+                    }
+                var rgb = dashboard.attribute(entityId, "rgb_color")
+                if (!rgb || rgb.length < 3)
+                    return { hue: 0, saturation: 100 }
+                return bar.rgbToHs(rgb)
+            }
+
+            function syncFromEntity() {
+                if (hueSlider.down)
+                    return
+                var color = colorFromEntity()
+                hue = color.hue
+                saturation = color.saturation
+                hueSlider.value = hue
+            }
+
+            function applyColor() {
+                if (!dashboard || !entityId.length)
+                    return
+                dashboard.callService("light", "turn_on",
+                                      { "hs_color": [Math.round(hue), Math.round(saturation)] },
+                                      entityId)
+            }
+
+            function previewColor() {
+                var rgb = bar.hsToRgb(hue, saturation)
+                return Qt.rgba(rgb.r / 255, rgb.g / 255, rgb.b / 255, 1)
+            }
+
+            onDashboardChanged: colorFeature.syncFromEntity()
+            onEntityIdChanged: colorFeature.syncFromEntity()
+
+            Connections {
+                target: colorFeature.dashboard
+                onEntityChanged: {
+                    if (entityId === colorFeature.entityId)
+                        colorFeature.syncFromEntity()
+                }
+            }
+
+            Connections {
+                target: hueSlider
+                onValueChanged: {
+                    if (!hueSlider.down)
+                        return
+                    colorFeature.hue = hueSlider.value
+                    if (colorFeature.saturation < 1)
+                        colorFeature.saturation = 100
+                }
+                onReleased: {
+                    colorFeature.hue = hueSlider.value
+                    colorFeature.applyColor()
+                }
+                onCanceled: {
+                    colorFeature.syncFromEntity()
+                }
+            }
+
+            Component.onCompleted: colorFeature.syncFromEntity()
+
+            Row {
+                width: parent.width
+                Label {
+                    width: parent.width - colorPreview.width
+                    text: i18n.translation("color")
+                    color: Theme.secondaryColor
+                }
+                Rectangle {
+                    id: colorPreview
+                    width: Theme.iconSizeSmall
+                    height: width
+                    radius: width / 2
+                    color: colorFeature.previewColor()
+                }
+            }
+
+            Slider {
+                id: hueSlider
+                width: parent.width
+                minimumValue: 0
+                maximumValue: 359
+                stepSize: 1
+                label: ""
+                leftMargin: Theme.paddingMedium
+                rightMargin: Theme.paddingMedium
+                highlighted: true
+                preventStealing: true
+            }
+        }
+    }
+
+    Component {
         id: colorTempComp
         Slider {
             property var feature
             property string entityId
             property var dashboard
-            width: parent.width
-            minimumValue: {
-                var v = (dashboard && bar.rev >= 0) ? Number(dashboard.attribute(entityId, "min_color_temp_kelvin")) : 0
-                return v > 0 ? v : 2000
-            }
-            maximumValue: {
-                var v = (dashboard && bar.rev >= 0) ? Number(dashboard.attribute(entityId, "max_color_temp_kelvin")) : 0
-                return v > 0 ? v : 6500
-            }
-            value: (dashboard && bar.rev >= 0) ? Number(dashboard.attribute(entityId, "color_temp_kelvin")) : 0
+            readonly property var temperatureRange: bar.lightColorTempRange()
+            readonly property real currentTemperature: bar.lightColorTempValue()
+            width: bar.width
+            leftMargin: Theme.paddingMedium
+            rightMargin: Theme.paddingMedium
+            preventStealing: true
+            minimumValue: temperatureRange.min
+            maximumValue: temperatureRange.max
+            stepSize: 50
+            value: currentTemperature > 0 ? currentTemperature : (minimumValue + maximumValue) / 2
             label: i18n.translation("color_temperature")
             onReleased: {
                 if (dashboard)
-                    dashboard.callService("light", "turn_on",
-                                          { "color_temp_kelvin": Math.round(value) }, entityId)
+                    bar.setLightColorTemp(value)
             }
         }
     }
