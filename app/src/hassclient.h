@@ -357,6 +357,7 @@ private:
     int m_haLanguageReqId;
     NetworkState m_networkState;
     NetworkState m_pendingNetworkState;
+    bool m_networkResolved;
     int m_pushAuthRetries;
     int m_pushRefreshFailures;
     int m_port;

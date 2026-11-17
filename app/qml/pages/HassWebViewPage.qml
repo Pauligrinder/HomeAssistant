@@ -22,6 +22,8 @@ Page {
     property bool resumeProbeRunning: false
     property int resumeDeadCount: 0
     property double lastBackgroundedAt: 0
+    property bool frontendSuspended: false
+    property bool frontendSuspendUnsupported: false
     property bool appActive: Qt.application.active
     property bool capturingSnapshot: false
     property int snapshotReadyAttempts: 0
@@ -304,8 +306,10 @@ Page {
         page.authHops = 0
         page.resumeProbeRunning = false
         page.resumeDeadCount = 0
+        page.frontendSuspended = false
         resumeProbeTimer.stop()
         resumeProbeStartTimer.stop()
+        backgroundSuspendTimer.stop()
         openedPathTimer.stop()
         snapshotSettleTimer.stop()
         snapshotReadyTimer.stop()
@@ -445,7 +449,9 @@ Page {
                 + "    return 'wait';"
                 + "  }"
                 + "  try {"
-                + "    if(typeof ha.hass.connection.reconnect==='function')"
+                + "    if(window.__helmsmanWsResume)"
+                + "      window.__helmsmanWsResume();"
+                + "    else if(typeof ha.hass.connection.reconnect==='function')"
                 + "      ha.hass.connection.reconnect();"
                 + "  } catch (e) {}"
                 + "  return 'reconnecting';"
@@ -469,11 +475,68 @@ Page {
                         }
                         // wait / reconnecting: keep the live view, do not reload.
                         page.resumeDeadCount = 0
+                        page.frontendSuspended = false
                     },
                     function(error) {
                         // Compositor often rejects JS while waking; never treat
                         // that as a dead document.
                         console.log("Helmsman: resume probe JS failed:", error)
+                    })
+    }
+
+    // Lovelace keeps its websocket alive while backgrounded, so HA keeps
+    // pushing state_changed events into the webview and the embedding
+    // engine spins at ~2% CPU. Suspend the frontend connection after the
+    // same grace period the resume probe uses; home-assistant-js-websocket
+    // parks its reconnect until the gate resolves and then resubscribes
+    // every subscription by itself.
+    function suspendFrontendConnection() {
+        if (page.frontendSuspended || page.frontendSuspendUnsupported)
+            return
+        if (page.status === PageStatus.Active && Qt.application.active)
+            return
+
+        var script = "return (function(){"
+                + "try {"
+                + "  var ha=document.querySelector('home-assistant');"
+                + "  var c=ha&&ha.hass&&ha.hass.connection;"
+                + "  if(!c||!c.connected)return 'none';"
+                + "  if(typeof c.suspend!=='function'"
+                + "     ||typeof c.suspendReconnectUntil!=='function')"
+                + "    return 'unsupported';"
+                + "  var wake=function(){"
+                + "    if(document.hidden)return;"
+                + "    document.removeEventListener('visibilitychange',wake);"
+                + "    window.removeEventListener('pageshow',wake);"
+                + "    var r=window.__helmsmanWsResume;"
+                + "    if(r)r();"
+                + "  };"
+                + "  var gate=new Promise(function(res){"
+                + "    window.__helmsmanWsResume=function(){"
+                + "      window.__helmsmanWsResume=null;"
+                + "      document.removeEventListener('visibilitychange',wake);"
+                + "      window.removeEventListener('pageshow',wake);"
+                + "      res();"
+                + "    };"
+                + "  });"
+                + "  document.addEventListener('visibilitychange',wake);"
+                + "  window.addEventListener('pageshow',wake);"
+                + "  c.suspendReconnectUntil(gate);"
+                + "  c.suspend();"
+                + "  return 'suspended';"
+                + "} catch (e) { return 'error'; }"
+                + "})();"
+
+        page.runViewJavaScript(
+                    script,
+                    function(result) {
+                        if (result === "suspended") {
+                            page.frontendSuspended = true
+                            console.log("Helmsman: frontend HA websocket suspended for background")
+                        } else if (result === "unsupported") {
+                            page.frontendSuspendUnsupported = true
+                            console.log("Helmsman: HA frontend websocket suspend unsupported")
+                        }
                     })
     }
 
@@ -1415,8 +1478,14 @@ Page {
     Component.onCompleted: page.refreshSnapshotState()
 
     onStatusChanged: {
-        if (status === PageStatus.Active)
+        if (status === PageStatus.Active) {
             startWebViewTimer.start()
+            // Foregrounding on another QML page skips the resume probe; the
+            // suspended websocket gate needs one once the view is visible.
+            if (page.frontendSuspended && Qt.application.active
+                    && page.dashboardReady)
+                page.beginResumeProbe()
+        }
     }
 
     Timer {
@@ -1450,8 +1519,31 @@ Page {
     }
 
     onAppActiveChanged: {
-        if (!page.appActive)
+        if (!page.appActive) {
             page.lastBackgroundedAt = Date.now()
+            if (page.dashboardReady)
+                backgroundSuspendTimer.start()
+        } else {
+            backgroundSuspendTimer.stop()
+        }
+    }
+
+    // Endpoint changes (and in-page reloads) recreate the frontend while the
+    // app is backgrounded; the fresh Lovelace is unsuspended and the armed
+    // one-shot timer is stopped by resetDashboardState(). Re-arm so it gets
+    // suspended again instead of idling at ~2% CPU inside EmbedLiteThread.
+    onDashboardReadyChanged: {
+        if (page.dashboardReady && !page.appActive)
+            backgroundSuspendTimer.start()
+    }
+
+    // Matches the resume-probe threshold: short cover or app switches keep
+    // the HA websocket alive, longer ones tear the frontend link down.
+    Timer {
+        id: backgroundSuspendTimer
+        interval: 60000
+        repeat: false
+        onTriggered: page.suspendFrontendConnection()
     }
 
     Timer {
@@ -1466,6 +1558,7 @@ Page {
         interval: 250
         repeat: true
         running: page.status === PageStatus.Active
+                 && Qt.application.active
                  && !page.isHome
                  && page.dashboardReady
                  && hassClient && hassClient.loggedIn
