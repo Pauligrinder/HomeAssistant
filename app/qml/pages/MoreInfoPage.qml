@@ -404,6 +404,41 @@ Page {
                                                   { "value": value }, page.entityId)
             }
 
+            ComboBox {
+                id: selectControl
+                width: parent.width
+                visible: (page.domain === "select" || page.domain === "input_select")
+                         && dashboard && page.rev >= 0
+                         && page.selectOptions.length > 0
+                label: i18n.translation("select_option")
+                description: (dashboard && page.rev >= 0)
+                              ? dashboard.formatState(page.entityId) : ""
+                currentIndex: page.selectOptions.indexOf(
+                                  dashboard ? dashboard.entityState(page.entityId) : "")
+                menu: ContextMenu {
+                    Repeater {
+                        model: page.selectOptions
+                        MenuItem {
+                            text: String(modelData)
+                            onClicked: {
+                                selectControl.currentIndex = index
+                                dashboard.callService(page.domain, "select_option",
+                                                      { "option": String(modelData) },
+                                                      page.entityId)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Button {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: page.domain === "button" || page.domain === "input_button"
+                text: i18n.translation("press")
+                enabled: dashboard && page.rev >= 0
+                onClicked: dashboard.callService(page.domain, "press", {}, page.entityId)
+            }
+
             SectionHeader {
                 text: i18n.translation("controls")
                 visible: page.relatedControls.length > 0
@@ -665,11 +700,17 @@ Page {
             height: Theme.itemSizeSmall
             property string relatedId: String(modelData || "")
             readonly property bool isScript: row.relatedId.indexOf("script.") === 0
+            readonly property string relatedDomain: dashboard
+                                                     ? dashboard.domainOf(row.relatedId) : ""
+            readonly property bool isButton: row.relatedDomain === "button"
+                                             || row.relatedDomain === "input_button"
             readonly property bool toggleable: dashboard && page.rev >= 0 && row.relatedId.length
-                                               ? dashboard.isToggleable(row.relatedId) : false
-            readonly property bool showRun: row.isScript
+                                               ? dashboard.isToggleable(row.relatedId)
+                                                 && !row.isButton : false
+            readonly property bool showRun: row.isScript || row.isButton
             readonly property bool showToggle: row.toggleable && !row.isScript
-            readonly property bool showState: row.relatedId.length > 0 && !row.toggleable && !row.isScript
+            readonly property bool showState: row.relatedId.length > 0 && !row.toggleable
+                                               && !row.isScript && !row.isButton
 
             onClicked: {
                 if (!row.relatedId.length)
@@ -749,8 +790,13 @@ Page {
                     visible: row.showRun
                     preferredWidth: Theme.buttonWidthExtraSmall
                     height: Theme.itemSizeExtraSmall
-                    text: i18n.translation("run")
-                    onClicked: dashboard.toggle(row.relatedId)
+                    text: row.isButton ? i18n.translation("press") : i18n.translation("run")
+                    onClicked: {
+                        if (row.isButton)
+                            dashboard.callService(row.relatedDomain, "press", {}, row.relatedId)
+                        else
+                            dashboard.toggle(row.relatedId)
+                    }
                 }
 
                 Switch {
@@ -793,6 +839,21 @@ Page {
         var n = Number(dashboard.attribute(page.entityId, key))
         return isFinite(n) && (key !== "step" || n > 0) ? n : fallback
     }
+
+    function selectOptionList() {
+        if (!dashboard || page.rev < 0
+                || (page.domain !== "select" && page.domain !== "input_select"))
+            return []
+        var options = dashboard.attribute(page.entityId, "options")
+        if (!options || typeof options.length !== "number")
+            return []
+        var out = []
+        for (var i = 0; i < options.length; ++i)
+            out.push(String(options[i]))
+        return out
+    }
+
+    readonly property var selectOptions: page.selectOptionList()
 
     function cameraPowerSupported() {
         if (page.domain !== "camera" || !dashboard || page.rev < 0)
