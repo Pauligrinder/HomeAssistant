@@ -4,7 +4,7 @@
 
 Name:       harbour-helmsman
 Summary:    Semi-native Home Assistant client
-Version:    0.6.10
+Version:    0.6.11
 Release:    1
 License:    ASL 2.0
 URL:        https://github.com
@@ -91,6 +91,11 @@ done
 %config %{_sysconfdir}/sailjail/permissions/%{name}.profile
 
 %changelog
+* Fri Nov 20 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.11-1
+- Native select/input_select ComboBox and button/input_button Press on entities and more-info (#93).
+- button/input_button toggle now calls press instead of turn_on.
+- Thanks to Lowxorx for the contribution.
+
 * Tue Nov 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.10-1
 - Suspend Lovelace websocket after 60s backgrounded to cut idle CPU (#90).
 - Persist/restore internal vs external endpoint across restarts (#90).
