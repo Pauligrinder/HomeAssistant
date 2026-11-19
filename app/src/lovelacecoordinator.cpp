@@ -3313,8 +3313,11 @@ void LovelaceCoordinator::toggle(const QString &entityId)
     if (entityId.isEmpty())
         return;
     const QString domain = domainOfEntity(entityId);
-    if (domain == QLatin1String("scene") || domain == QLatin1String("script")
-            || domain == QLatin1String("button") || domain == QLatin1String("input_button")) {
+    if (domain == QLatin1String("button") || domain == QLatin1String("input_button")) {
+        callService(domain, QStringLiteral("press"), QVariantMap(), entityId);
+        return;
+    }
+    if (domain == QLatin1String("scene") || domain == QLatin1String("script")) {
         callService(domain, QStringLiteral("turn_on"), QVariantMap(), entityId);
         return;
     }

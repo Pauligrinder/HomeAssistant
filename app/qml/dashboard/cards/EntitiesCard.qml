@@ -87,19 +87,49 @@ CardChrome {
                     return false
                 return dashboard.domainOf(row.entityId) === "script"
             }
+            readonly property bool isButton: {
+                if (row.entityId.indexOf("button.") === 0
+                        || row.entityId.indexOf("input_button.") === 0)
+                    return true
+                if (!dashboard || !row.entityId.length || root.rev < 0)
+                    return false
+                var domain = dashboard.domainOf(row.entityId)
+                return domain === "button" || domain === "input_button"
+            }
+            readonly property string entityDomain: {
+                if (row.entityId.indexOf("select.") === 0)
+                    return "select"
+                if (row.entityId.indexOf("input_select.") === 0)
+                    return "input_select"
+                return dashboard && row.entityId.length && root.rev >= 0
+                        ? dashboard.domainOf(row.entityId) : ""
+            }
+            readonly property bool isSelect: row.entityDomain === "select"
+                                             || row.entityDomain === "input_select"
+            readonly property var selectOptions: {
+                if (!row.isSelect || !dashboard || root.rev < 0)
+                    return []
+                var options = dashboard.attribute(row.entityId, "options")
+                if (!options || typeof options.length !== "number")
+                    return []
+                var out = []
+                for (var i = 0; i < options.length; ++i)
+                    out.push(String(options[i]))
+                return out
+            }
             // Lovelace entities "button" rows render an action chip (default Run).
-            readonly property bool showActionButton: rowType === "button"
+            readonly property bool showActionButton: rowType === "button" || row.isButton
             readonly property string actionButtonText: {
                 if (entry && entry.action_name !== undefined && entry.action_name !== null
                         && String(entry.action_name).length)
                     return String(entry.action_name)
-                return i18n.translation("run")
+                return row.isButton ? i18n.translation("press") : i18n.translation("run")
             }
             readonly property bool showRunText: row.isScript
                     && rowType === "entity" && row.entityId.length > 0
-            readonly property bool showToggle: row.toggleable && !row.isScript
+            readonly property bool showToggle: row.toggleable && !row.isScript && !row.isButton
             readonly property bool showState: rowType === "entity" && row.entityId.length > 0
-                    && !row.toggleable && !row.isScript
+                    && !row.toggleable && !row.isScript && !row.isButton && !row.isSelect
 
             function runRowAction() {
                 if (!dashboard)
@@ -107,13 +137,9 @@ CardChrome {
                 var confirm = entry.confirmation
                 if (confirm === undefined && entry.tap_action)
                     confirm = entry.tap_action.confirmation
-                if (rowType === "button") {
-                    dashboard.performAction(root.mergeConfirmation(entry.tap_action || { "action": "toggle" },
-                                                                   confirm), row.entityId)
-                    return
-                }
-                dashboard.performAction(root.mergeConfirmation({ "action": "toggle" }, confirm),
-                                       row.entityId)
+                dashboard.performAction(root.mergeConfirmation(
+                                            entry.tap_action || { "action": "toggle" }, confirm),
+                                        row.entityId)
             }
 
             // Collapse when visibility/conditions fail or the entity is registry-hidden.
@@ -124,7 +150,9 @@ CardChrome {
             }
             opacity: root.withPressOpacity(
                          (row.entityId.length && dashboard && root.rev >= 0
-                          && dashboard.entityDimmed(row.entityId)) ? 0.45 : 1.0,
+                          && (row.isSelect || row.isButton
+                              ? dashboard.isEntityDisabled(row.entityId)
+                              : dashboard.entityDimmed(row.entityId))) ? 0.45 : 1.0,
                          row.down)
 
             onClicked: {
@@ -229,6 +257,8 @@ CardChrome {
                     y: (parent.height - height) / 2
                     height: parent.height
                     width: {
+                        if (selectControl.visible)
+                            return selectControl.width
                         if (actionButton.visible)
                             return actionButton.width
                         if (toggle.visible)
@@ -236,6 +266,47 @@ CardChrome {
                         if (stateLabel.visible)
                             return Math.min(stateLabel.implicitWidth, row.width * 0.45)
                         return 0
+                    }
+
+                    ComboBox {
+                        id: selectControl
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: parent.right
+                        width: Math.min(row.width * 0.4, Theme.buttonWidthSmall)
+                        visible: row.isSelect && row.selectOptions.length > 0
+                        label: ""
+                        leftMargin: 0
+                        rightMargin: 0
+                        valueColor: "transparent"
+                        currentIndex: row.selectOptions.indexOf(
+                                          dashboard ? dashboard.entityState(row.entityId) : "")
+                        menu: ContextMenu {
+                            Repeater {
+                                model: row.selectOptions
+                                MenuItem {
+                                    text: String(modelData)
+                                    horizontalAlignment: Text.AlignHCenter
+                                    onClicked: {
+                                        selectControl.currentIndex = index
+                                        dashboard.callService(row.entityDomain, "select_option",
+                                                              { "option": String(modelData) },
+                                                              row.entityId)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Label {
+                        anchors.fill: selectControl
+                        verticalAlignment: Text.AlignVCenter
+                        horizontalAlignment: Text.AlignRight
+                        visible: selectControl.visible
+                        text: (dashboard && root.rev >= 0)
+                              ? dashboard.entityState(row.entityId) : ""
+                        font.pixelSize: Theme.fontSizeExtraSmall
+                        color: Theme.secondaryColor
+                        truncationMode: TruncationMode.Fade
                     }
 
                     Button {
