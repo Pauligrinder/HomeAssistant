@@ -94,7 +94,8 @@ done
 * Fri Nov 20 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.11-1
 - Native select/input_select ComboBox and button/input_button Press on entities and more-info (#93).
 - button/input_button toggle now calls press instead of turn_on.
-- Thanks to Lowxorx for the contribution.
+- Wi-Fi Away when off home network without GPS; webhook timeouts/retries (#92).
+- Thanks to Lowxorx and vivia for these contributions.
 
 * Tue Nov 17 2026 Pauli Kettunen <pauligrinder@gmail.com> - 0.6.10-1
 - Suspend Lovelace websocket after 60s backgrounded to cut idle CPU (#90).
